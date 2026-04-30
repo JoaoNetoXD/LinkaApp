@@ -340,6 +340,20 @@ function bindAdminEvents(container) {
     toggle.addEventListener('click', () => { toggle.classList.toggle('active'); });
   });
 
+  // Settings & Generic Buttons
+  container.querySelectorAll('.settings-section .btn, .admin-section-header .btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showToast('Funcionalidade em desenvolvimento.', 'info');
+    });
+  });
+  
+  // Heatmap actions
+  container.querySelectorAll('.category-heat-actions .btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showToast('Configuração de vagas e duração em breve.', 'info');
+    });
+  });
+
   // Charts
   setTimeout(() => {
     drawAdminChart(container.querySelector('#admin-chart'));

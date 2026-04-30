@@ -280,6 +280,13 @@ function renderHome(container) {
       }
     });
   });
+
+  // View details
+  container.querySelectorAll('.view-details-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      showToast('Detalhes do produto em breve!', 'info');
+    });
+  });
 }
 
 function showPaymentSelectionModal(product, container) {

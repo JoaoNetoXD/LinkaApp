@@ -495,6 +495,15 @@ function bindSellerEvents(container) {
     });
   });
 
+  // Renew buttons
+  container.querySelectorAll('.btn-primary.btn-sm').forEach(btn => {
+    if (btn.textContent.includes('Renovar')) {
+      btn.addEventListener('click', () => {
+        showToast('Anúncio renovado e enviado para a fila!', 'success');
+      });
+    }
+  });
+
   // Simple chart
   setTimeout(() => {
     const canvas = container.querySelector('#seller-chart');

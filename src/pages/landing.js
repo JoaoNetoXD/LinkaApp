@@ -1,6 +1,7 @@
 import { getTopHTML } from './landing-top.js';
 import { getBottomHTML } from './landing-bottom.js';
 import { flowSteps, plansData, checkSvg, landingIcons as ico } from './landing-data.js';
+import { showToast } from '../main.js';
 
 export function renderLanding(container) {
   container.innerHTML = `<div class="page landing-page">${getTopHTML()}${getBottomHTML()}</div>`;
@@ -10,6 +11,8 @@ export function renderLanding(container) {
   initTimelineScroll();
   initSnapDots('lk-problem-snap', 'lk-problem-dots');
   initCtaForm();
+  initPlanButtons();
+  initFooterLinks();
 }
 
 /* === NAVBAR === */
@@ -120,5 +123,27 @@ function initCtaForm() {
       btn.textContent = originalText;
       form.reset();
     }, 3000);
+  });
+}
+
+/* === PLAN BUTTONS === */
+function initPlanButtons() {
+  document.querySelectorAll('.lk-plan-card__btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const contatoSection = document.getElementById('contato');
+      if (contatoSection) {
+        contatoSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+}
+
+/* === FOOTER LINKS === */
+function initFooterLinks() {
+  document.querySelectorAll('.lk-footer a[href="#"]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      showToast('Página em construção.', 'info');
+    });
   });
 }
