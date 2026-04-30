@@ -42,13 +42,13 @@
   position: relative; max-width: 600px; margin: 0 auto; padding-left: 32px;
 }
 .lk-timeline__line {
-  position: absolute; left: 16px; top: 0; bottom: 0; width: 2px;
-  background: var(--lk-border); border-radius: 2px; overflow: hidden;
+  position: absolute; left: 15px; top: 0; bottom: 0; width: 4px;
+  background: var(--lk-border); border-radius: 4px; overflow: hidden;
 }
 .lk-timeline__glow {
   position: absolute; top: 0; left: 0; width: 100%; height: 0;
   background: linear-gradient(180deg, transparent, var(--lk-mint), transparent);
-  box-shadow: 0 0 10px var(--lk-mint); transition: height 0.5s ease;
+  box-shadow: 0 0 15px var(--lk-mint); transition: height 0.5s ease;
 }
 
 .lk-timeline__item {

@@ -24,12 +24,15 @@
   font-family: var(--lk-font-b);
   font-family: var(--lk-font-b);
   overflow-x: hidden;
-  position: relative;
   width: 100%;
 }
 
 body {
   overflow-x: hidden;
+}
+
+p {
+  line-height: 1.7;
 }
 
 /* Base Styles & Utils */
@@ -95,7 +98,7 @@ body {
   font-weight: 800; line-height: 1.1; color: var(--lk-white); margin-bottom: 16px;
 }
 .lk-hero__hl { color: var(--lk-mint); }
-.lk-hero__sub { font-size: 1.125rem; color: var(--lk-text2); line-height: 1.6; margin-bottom: 32px; }
+.lk-hero__sub { font-size: 1.125rem; color: var(--lk-text2); line-height: 1.7; margin-bottom: 32px; }
 
 .lk-hero__btns { display: flex; flex-direction: column; width: 100%; }
 .lk-hero__btns .lk-btn-primary { width: 100%; }
@@ -119,12 +122,12 @@ body {
   display: flex; flex-direction: column; gap: 16px;
   transform: rotate(-5deg); animation: float 6s ease-in-out infinite;
 }
-.lk-mock-hdr { display: flex; justify-content: space-between; align-items: center; }
+.lk-mock-hdr { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
 .lk-mock-hdr__name { font-size: 0.875rem; color: var(--lk-text2); }
 .lk-mock-hdr__inst { font-size: 0.75rem; color: var(--lk-text3); }
 .lk-mock-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--lk-mint); color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 
-.lk-mock-product { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.08); }
+.lk-mock-product { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .lk-mock-product__img { height: 80px; background: linear-gradient(135deg, #2A1A10, #3E291B); border-radius: 8px; margin-bottom: 12px; }
 .lk-mock-product__name { font-size: 1rem; font-weight: 700; color: var(--lk-white); }
 .lk-mock-product__price { font-size: 1.125rem; font-weight: 800; color: var(--lk-mint); margin-top: 4px; }
@@ -132,7 +135,7 @@ body {
 .lk-eco__float {
   position: absolute; width: 48px; height: 48px; background: var(--lk-bg-card2);
   border: 1px solid var(--lk-border2); border-radius: 12px; display: flex; align-items: center; justify-content: center;
-  color: var(--lk-mint); box-shadow: 0 8px 16px rgba(0,0,0,0.5); z-index: 15;
+  color: var(--lk-mint); box-shadow: 0 16px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1); z-index: 15;
 }
 .lk-eco__float--1 { top: 20%; left: 10%; color: var(--lk-amber); animation: float 5s ease-in-out infinite 1s; }
 .lk-eco__float--2 { top: 60%; right: 5%; color: var(--lk-mint); animation: float 7s ease-in-out infinite 2s; }

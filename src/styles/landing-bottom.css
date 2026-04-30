@@ -18,7 +18,7 @@
   display: inline-block; padding: 4px 12px; background: rgba(0, 240, 160, 0.1);
   color: var(--lk-mint); font-size: 0.75rem; font-weight: 700; border-radius: 99px; margin-bottom: 12px;
 }
-.lk-case-card p { font-size: 1rem; color: var(--lk-text); font-style: italic; line-height: 1.6; }
+.lk-case-card p { font-size: 1rem; color: var(--lk-text); font-style: italic; line-height: 1.7; }
 
 /* Student Banner (Breakout) */
 .lk-student-banner {
@@ -35,6 +35,12 @@
 .lk-student-banner__title { font-family: var(--lk-font-h); font-size: 1.5rem; font-weight: 800; color: var(--lk-white); }
 .lk-student-banner__sub { font-size: 1rem; color: var(--lk-text2); margin-bottom: 8px; }
 
+@keyframes slow-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 240, 160, 0.2); }
+  50% { box-shadow: 0 0 0 15px rgba(0, 240, 160, 0); border-color: rgba(0, 240, 160, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 240, 160, 0); }
+}
+
 .lk-btn-ghost {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 24px; background: rgba(255,255,255,0.05); color: var(--lk-white);
@@ -44,6 +50,10 @@
 }
 .lk-btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.4); transform: translateY(-2px); }
 
+.lk-student-banner .lk-btn-ghost {
+  animation: slow-pulse 3s infinite;
+}
+
 /* Features Grid */
 .lk-features-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
@@ -52,7 +62,10 @@
 .lk-feat {
   background: var(--lk-bg-card2); border: 1px solid var(--lk-border2); border-radius: 12px;
   padding: 20px; display: flex; flex-direction: column; align-items: flex-start;
+  transition: transform 0.2s ease, background 0.3s ease;
 }
+.lk-feat:nth-child(even) { background: var(--lk-bg-card); }
+.lk-feat:active { transform: scale(0.98); }
 .lk-feat__icon {
   width: 40px; height: 40px; border-radius: 8px; background: rgba(255,255,255,0.05);
   display: flex; align-items: center; justify-content: center; color: var(--lk-mint); margin-bottom: 16px;

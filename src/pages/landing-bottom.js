@@ -6,14 +6,14 @@ function planCard(p, period) {
     : `<div class="lk-plan-card__price" style="font-size:1.5rem;">Sob consulta</div>`;
   return `
     <div class="lk-plan-card ${p.featured ? 'lk-plan-card--featured' : ''} lk-reveal">
-      ${p.featured ? '<div class="lk-plan-card__badge">Mais popular</div>' : ''}
+      ${p.featured ? '<div class="lk-plan-card__badge">O MAIS ESCOLHIDO</div>' : ''}
       <div class="lk-plan-card__name">${p.name}</div>
       ${priceHTML}
       <div class="lk-plan-card__desc">${p.desc}</div>
       <ul class="lk-plan-card__features">
         ${p.features.map(f => `<li>${checkSvg} ${f}</li>`).join('')}
       </ul>
-      <button class="lk-btn-primary ${p.ctaClass || ''} lk-plan-card__btn" aria-label="${p.cta}">${p.cta}</button>
+      <button class="${p.featured ? 'lk-btn-primary' : 'lk-btn-ghost'} ${p.ctaClass || ''} lk-plan-card__btn" aria-label="${p.cta}" style="width: 100%;">${p.cta}</button>
     </div>`;
 }
 
@@ -27,28 +27,28 @@ export function getBottomHTML() {
       </div>
       <div class="lk-cases">
         <div class="lk-case-card lk-reveal">
-          <div class="lk-case-card__img" style="background-image: url('${whoImages.seller}')"></div>
+          <div class="lk-case-card__img" style="background-image: linear-gradient(rgba(10,10,15,0.4), rgba(10,10,15,0.4)), url('${whoImages.seller}')"></div>
           <div class="lk-case-card__content">
             <div class="lk-case-card__tag">Aluno Vendedor</div>
             <p>"Finalmente tenho uma vitrine que a faculdade aprova e que os colegas confiam."</p>
           </div>
         </div>
         <div class="lk-case-card lk-reveal">
-          <div class="lk-case-card__img" style="background-image: url('${whoImages.buyer}')"></div>
+          <div class="lk-case-card__img" style="background-image: linear-gradient(rgba(10,10,15,0.4), rgba(10,10,15,0.4)), url('${whoImages.buyer}')"></div>
           <div class="lk-case-card__content">
             <div class="lk-case-card__tag">Aluno Comprador</div>
             <p>"Encontro tudo em um só lugar, com desconto e sem precisar ficar perguntando em grupo."</p>
           </div>
         </div>
         <div class="lk-case-card lk-reveal">
-          <div class="lk-case-card__img" style="background-image: url('${whoImages.admin}')"></div>
+          <div class="lk-case-card__img" style="background-image: linear-gradient(rgba(10,10,15,0.4), rgba(10,10,15,0.4)), url('${whoImages.admin}')"></div>
           <div class="lk-case-card__content">
             <div class="lk-case-card__tag">Coordenador</div>
             <p>"Agora consigo moderar o que circula e gerar relatórios de empreendedorismo real."</p>
           </div>
         </div>
         <div class="lk-case-card lk-reveal">
-          <div class="lk-case-card__img" style="background-image: url('${whoImages.inst}')"></div>
+          <div class="lk-case-card__img" style="background-image: linear-gradient(rgba(10,10,15,0.4), rgba(10,10,15,0.4)), url('${whoImages.inst}')"></div>
           <div class="lk-case-card__content">
             <div class="lk-case-card__tag">Instituição</div>
             <p>"Dados reais de empreendedorismo discente para nossos relatórios de impacto."</p>
