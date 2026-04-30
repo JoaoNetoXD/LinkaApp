@@ -12,7 +12,7 @@ export function getTopHTML() {
         <li><a href="#funcionalidades">RECURSOS</a></li>
         <li><a href="#planos">PLANOS</a></li>
       </ul>
-      <button class="lk-nav__cta" aria-label="Solicitar demonstração">Solicitar demo</button>
+      <a href="#/admin" class="lk-nav__cta" aria-label="Painel Admin">Painel Admin</a>
       <button class="lk-hamburger" id="lk-hamburger" aria-label="Abrir menu">
         <span></span><span></span><span></span>
       </button>
@@ -26,7 +26,7 @@ export function getTopHTML() {
       <a href="#para-quem">Para quem</a>
       <a href="#funcionalidades">Recursos</a>
       <a href="#planos">Planos</a>
-      <button class="lk-btn-primary" style="margin-top:12px;">Solicitar demo</button>
+      <a href="#/admin" class="lk-btn-primary" style="margin-top:12px; display:block; text-align:center;">Painel Admin</a>
     </div>
 
     <!-- HERO -->
@@ -42,8 +42,8 @@ export function getTopHTML() {
             <h1>O marketplace que transforma alunos em <em>empreendedores de verdade.</em></h1>
             <p class="lk-hero__sub">Vitrine aprovada pela instituição. Cupom rastreável. Venda pelo WhatsApp. Zero burocracia.</p>
             <div class="lk-hero__btns">
-              <a href="#contato" class="lk-btn-primary" aria-label="Ver demonstração">Ver demonstração ${arrowRight}</a>
-              <a href="#funcionalidades" class="lk-btn-outline" aria-label="Conhecer a solução">Conhecer a solução</a>
+              <a href="#/buyer" class="lk-btn-primary" aria-label="Comprar Produtos">Sou Aluno (Comprar) ${arrowRight}</a>
+              <a href="#/seller" class="lk-btn-outline" aria-label="Vender Produtos">Sou Empreendedor (Vender)</a>
             </div>
           </div>
           <div class="lk-hero__mockup">

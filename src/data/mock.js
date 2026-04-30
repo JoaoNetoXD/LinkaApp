@@ -18,12 +18,12 @@ export const currentUser = {
 };
 
 export const categories = [
-  { id: 'all', name: 'Todos', icon: '✦' },
-  { id: 'food', name: 'Lanches & Bebidas', icon: '🍔', maxSlots: 5, duration: '12h' },
-  { id: 'fashion', name: 'Moda & Acessórios', icon: '👕', maxSlots: 5, duration: '24h' },
-  { id: 'services', name: 'Serviços Presenciais', icon: '✂️', maxSlots: 5, duration: '24h' },
-  { id: 'digital', name: 'Digital & Criativo', icon: '🎨', maxSlots: 5, duration: '24h' },
-  { id: 'others', name: 'Outros', icon: '📦', maxSlots: 5, duration: '24h' }
+  { id: 'all', name: 'Todos' },
+  { id: 'food', name: 'Lanches & Bebidas', maxSlots: 5, duration: '12h' },
+  { id: 'fashion', name: 'Moda & Acessórios', maxSlots: 5, duration: '24h' },
+  { id: 'services', name: 'Serviços Presenciais', maxSlots: 5, duration: '24h' },
+  { id: 'digital', name: 'Digital & Criativo', maxSlots: 5, duration: '24h' },
+  { id: 'others', name: 'Outros', maxSlots: 5, duration: '24h' }
 ];
 
 export const products = [

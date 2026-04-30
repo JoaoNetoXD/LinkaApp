@@ -2,6 +2,8 @@ import { renderLanding } from './pages/landing.js';
 import { renderBuyer } from './pages/buyer.js';
 import { renderSeller } from './pages/seller.js';
 import { renderAdmin } from './pages/admin.js';
+import { renderAuth } from './pages/auth.js';
+import { getCurrentSession, onAuthStateChange, getCurrentProfile } from './services/auth-service.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -13,6 +15,7 @@ import './styles/landing-bottom.css';
 import './styles/buyer.css';
 import './styles/seller.css';
 import './styles/payment.css';
+import './styles/auth.css';
 import './styles/admin.css';
 import './styles/app-dark.css';
 
@@ -20,9 +23,9 @@ const app = document.getElementById('app');
 
 // SVG icons used across the app
 export const icons = {
-  home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
-  grid: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
-  ticket: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>',
+  home: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  grid: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  ticket: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></svg>',
   user: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
   plus: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
   search: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
@@ -50,6 +53,13 @@ export const icons = {
   loader: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>',
   wallet: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>',
   pix: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.59 14.41l3.89 3.89c.51.51 1.18.79 1.9.79h1.27l-5.07-5.07c-.39-.39-1.02-.39-1.41 0l-.58.39zm-3.18 0l-.58-.39c-.39-.39-1.02-.39-1.41 0L3.35 19.09h1.27c.72 0 1.39-.28 1.9-.79l3.89-3.89zm3.18-4.82c.39-.39.39-1.02 0-1.41L9.7 4.29c-.51-.51-1.18-.79-1.9-.79H6.53l5.07 5.07.58.39.39.58 5.07 5.07V13c0-.72-.28-1.39-.79-1.9l-3.89-3.89c-.39.39-.39 1.02 0 1.41l.58.39-.58.39c-.39.39-.39 1.02 0 1.41l3.89 3.89c.51.51.79 1.18.79 1.9v1.27l-5.07-5.07-.39-.58-.58-.39-5.07-5.07H6.53c-.72 0-1.39.28-1.9.79L.74 14.41h1.27c.72 0 1.39-.28 1.9-.79l3.89-3.89z"/></svg>',
+  food: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+  fashion: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
+  services: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+  digital: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.16 3.84a2.76 2.76 0 0 0-3.92 0L5.3 15.78a2 2 0 0 0-.5.98l-.78 3.93a1 1 0 0 0 1.18 1.18l3.93-.78a2 2 0 0 0 .98-.5l11.94-11.94a2.76 2.76 0 0 0 0-3.93z"/><path d="M16.5 7.5l2 2"/></svg>',
+  others: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  all: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
+  refresh: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 3.43-11.02L21.5 8"/></svg>'
 };
 
 // Toast notification system
@@ -67,25 +77,21 @@ export function showToast(message, type = 'info') {
   }, 3000);
 }
 
+// Placeholder fine line icons
+const placeholderIcons = {
+  food: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+  fashion: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
+  services: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+  digital: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>',
+  others: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
+};
+
 // Product image placeholder generator
-export function getProductImage(imageKey, width = 400, height = 300) {
-  const colors = {
-    brownie: ['#4a3728', '#8B6914', '🍫'],
-    camiseta: ['#1e3a5f', '#3b82f6', '👕'],
-    aula: ['#1a4731', '#22c55e', '📚'],
-    'logo-design': ['#581c87', '#a855f7', '🎨'],
-    acai: ['#4c1d95', '#7c3aed', '🫐'],
-    caderno: ['#7c2d12', '#ea580c', '📓'],
-    brigadeiro: ['#3f1f0a', '#92400e', '🍫'],
-    bolo: ['#831843', '#ec4899', '🍰'],
-    sanduiche: ['#365314', '#84cc16', '🥪'],
-    salgado: ['#713f12', '#ca8a04', '🥟'],
-    espetinho: ['#7c2d12', '#f97316', '🍢'],
-    corte: ['#1e293b', '#64748b', '✂️'],
-    pulseira: ['#134e4a', '#14b8a6', '📿'],
-  };
-  const c = colors[imageKey] || ['#334155', '#64748b', '📦'];
-  return `<div style="width:100%;height:100%;background:linear-gradient(135deg,${c[0]},${c[1]});display:flex;align-items:center;justify-content:center;font-size:${Math.min(width, height) / 4}px;">${c[2]}</div>`;
+export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
+  const iconSvg = placeholderIcons[categoryId] || placeholderIcons.others;
+  const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A1A24'/%3E%3C/svg%3E")`;
+  
+  return `<div style="width:100%;height:100%;background-color:#161620;background-image:${dotGrid};background-size:18px 18px;display:flex;align-items:center;justify-content:center;opacity:0.8;">${iconSvg}</div>`;
 }
 
 // Format currency
@@ -93,40 +99,71 @@ export function formatCurrency(value) {
   return `R$ ${value.toFixed(2).replace('.', ',')}`;
 }
 
+// Global auth state
+export let globalSession = null;
+export let globalProfile = null;
+
 // Simple client-side routing (supports both hash and path)
-const path = window.location.hash.slice(1) || window.location.pathname;
+async function handleRoute() {
+  const path = window.location.hash.slice(1) || window.location.pathname;
 
-if (path.startsWith('/buyer') || path === 'buyer') {
-  const parts = path.split('/').filter(Boolean);
-  renderBuyer(app, parts[1]);
-} else if (path.startsWith('/seller') || path === 'seller') {
-  const parts = path.split('/').filter(Boolean);
-  renderSeller(app, parts[1]);
-} else if (path.startsWith('/admin') || path === 'admin') {
-  const parts = path.split('/').filter(Boolean);
-  renderAdmin(app, parts[1]);
-} else {
-  renderLanding(app);
-}
-
-// Add event listener for hash changes to support SPA navigation
-window.addEventListener('hashchange', () => {
-  const newPath = window.location.hash.slice(1) || window.location.pathname;
   // Ignore hash changes for intra-page anchors (e.g. #problema, #contato)
   if (window.location.hash && !window.location.hash.startsWith('#/')) {
     return;
   }
 
-  if (newPath.startsWith('/buyer') || newPath === 'buyer') {
-    renderBuyer(app, newPath.split('/').filter(Boolean)[1]);
-  } else if (newPath.startsWith('/seller') || newPath === 'seller') {
-    renderSeller(app, newPath.split('/').filter(Boolean)[1]);
-  } else if (newPath.startsWith('/admin') || newPath === 'admin') {
-    renderAdmin(app, newPath.split('/').filter(Boolean)[1]);
+  // Check auth for protected routes
+  const isProtectedRoute = path.startsWith('/buyer') || path.startsWith('/seller') || path.startsWith('/admin') || path === 'buyer' || path === 'seller' || path === 'admin';
+  
+  if (isProtectedRoute) {
+    const session = await getCurrentSession();
+    if (!session) {
+      window.location.hash = '#/auth';
+      return;
+    }
+    // Load profile if missing
+    if (!globalProfile) {
+      globalProfile = await getCurrentProfile(session.user.id);
+    }
+  }
+
+  if (path.startsWith('/auth') || path === 'auth') {
+    const session = await getCurrentSession();
+    if (session) {
+      window.location.hash = '#/buyer'; // Redirect if already logged in
+      return;
+    }
+    renderAuth(app);
+  } else if (path.startsWith('/buyer') || path === 'buyer') {
+    const parts = path.split('/').filter(Boolean);
+    renderBuyer(app, parts[1]);
+  } else if (path.startsWith('/seller') || path === 'seller') {
+    const parts = path.split('/').filter(Boolean);
+    renderSeller(app, parts[1]);
+  } else if (path.startsWith('/admin') || path === 'admin') {
+    const parts = path.split('/').filter(Boolean);
+    renderAdmin(app, parts[1]);
   } else {
     renderLanding(app);
   }
+}
+
+// Listen to auth changes
+onAuthStateChange((event, session) => {
+  globalSession = session;
+  if (event === 'SIGNED_IN') {
+    handleRoute();
+  } else if (event === 'SIGNED_OUT') {
+    globalProfile = null;
+    window.location.hash = '#/';
+  }
 });
+
+// Add event listener for hash changes to support SPA navigation
+window.addEventListener('hashchange', handleRoute);
+
+// Init
+handleRoute();
 
 // Register service worker
 if ('serviceWorker' in navigator) {

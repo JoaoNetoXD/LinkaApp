@@ -8,6 +8,9 @@ let currentPayment = null;
 let paymentTimerInterval = null;
 let paymentPollInterval = null;
 
+// Intersection Observer for card entrance animation
+let observer = null;
+
 export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
     currentView = 'coupons';
@@ -17,578 +20,572 @@ export function renderBuyer(container, subpage) {
   renderBuyerPage(container);
 }
 
+function initObserver() {
+  if (observer) {
+    observer.disconnect();
+  }
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+      if (entry.isIntersecting) {
+        setTimeout(() => {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }, i * 80);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  
+  document.querySelectorAll('.product-card').forEach(card => {
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(16px)';
+    card.style.transition = 'opacity 0.35s ease-out, transform 0.35s ease-out';
+    observer.observe(card);
+  });
+}
+
 function renderBuyerPage(container) {
-  const filtered = activeCategory === 'all' ? products : products.filter(p => p.category === activeCategory);
+  if (currentView === 'home') {
+    renderHome(container);
+    initObserver();
+  } else if (currentView === 'detail') {
+    // We'll keep the detail simple or implement it if needed. 
+    // For now, let's just render a placeholder or re-render home.
+    renderHome(container);
+    initObserver();
+  } else if (currentView === 'profile') {
+    renderProfile(container);
+  } else if (currentView === 'payment') {
+    renderPayment(container);
+  }
+
+  // Bind Bottom Nav
+  const navItems = container.querySelectorAll('.bottom-nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const nav = item.dataset.nav;
+      if (nav === 'home') {
+        currentView = 'home';
+        window.history.pushState({}, '', '/buyer');
+        renderBuyerPage(container);
+      } else if (nav === 'coupons') {
+        currentView = 'coupons';
+        window.history.pushState({}, '', '/buyer/coupons');
+        renderBuyerPage(container);
+      } else if (nav === 'profile') {
+        currentView = 'profile';
+        window.history.pushState({}, '', '/buyer/profile');
+        renderBuyerPage(container);
+      }
+    });
+  });
+}
+
+function getTimerInfo(expiresIn) {
+  const match = expiresIn.match(/(\d+)h/);
+  let hours = 24;
+  if (match) {
+    hours = parseInt(match[1]);
+  }
+  let colorClass = 'timer-neutral';
+  let isCritical = false;
+  if (hours < 2) {
+    colorClass = 'timer-critical';
+    isCritical = true;
+  } else if (hours <= 12) {
+    colorClass = 'timer-amber';
+  }
+  return { text: `Expira em ${expiresIn}`, colorClass, isCritical };
+}
+
+function getSlotsInfo(used, total) {
+  const percent = (used / total) * 100;
+  const available = total - used;
+  let colorClass = 'slots-green';
+  if (available / total < 0.3) {
+    colorClass = 'slots-red';
+  } else if (available / total <= 0.6) {
+    colorClass = 'slots-amber';
+  }
+  return { percent, colorClass, text: `${available} de ${total} vagas`, almostEmpty: available === 1 };
+}
+
+function renderHome(container) {
+  const filteredProducts = activeCategory === 'all' 
+    ? products 
+    : products.filter(p => p.category === activeCategory);
 
   container.innerHTML = `
-    <div class="page buyer-page">
-      <!-- App Header -->
-      <header class="app-header">
-        <div>
-          <div style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);">Olá, ${currentUser.name}</div>
-          <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${institution.name}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:var(--space-3);">
-          <button class="btn-icon" style="position:relative;">
-            ${icons.bell}
-            <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid white;"></span>
-          </button>
-          <div class="avatar">${currentUser.avatar}</div>
-        </div>
-      </header>
-
-      <div class="app-body" id="buyer-content">
-        ${currentView === 'coupons' ? renderCouponsView() : renderHomeView(filtered)}
-      </div>
-
-      <!-- Bottom Navigation -->
-      <nav class="bottom-nav">
-        <div class="nav-item ${currentView === 'home' ? 'active' : ''}" data-nav="home">
-          ${icons.home}
-          <span>Início</span>
-        </div>
-        <div class="nav-item" data-nav="categories">
-          ${icons.grid}
-          <span>Categorias</span>
-        </div>
-        <div class="nav-item ${currentView === 'coupons' ? 'active' : ''}" data-nav="coupons">
-          ${icons.ticket}
-          <span>Meus Cupons</span>
-        </div>
-        <div class="nav-item" data-nav="profile">
-          ${icons.user}
-          <span>Perfil</span>
-        </div>
-      </nav>
-    </div>
-  `;
-
-  bindBuyerEvents(container);
-}
-
-function renderHomeView(filtered) {
-  return `
-    <!-- Search -->
-    <div class="buyer-search">
-      <div class="search-bar">
-        <span class="search-icon">${icons.search}</span>
-        <input type="text" class="input-field" placeholder="Buscar lanches, serviços, moda..." style="padding-left:48px;" id="search-input">
-      </div>
-    </div>
-
-    <!-- Categories -->
-    <div class="buyer-categories" id="category-chips">
-      ${categories.map(c => `
-        <button class="chip ${c.id === activeCategory ? 'active' : ''}" data-category="${c.id}">
-          ${c.icon} ${c.name}
-        </button>
-      `).join('')}
-    </div>
-
-    <!-- Banner -->
-    <div class="buyer-banner">
-      <h3>🎓 Ofertas ativas dentro da sua instituição</h3>
-      <p>Pegue um cupom e fale direto com o vendedor pelo WhatsApp.</p>
-    </div>
-
-    <!-- Products -->
-    <div class="products-grid" id="products-grid">
-      ${filtered.length > 0 ? filtered.map(p => renderProductCard(p)).join('') : `
-        <div class="empty-state" style="grid-column:1/-1;">
-          ${icons.package}
-          <h3>Ainda não há ofertas nesta categoria</h3>
-          <p>Novas ofertas aparecem quando vendedores publicam anúncios.</p>
-        </div>
-      `}
-    </div>
-  `;
-}
-
-function renderProductCard(product) {
-  const isFull = product.slots.used >= product.slots.total;
-  return `
-    <div class="product-card" data-product-id="${product.id}">
-      <div class="product-image">
-        ${getProductImage(product.images[0])}
-        <div class="product-category">${categories.find(c => c.id === product.category)?.icon || ''} ${categories.find(c => c.id === product.category)?.name || ''}</div>
-        <div class="discount-badge">-${product.discount}%</div>
-      </div>
-      <div class="product-body">
-        <h3 class="product-title">${product.title}</h3>
-        <div class="product-pricing">
-          <span class="price-original">${formatCurrency(product.originalPrice)}</span>
-          <span class="price-discount">${formatCurrency(product.discountPrice)}</span>
-        </div>
-        <div class="product-meta">
-          <span class="timer">${icons.clock} expira em ${product.expiresIn}</span>
-          <span class="product-slots">${product.slots.used} de ${product.slots.total} vagas</span>
-        </div>
-        <div class="product-actions">
-          <button class="btn btn-primary btn-sm coupon-btn" data-product-id="${product.id}" ${isFull ? 'disabled style="opacity:0.5;pointer-events:none;"' : ''}>
-            ${isFull ? 'Esgotado' : '🎟️ Pegar cupom'}
-          </button>
-          <button class="btn btn-ghost btn-sm detail-btn" data-product-id="${product.id}">Detalhes</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderCouponsView() {
-  return `
-    <div class="buyer-section-title">Meus Cupons</div>
-    <div class="coupons-list">
-      ${coupons.length > 0 ? coupons.map(c => `
-        <div class="coupon-item">
-          <div class="coupon-item-header">
-            <span class="coupon-item-code">${c.code}</span>
-            <span class="badge ${c.status === 'active' ? 'badge-success' : c.status === 'used' ? 'badge-neutral' : 'badge-warning'}">${c.status === 'active' ? 'Ativo' : c.status === 'used' ? 'Usado' : 'Expirado'}</span>
+    <div class="buyer-wrapper">
+      <!-- HEADER -->
+      <header class="buyer-header">
+        <div class="buyer-header-top">
+          <div class="buyer-greeting">
+            <h1>Olá, ${currentUser.name.split(' ')[0]}</h1>
+            <div class="inst-badge">${institution.name}</div>
           </div>
-          <div class="coupon-item-product">${c.product}</div>
-          <div class="coupon-item-meta">
-            Vendedor: ${c.seller} · Gerado em ${c.createdAt}
-          </div>
-          ${c.status === 'active' ? `
-            <button class="btn btn-success btn-sm btn-block" style="margin-top:var(--space-3);" onclick="window.open('https://wa.me/5586999112233?text=Olá! Tenho o cupom ${c.code} para ${c.product}','_blank')">
-              ${icons.whatsapp} Abrir WhatsApp
+          <div class="buyer-actions">
+            <button class="icon-btn notification-btn">
+              ${icons.bell}
+              <span class="badge">2</span>
             </button>
-          ` : ''}
+            <div class="user-avatar">${currentUser.avatar}</div>
+          </div>
         </div>
-      `).join('') : `
-        <div class="empty-state">
-          ${icons.ticket}
-          <h3>Você ainda não gerou nenhum cupom</h3>
-          <p>Navegue pela vitrine e pegue cupons para falar com vendedores.</p>
+        <div class="search-bar">
+          ${icons.search}
+          <input type="text" placeholder="Buscar ofertas, categorias..." />
         </div>
-      `}
-    </div>
-  `;
-}
-
-function renderProductDetail(container, product) {
-  clearPaymentIntervals();
-  const detailHTML = `
-    <div class="page buyer-page">
-      <header class="app-header">
-        <button class="btn-icon" id="back-to-list">${icons.arrowRight.replace('points="12 5 19 12 12 19"', 'points="12 19 5 12 12 5"').replace('x1="5" y1="12" x2="19"', 'x1="19" y1="12" x2="5"')}</button>
-        <span class="app-header-title">Detalhes</span>
-        <div style="width:44px;"></div>
       </header>
-      <div class="app-body product-detail">
-        <div class="detail-gallery">
-          <div class="detail-gallery-item">${getProductImage(product.images[0], 400, 260)}</div>
-          <div class="detail-gallery-item">${getProductImage(product.images[0], 400, 260)}</div>
+
+      <!-- CATEGORY CHIPS -->
+      <div class="category-scroll">
+        <div class="category-chips">
+          ${categories.map(c => `
+            <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
+              ${icons[c.id] || icons.others}
+              <span>${c.name}</span>
+            </button>
+          `).join('')}
         </div>
-        <div class="detail-info">
-          <span class="badge badge-primary product-category-badge">${categories.find(c => c.id === product.category)?.name || ''}</span>
-          <h1>${product.title}</h1>
-          <p style="color:var(--text-secondary);margin-bottom:var(--space-4);line-height:var(--line-height-relaxed);">${product.description}</p>
-          <div class="product-pricing" style="margin-bottom:var(--space-3);">
-            <span class="price-original" style="font-size:var(--font-size-base);">${formatCurrency(product.originalPrice)}</span>
-            <span class="price-discount" style="font-size:var(--font-size-2xl);">${formatCurrency(product.discountPrice)}</span>
-            <span class="badge badge-danger">-${product.discount}%</span>
-          </div>
-          <div class="product-meta" style="margin-bottom:var(--space-4);">
-            <span class="timer">${icons.clock} expira em ${product.expiresIn}</span>
-            <span class="product-slots">${product.slots.used}/${product.slots.total} vagas</span>
-          </div>
-          <div class="detail-seller">
-            <div class="avatar">${product.seller.avatar}</div>
-            <div class="detail-seller-info">
-              <h4>${product.seller.name}</h4>
-              <p>${product.seller.course} · ${product.seller.semester}</p>
-              ${product.seller.verified ? `<span class="verified-badge">${icons.check} Aluno verificado pela instituição</span>` : ''}
+      </div>
+
+      <!-- INSTITUTION BANNER -->
+      <div class="inst-banner">
+        <div class="banner-icon">${icons.shield}</div>
+        <div class="banner-text">
+          <strong>Ofertas verificadas pela sua instituição</strong>
+          <span>Pegue o cupom e fale direto pelo WhatsApp</span>
+        </div>
+      </div>
+
+      <div class="list-header">
+        <div class="section-divider"></div>
+        <div class="offers-count">${filteredProducts.length} ofertas disponíveis</div>
+      </div>
+
+      <!-- PRODUCTS LIST -->
+      <div class="products-list">
+        ${filteredProducts.map(p => {
+          const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
+          const catIcon = icons[p.category] || icons.others;
+          const timer = getTimerInfo(p.expiresIn);
+          const slots = getSlotsInfo(p.slots.used, p.slots.total);
+          const isSoldOut = p.slots.used >= p.slots.total;
+          
+          return `
+          <div class="product-card ${isSoldOut ? 'sold-out' : ''}">
+            <div class="card-image-area">
+              ${getProductImage(p.images[0], 400, 160, p.category)}
+              <div class="cat-badge">${catIcon} ${catName}</div>
+              ${isSoldOut 
+                ? `<div class="discount-badge soldout-badge">ESGOTADO</div>`
+                : `<div class="discount-badge">-${p.discount}%</div>`
+              }
+            </div>
+            
+            <div class="card-body">
+              <h3 class="card-title">${p.title}</h3>
+              
+              <div class="card-price-row">
+                <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
+                <span class="price-original">${formatCurrency(p.originalPrice)}</span>
+              </div>
+              
+              <div class="card-timer ${timer.colorClass}">
+                <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
+                <span>${timer.text}</span>
+              </div>
+              
+              <div class="card-slots">
+                <div class="slots-label">
+                  <span>${slots.text}</span>
+                  ${slots.almostEmpty && !isSoldOut ? '<span class="slots-warning pulse">Última vaga!</span>' : ''}
+                </div>
+                <div class="slots-bar-bg">
+                  <div class="slots-bar-fill ${slots.colorClass}" style="width: 0%" data-target="${slots.percent}%"></div>
+                </div>
+              </div>
+              
+              <div class="card-actions">
+                <button class="btn-primary get-coupon-btn" ${isSoldOut ? 'disabled' : ''} data-id="${p.id}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                  Pegar cupom
+                </button>
+                <button class="btn-outline view-details-btn" data-id="${p.id}">
+                  Ver detalhes
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        `}).join('')}
       </div>
-      <div class="detail-fixed-bottom" style="display:flex;flex-direction:column;gap:var(--space-2);">
-        <div style="display:flex;gap:var(--space-2);">
-          <button class="btn btn-primary btn-lg detail-coupon-btn" data-product-id="${product.id}" style="flex:1;">🎟️ Pegar cupom</button>
-          <button class="btn btn-pix btn-lg detail-pix-btn" data-product-id="${product.id}" style="flex:1;">💳 Pagar com Pix</button>
-        </div>
-        <button class="btn btn-secondary btn-lg detail-card-btn" data-product-id="${product.id}" style="width:100%;">💳 Pagar com Cartão</button>
-      </div>
-      <nav class="bottom-nav">
-        <div class="nav-item active" data-nav="home">${icons.home}<span>Início</span></div>
-        <div class="nav-item" data-nav="categories">${icons.grid}<span>Categorias</span></div>
-        <div class="nav-item" data-nav="coupons">${icons.ticket}<span>Meus Cupons</span></div>
-        <div class="nav-item" data-nav="profile">${icons.user}<span>Perfil</span></div>
-      </nav>
     </div>
+    
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item ${currentView === 'home' ? 'active' : ''}" data-nav="home">
+        ${icons.home}
+        <span>Início</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="cats">
+        ${icons.grid}
+        <span>Categorias</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item ${currentView === 'coupons' ? 'active' : ''}" data-nav="coupons">
+        ${icons.ticket}
+        <span>Cupons</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="profile">
+        ${icons.user}
+        <span>Perfil</span>
+        <div class="nav-indicator"></div>
+      </div>
+    </nav>
   `;
-  container.innerHTML = detailHTML;
 
-  container.querySelector('#back-to-list')?.addEventListener('click', () => {
-    currentView = 'home';
-    renderBuyerPage(container);
+  // Animate progress bars after render
+  setTimeout(() => {
+    container.querySelectorAll('.slots-bar-fill').forEach(bar => {
+      bar.style.width = bar.dataset.target;
+    });
+  }, 100);
+
+  // Category clicks
+  container.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      // Exit animation
+      const list = container.querySelector('.products-list');
+      list.style.opacity = '0';
+      list.style.transform = 'scale(0.98)';
+      list.style.transition = 'all 0.15s ease-out';
+      
+      setTimeout(() => {
+        activeCategory = chip.dataset.cat;
+        renderBuyerPage(container);
+      }, 150);
+    });
   });
-  container.querySelector('.detail-coupon-btn')?.addEventListener('click', () => showCouponModal(product));
-  container.querySelector('.detail-pix-btn')?.addEventListener('click', () => {
-    startPixPayment(container, product);
+
+  // Get coupon
+  container.querySelectorAll('.get-coupon-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!btn.disabled) {
+        const productId = btn.dataset.id;
+        const product = products.find(p => p.id == productId);
+        showPaymentSelectionModal(product, container);
+      }
+    });
   });
-  container.querySelector('.detail-card-btn')?.addEventListener('click', () => {
-    startCardPayment(container, product);
-  });
-  bindBottomNav(container);
 }
 
-function generateCouponCode() {
-  return String.fromCharCode(65+Math.floor(Math.random()*26)) + Math.floor(Math.random()*10) + String.fromCharCode(65+Math.floor(Math.random()*26)) + Math.floor(Math.random()*10);
-}
-
-async function startPixPayment(container, product) {
-  const btn = container.querySelector('.detail-pix-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = `${icons.loader} Gerando Pix...`; }
-  try {
-    const couponCode = generateCouponCode();
-    const payment = await createPixPayment(product, couponCode, currentUser);
-    currentPayment = payment;
-    renderPaymentScreen(container, payment, product);
-  } catch (err) {
-    showToast('Erro ao gerar Pix. Verifique o servidor local.', 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pagar com Pix'; }
-  }
-}
-
-async function startCardPayment(container, product) {
-  const btn = container.querySelector('.detail-card-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = `${icons.loader} Redirecionando...`; }
-  try {
-    const couponCode = generateCouponCode();
-    const initPoint = await createCheckoutPreference(product, couponCode, currentUser);
-    window.location.href = initPoint;
-  } catch (err) {
-    showToast('Erro ao gerar checkout de cartão. Verifique suas credenciais.', 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '💳 Pagar com Cartão'; }
-  }
-}
-
-function renderPaymentScreen(container, payment, product) {
-  clearPaymentIntervals();
-  const isPaid = payment.status === 'paid';
-  const isExpired = payment.status === 'expired';
-
-  container.innerHTML = `
-    <div class="page buyer-page" style="background-color: var(--gray-50);">
-      <header class="app-header payment-header">
-        <button class="btn-icon" id="back-from-payment" style="color: white;">${icons.arrowRight.replace('points="12 5 19 12 12 19"', 'points="12 19 5 12 12 5"').replace('x1="5" y1="12" x2="19"', 'x1="19" y1="12" x2="5"')}</button>
-        <span class="app-header-title" style="color: white;">Pagamento Pix</span>
-        <span class="pix-brand" style="color: white; opacity: 0.9;">${icons.pix}</span>
-      </header>
-      <div class="payment-header-bg"></div>
-      <div class="app-body payment-screen" id="payment-screen">
-        <div class="payment-premium-card">
-          <!-- Status -->
-        <div class="payment-status-container ${payment.status}" id="payment-status">
-          <div class="payment-status-icon">${isPaid ? '✅' : isExpired ? '⏰' : '⏳'}</div>
-          <div class="payment-status-text">${isPaid ? 'Pagamento confirmado!' : isExpired ? 'Pagamento expirado' : 'Aguardando pagamento'}</div>
-          <div class="payment-status-sub">${isPaid ? 'Seu pagamento foi recebido com sucesso.' : isExpired ? 'O tempo para pagamento expirou.' : 'Escaneie o QR Code ou copie o código Pix.'}</div>
-          ${!isPaid && !isExpired ? `<div class="payment-timer" id="payment-timer">${icons.clock} Expira em <span class="payment-timer-value" id="timer-value">10:00</span></div>` : ''}
+function showPaymentSelectionModal(product, container) {
+  const modalHTML = `
+    <div class="payment-modal-overlay" id="paymentSelectionModal">
+      <div class="payment-modal-content">
+        <div class="payment-modal-header">
+          <h3>Forma de Pagamento</h3>
+          <button class="icon-btn close-modal-btn">${icons.plus}</button> <!-- reused plus, will rotate in css -->
         </div>
-
-        ${!isPaid && !isExpired ? `
-        <!-- QR Code -->
-        <div class="qr-code-container">
-          <div class="qr-code-wrapper">
-            ${payment.qrCodeSVG}
-          </div>
-          <div class="qr-code-label">${icons.pix} Escaneie com seu banco</div>
-        </div>
-
-        <!-- Pix Code -->
-        <div class="pix-code-section">
-          <div class="pix-code-section-title">Código Copia e Cola</div>
-          <div class="pix-code-field">
-            <div class="pix-code-text" id="pix-code-text">${payment.pixCode}</div>
-            <button class="pix-code-copy-btn" id="copy-pix-btn">
-              ${icons.copy} Copiar
-            </button>
-          </div>
-        </div>
-        ` : ''}
-        
-        <!-- Instruction -->
-        <div class="payment-instruction">
-          <div class="payment-instruction-icon">📱</div>
-          <div class="payment-instruction-text"><strong>Abra seu banco</strong> e pague via Pix usando o QR Code ou o código copiado.</div>
-        </div>
-        </div> <!-- End of premium card -->
-
-        ${isPaid ? `
-        <div style="text-align:center;margin:var(--space-5) 0;">
-          <button class="btn btn-success btn-lg btn-block" onclick="window.open('https://wa.me/${product.seller.whatsapp}?text=Olá, ${product.seller.name}! Paguei via Pix o produto *${product.title}* (cupom ${payment.couponCode}) no Linka.','_blank')">
-            ${icons.whatsapp} Falar com vendedor
+        <div class="payment-modal-body">
+          <p class="payment-modal-desc">Você está comprando <strong>${product.title}</strong> por ${formatCurrency(product.discountPrice)}</p>
+          <button class="btn-payment-option pix-option" id="btnPayPix">
+            ${icons.pix}
+            <span>Pagar com Pix</span>
+            <small>Aprovação imediata</small>
+          </button>
+          <button class="btn-payment-option card-option" id="btnPayCard">
+            ${icons.wallet || icons.ticket}
+            <span>Cartão de Crédito</span>
+            <small>Redireciona para o Mercado Pago</small>
           </button>
         </div>
-        ` : ''}
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', modalHTML);
 
-        <!-- Summary -->
-        <div class="payment-summary">
-          <div class="payment-summary-title">Resumo do pagamento</div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">Produto</span>
-            <span class="payment-summary-value">${product.title}</span>
+  const modal = document.getElementById('paymentSelectionModal');
+  setTimeout(() => modal.classList.add('visible'), 10);
+
+  modal.querySelector('.close-modal-btn').addEventListener('click', () => {
+    modal.classList.remove('visible');
+    setTimeout(() => modal.remove(), 300);
+  });
+
+  document.getElementById('btnPayPix').addEventListener('click', async () => {
+    modal.classList.remove('visible');
+    setTimeout(() => modal.remove(), 300);
+    currentPayment = { product, method: 'pix' };
+    currentView = 'payment';
+    renderBuyerPage(container);
+  });
+
+  document.getElementById('btnPayCard').addEventListener('click', async () => {
+    const btn = document.getElementById('btnPayCard');
+    btn.innerHTML = `${icons.refresh} <span>Aguarde...</span>`; // Mock spinner
+    try {
+      const url = await createCheckoutPreference(product, 'MOCK123', currentUser);
+      window.location.href = url; // Redirects to mercado pago
+    } catch (err) {
+      showToast('Erro ao redirecionar', 'error');
+      btn.innerHTML = `<span>Tentar novamente</span>`;
+    }
+  });
+}
+
+function renderCoupons(container) {
+  // Simple coupons view matching dark aesthetic
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header">
+        <h1>Meus Cupons</h1>
+      </header>
+      
+      <div class="coupons-list">
+        ${coupons.map(c => `
+          <div class="coupon-card ${c.status}">
+            <div class="coupon-status-bar"></div>
+            <div class="coupon-body">
+              <div class="coupon-header">
+                <h3>${c.product}</h3>
+                <span class="status-badge ${c.status}">${c.status === 'active' ? 'Ativo' : c.status === 'used' ? 'Usado' : 'Expirado'}</span>
+              </div>
+              <div class="coupon-code-area">
+                <div class="coupon-code">${c.code}</div>
+                <button class="icon-btn copy-btn">${icons.copy}</button>
+              </div>
+              <div class="coupon-footer">
+                <div class="seller-info">
+                  ${icons.user} <span>${c.seller}</span>
+                </div>
+                ${c.status === 'active' ? `<button class="btn-whatsapp">${icons.whatsapp} WhatsApp</button>` : ''}
+              </div>
+            </div>
           </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">Vendedor</span>
-            <span class="payment-summary-value">${product.seller.name}</span>
-          </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">Cupom</span>
-            <span class="payment-summary-value" style="font-family:'Courier New',monospace;color:var(--primary-700);">${payment.couponCode}</span>
-          </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">De</span>
-            <span class="payment-summary-value" style="text-decoration:line-through;color:var(--text-tertiary);">${formatCurrency(payment.originalAmount)}</span>
-          </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">Subtotal</span>
-            <span class="payment-summary-value">${formatCurrency(payment.amount)} <span class="badge badge-danger">-${payment.discount}%</span></span>
-          </div>
-          <div class="payment-summary-row" style="opacity:0.7;">
-            <span class="payment-summary-label">Taxa da plataforma (1%)</span>
-            <span class="payment-summary-value" style="font-size:var(--font-size-xs);">${formatCurrency(payment.platformFee || 0)}</span>
-          </div>
-          <div class="payment-summary-row" style="opacity:0.7;">
-            <span class="payment-summary-label">Repasse ao vendedor</span>
-            <span class="payment-summary-value" style="font-size:var(--font-size-xs);color:var(--success-600);">${formatCurrency(payment.sellerAmount || payment.amount)}</span>
-          </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">Total a pagar</span>
-            <span class="payment-summary-value amount">${formatCurrency(payment.amount)}</span>
-          </div>
-          <div class="payment-summary-row">
-            <span class="payment-summary-label">ID</span>
-            <span class="payment-summary-value" style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${payment.id}</span>
+        `).join('')}
+      </div>
+    </div>
+    
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item" data-nav="home">
+        ${icons.home}
+        <span>Início</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="cats">
+        ${icons.grid}
+        <span>Categorias</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item active" data-nav="coupons">
+        ${icons.ticket}
+        <span>Cupons</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="profile">
+        ${icons.user}
+        <span>Perfil</span>
+        <div class="nav-indicator"></div>
+      </div>
+    </nav>
+  `;
+
+  // Bind Bottom Nav
+  const navItems = container.querySelectorAll('.bottom-nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const nav = item.dataset.nav;
+      if (nav === 'home') {
+        currentView = 'home';
+        window.history.pushState({}, '', '/buyer');
+        renderBuyerPage(container);
+      } else if (nav === 'profile') {
+        currentView = 'profile';
+        window.history.pushState({}, '', '/buyer/profile');
+        renderBuyerPage(container);
+      }
+    });
+  });
+}
+
+function renderProfile(container) {
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header">
+        <h1>Meu Perfil</h1>
+      </header>
+      
+      <div class="profile-container" style="padding: 24px 16px;">
+        <div style="text-align:center; margin-bottom: 24px;">
+          <div class="user-avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px;">${currentUser.avatar}</div>
+          <h2 style="font-size:18px;margin:0 0 4px;">${currentUser.name}</h2>
+          <span style="color:#6B7280;font-size:13px;">${currentUser.email}</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">Nome Completo</label>
+          <input type="text" value="${currentUser.name}" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
+        </div>
+        
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">WhatsApp (Para receber cupons)</label>
+          <input type="text" value="${currentUser.whatsapp}" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
+        </div>
+
+        <button class="btn-primary" style="width:100%;margin-top:16px;" id="btnSaveProfile">Salvar Dados</button>
+      </div>
+    </div>
+    
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item" data-nav="home">
+        ${icons.home}
+        <span>Início</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="cats">
+        ${icons.grid}
+        <span>Categorias</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="coupons">
+        ${icons.ticket}
+        <span>Cupons</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item active" data-nav="profile">
+        ${icons.user}
+        <span>Perfil</span>
+        <div class="nav-indicator"></div>
+      </div>
+    </nav>
+  `;
+
+  document.getElementById('btnSaveProfile').addEventListener('click', () => {
+    showToast('Perfil atualizado com sucesso!', 'success');
+  });
+
+  const navItems = container.querySelectorAll('.bottom-nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const nav = item.dataset.nav;
+      if (nav === 'home') {
+        currentView = 'home';
+        window.history.pushState({}, '', '/buyer');
+        renderBuyerPage(container);
+      } else if (nav === 'coupons') {
+        currentView = 'coupons';
+        window.history.pushState({}, '', '/buyer/coupons');
+        renderBuyerPage(container);
+      }
+    });
+  });
+}
+
+function renderPayment(container) {
+  if (!currentPayment) {
+    currentView = 'home';
+    renderBuyerPage(container);
+    return;
+  }
+
+  const { product, method } = currentPayment;
+
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header" style="display:flex;align-items:center;gap:12px;">
+        <button class="icon-btn" id="btnBackHome" style="color:#FFF;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <h1>Pagamento</h1>
+      </header>
+
+      <div class="payment-container" style="padding: 24px 16px; text-align:center;">
+        <h2 style="font-size:18px;margin-bottom:8px;">Finalizar via Pix</h2>
+        <p style="font-size:14px;color:#6B7280;margin-bottom:24px;">Valor: <strong style="color:#FFF;">${formatCurrency(product.discountPrice)}</strong></p>
+        
+        <div id="pixContainer" style="background:#111118; border:1px solid #1E1E2A; border-radius:16px; padding:24px; margin-bottom:24px;">
+          <div style="margin-bottom:16px;color:#00E5A0;">
+            ${icons.loader}
+            <span style="font-size:14px;font-weight:600;display:block;margin-top:8px;">Gerando código Pix...</span>
           </div>
         </div>
       </div>
-      <nav class="bottom-nav">
-        <div class="nav-item active" data-nav="home">${icons.home}<span>Início</span></div>
-        <div class="nav-item" data-nav="categories">${icons.grid}<span>Categorias</span></div>
-        <div class="nav-item" data-nav="coupons">${icons.ticket}<span>Meus Cupons</span></div>
-        <div class="nav-item" data-nav="profile">${icons.user}<span>Perfil</span></div>
-      </nav>
     </div>
   `;
 
-  // Back button
-  container.querySelector('#back-from-payment')?.addEventListener('click', () => {
-    clearPaymentIntervals();
+  document.getElementById('btnBackHome').addEventListener('click', () => {
+    if (paymentPollInterval) clearInterval(paymentPollInterval);
     currentView = 'home';
     renderBuyerPage(container);
   });
 
-  // Copy Pix code
-  container.querySelector('#copy-pix-btn')?.addEventListener('click', () => {
-    navigator.clipboard?.writeText(payment.pixCode);
-    const btn = container.querySelector('#copy-pix-btn');
-    btn.innerHTML = `${icons.check} Copiado!`;
-    btn.classList.add('copied');
-    showToast('Código Pix copiado!', 'success');
-    setTimeout(() => {
-      if (btn) { btn.innerHTML = `${icons.copy} Copiar`; btn.classList.remove('copied'); }
-    }, 3000);
-  });
+  // Start Pix generation
+  initPixFlow(product, container);
+}
 
-  // Timer countdown
-  if (!isPaid && !isExpired) {
-    const expiresAt = new Date(payment.expiresAt).getTime();
-    paymentTimerInterval = setInterval(() => {
-      const now = Date.now();
-      const diff = expiresAt - now;
-      const timerEl = container.querySelector('#timer-value');
-      if (diff <= 0 || !timerEl) {
-        clearPaymentIntervals();
-        payment.status = 'expired';
-        renderPaymentScreen(container, payment, product);
-        return;
-      }
-      const mins = Math.floor(diff / 60000);
-      const secs = Math.floor((diff % 60000) / 1000);
-      timerEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }, 1000);
+async function initPixFlow(product, container) {
+  try {
+    const pixData = await createPixPayment(product, 'LNK' + Math.floor(Math.random() * 9999), currentUser);
+    
+    const pixContainer = container.querySelector('#pixContainer');
+    if (!pixContainer) return; // user navigated away
 
-    // Poll for payment status
+    pixContainer.innerHTML = `
+      <div style="background:#FFF; padding:12px; border-radius:12px; display:inline-block; margin-bottom:16px;">
+        ${pixData.qrCodeSVG}
+      </div>
+      <p style="font-size:12px; color:#6B7280; margin-bottom:16px;">Código expira em 10 minutos</p>
+      <button class="btn-outline" style="width:100%; border-color:#00E5A0; color:#00E5A0;" id="btnCopyPix">
+        Copiar código Pix
+      </button>
+    `;
+
+    document.getElementById('btnCopyPix').addEventListener('click', () => {
+      navigator.clipboard.writeText(pixData.qrCodeString).catch(() => {});
+      showToast('Código Pix copiado!', 'success');
+    });
+
+    // Start polling
+    let attempts = 0;
     paymentPollInterval = setInterval(async () => {
-      const updated = await checkPaymentStatus(payment.id);
-      if (updated && updated.status === 'paid') {
-        clearPaymentIntervals();
-        showPaymentSuccess(container, updated, product);
+      attempts++;
+      const statusData = await checkPaymentStatus(pixData.id);
+      
+      // Since it's a mock simulation, checkPaymentStatus will return {status: 'paid'}
+      if (statusData && statusData.status === 'paid' && attempts > 1) { // wait a bit to simulate real polling
+        clearInterval(paymentPollInterval);
+        
+        showToast('Pagamento Aprovado! Cupom gerado.', 'success');
+        
+        // Add to local mock coupons to show in UI
+        coupons.unshift({
+          code: pixData.couponCode,
+          productId: product.id,
+          product: product.title,
+          seller: product.seller.name,
+          status: 'active',
+          createdAt: new Date().toLocaleString(),
+          validUntil: 'Hoje'
+        });
+
+        setTimeout(() => {
+          currentView = 'coupons';
+          window.history.pushState({}, '', '/buyer/coupons');
+          renderBuyerPage(container);
+        }, 1500);
       }
     }, 2000);
 
-    // Listen for payment-confirmed event
-    const onConfirmed = (e) => {
-      if (e.detail?.id === payment.id) {
-        clearPaymentIntervals();
-        window.removeEventListener('payment-confirmed', onConfirmed);
-        showPaymentSuccess(container, e.detail, product);
-      }
-    };
-    window.addEventListener('payment-confirmed', onConfirmed);
+  } catch (err) {
+    const pixContainer = container.querySelector('#pixContainer');
+    if (pixContainer) {
+      pixContainer.innerHTML = `<p style="color:#E24B4A;">Erro ao gerar Pix. Tente novamente.</p>`;
+    }
   }
-
-  bindBottomNav(container);
-}
-
-function showPaymentSuccess(container, payment, product) {
-  const modalRoot = document.getElementById('modal-root');
-  modalRoot.innerHTML = `
-    <div class="payment-success-overlay" id="payment-success">
-      <div class="payment-success-content">
-        <div class="payment-success-check">${icons.checkCircle}</div>
-        <div class="payment-success-title">Pagamento confirmado!</div>
-        <div class="payment-success-subtitle">O valor de <strong>${formatCurrency(payment.amount)}</strong> foi enviado para <strong>${product.seller.name}</strong>.</div>
-        <button class="btn btn-success btn-block btn-lg" id="success-whatsapp" style="margin-bottom:var(--space-3);">
-          ${icons.whatsapp} Falar com vendedor
-        </button>
-        <button class="btn btn-secondary btn-block" id="success-close">Voltar à vitrine</button>
-      </div>
-    </div>
-  `;
-
-  modalRoot.querySelector('#success-whatsapp')?.addEventListener('click', () => {
-    window.open(`https://wa.me/${product.seller.whatsapp}?text=Olá, ${product.seller.name}! Paguei via Pix o produto *${product.title}* (cupom ${payment.couponCode}) no Linka.`, '_blank');
-  });
-
-  modalRoot.querySelector('#success-close')?.addEventListener('click', () => {
-    modalRoot.innerHTML = '';
-    currentView = 'home';
-    renderBuyerPage(container);
-  });
-
-  // Also update the payment screen behind
-  setTimeout(() => {
-    renderPaymentScreen(container, payment, product);
-  }, 300);
-}
-
-function clearPaymentIntervals() {
-  if (paymentTimerInterval) { clearInterval(paymentTimerInterval); paymentTimerInterval = null; }
-  if (paymentPollInterval) { clearInterval(paymentPollInterval); paymentPollInterval = null; }
-}
-
-function showCouponModal(product) {
-  const code = generateCouponCode();
-  const modalRoot = document.getElementById('modal-root');
-  modalRoot.innerHTML = `
-    <div class="modal-backdrop" id="coupon-modal-backdrop">
-      <div class="modal-content">
-        <div class="modal-handle"></div>
-        <div class="coupon-modal-content">
-          <div class="coupon-icon">🎟️</div>
-          <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Cupom gerado!</h2>
-          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Apresente este código ao vendedor.</p>
-          <span class="coupon-code">${code}</span>
-          <div class="coupon-modal-details">
-            <div class="detail-row"><span class="detail-label">Produto</span><span class="detail-value">${product.title}</span></div>
-            <div class="detail-row"><span class="detail-label">Vendedor</span><span class="detail-value">${product.seller.name}</span></div>
-            <div class="detail-row"><span class="detail-label">Preço</span><span class="detail-value">${formatCurrency(product.discountPrice)}</span></div>
-            <div class="detail-row"><span class="detail-label">Validade</span><span class="detail-value">24 horas</span></div>
-          </div>
-          <div class="coupon-warning">${icons.alertTriangle} Este cupom é único e vinculado ao seu perfil.</div>
-          <button class="btn btn-success btn-block btn-lg" onclick="window.open('https://wa.me/${product.seller.whatsapp}?text=Olá, ${product.seller.name}! Tenho o cupom *${code}* para *${product.title}* no Linka.','_blank')" style="margin-bottom:var(--space-2);">
-            ${icons.whatsapp} Chamar no WhatsApp
-          </button>
-          <button class="btn btn-secondary btn-block" id="copy-coupon-btn">
-            ${icons.copy} Copiar código
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-  modalRoot.querySelector('#coupon-modal-backdrop').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) modalRoot.innerHTML = '';
-  });
-  modalRoot.querySelector('#copy-coupon-btn')?.addEventListener('click', () => {
-    navigator.clipboard?.writeText(code);
-    showToast('Código copiado!', 'success');
-  });
-}
-
-function bindBuyerEvents(container) {
-  // Category chips
-  container.querySelectorAll('[data-category]').forEach(chip => {
-    chip.addEventListener('click', () => {
-      activeCategory = chip.dataset.category;
-      renderBuyerPage(container);
-    });
-  });
-
-  // Coupon buttons
-  container.querySelectorAll('.coupon-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const product = products.find(p => p.id == btn.dataset.productId);
-      if (product) showCouponModal(product);
-    });
-  });
-
-  // Detail buttons
-  container.querySelectorAll('.detail-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const product = products.find(p => p.id == btn.dataset.productId);
-      if (product) renderProductDetail(container, product);
-    });
-  });
-
-  // Product card click
-  container.querySelectorAll('.product-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const product = products.find(p => p.id == card.dataset.productId);
-      if (product) renderProductDetail(container, product);
-    });
-  });
-
-  // Search
-  const searchInput = container.querySelector('#search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const grid = container.querySelector('#products-grid');
-      if (!grid) return;
-      const filtered = products.filter(p =>
-        (activeCategory === 'all' || p.category === activeCategory) &&
-        (p.title.toLowerCase().includes(query) || p.description.toLowerCase().includes(query))
-      );
-      grid.innerHTML = filtered.length > 0
-        ? filtered.map(p => renderProductCard(p)).join('')
-        : `<div class="empty-state" style="grid-column:1/-1;">${icons.package}<h3>Nenhum resultado encontrado</h3><p>Tente buscar por outro termo.</p></div>`;
-
-      // Re-bind events for new cards
-      grid.querySelectorAll('.coupon-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const product = products.find(p => p.id == btn.dataset.productId);
-          if (product) showCouponModal(product);
-        });
-      });
-      grid.querySelectorAll('.detail-btn, .product-card').forEach(el => {
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const id = el.dataset.productId;
-          const product = products.find(p => p.id == id);
-          if (product) renderProductDetail(container, product);
-        });
-      });
-    });
-  }
-
-  bindBottomNav(container);
-}
-
-function bindBottomNav(container) {
-  container.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      clearPaymentIntervals();
-      if (nav === 'home') { activeCategory = 'all'; currentView = 'home'; renderBuyerPage(container); }
-      else if (nav === 'coupons') { currentView = 'coupons'; renderBuyerPage(container); }
-      else if (nav === 'categories') { activeCategory = 'all'; currentView = 'home'; renderBuyerPage(container); }
-      else if (nav === 'profile') { showToast('Perfil em breve!', 'info'); }
-    });
-  });
 }
