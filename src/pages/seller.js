@@ -20,41 +20,43 @@ async function renderSellerPage(container) {
 
   container.innerHTML = `
     <div class="page seller-page">
-      <header class="app-header">
-        <div>
-          <div style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);">Painel do vendedor</div>
-          <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${currentUser.fullName} · ${institution.name}</div>
+      <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
+        <div style="display:flex; align-items:center; gap: 12px;">
+          <div class="user-avatar" style="width: 40px; height: 40px;">${currentUser.avatar}</div>
+          <div>
+            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff;">${currentUser.fullName}</div>
+            <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${institution.name}</div>
+          </div>
         </div>
-        <button class="btn btn-primary btn-sm" id="new-ad-btn">${icons.plus} Novo anúncio</button>
+        ${isMPConnected ? `
+          <div class="mp-status-icon" title="Mercado Pago Conectado">
+            ${icons.checkCircle}
+          </div>
+        ` : `
+          <button class="btn btn-mp btn-sm" id="connect-mp-btn" style="padding: 6px 12px; font-size: 12px;">${icons.wallet} Conectar</button>
+        `}
       </header>
-
-      ${!isMPConnected ? `
-      <div class="mp-connect-banner" id="mp-connect-banner">
-        <div class="mp-connect-inner">
-          <div class="mp-connect-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
-          </div>
-          <div class="mp-connect-text">
-            <strong>Conecte seu Mercado Pago</strong>
-            <span>Receba pagamentos Pix diretamente na sua conta.</span>
-          </div>
-          <button class="btn btn-mp btn-sm" id="connect-mp-btn">Conectar</button>
-        </div>
-      </div>
-      ` : `
-      <div class="mp-connected-badge">
-        ${icons.checkCircle} Mercado Pago conectado
-      </div>
-      `}
 
       <div class="app-body" id="seller-content">
         ${sellerView === 'create' ? renderCreateForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
       </div>
       <nav class="bottom-nav">
-        <div class="nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard">${icons.home}<span>Dashboard</span></div>
-        <div class="nav-item ${sellerView === 'ads' ? 'active' : ''}" data-nav="ads">${icons.package}<span>Anúncios</span></div>
-        <div class="nav-item ${sellerView === 'payments' ? 'active' : ''}" data-nav="payments">${icons.wallet}<span>Vendas</span></div>
-        <div class="nav-item ${sellerView === 'coupons' ? 'active' : ''}" data-nav="coupons">${icons.ticket}<span>Cupons</span></div>
+        <div class="bottom-nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard">
+          ${icons.home}<span>Dashboard</span>
+          <div class="nav-indicator"></div>
+        </div>
+        <div class="bottom-nav-item ${sellerView === 'ads' ? 'active' : ''}" data-nav="ads">
+          ${icons.package}<span>Anúncios</span>
+          <div class="nav-indicator"></div>
+        </div>
+        <div class="bottom-nav-item ${sellerView === 'payments' ? 'active' : ''}" data-nav="payments">
+          ${icons.wallet}<span>Vendas</span>
+          <div class="nav-indicator"></div>
+        </div>
+        <div class="bottom-nav-item ${sellerView === 'coupons' ? 'active' : ''}" data-nav="coupons">
+          ${icons.ticket}<span>Cupons</span>
+          <div class="nav-indicator"></div>
+        </div>
       </nav>
     </div>
   `;
@@ -71,33 +73,39 @@ function renderDashboard() {
   };
 
   return `
-    <div class="seller-stats">
-      <div class="stat-card">
-        <div class="stat-label">Anúncios ativos</div>
-        <div class="stat-value">${sellerStats.activeAds}</div>
+    <div class="seller-stats-grid">
+      <div class="stat-card glass-card">
+        <div class="stat-icon">${icons.package}</div>
+        <div class="stat-info">
+          <div class="stat-value">${sellerStats.activeAds}</div>
+          <div class="stat-label">Anúncios</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Cupons gerados</div>
-        <div class="stat-value">${sellerStats.couponsGenerated}</div>
+      <div class="stat-card glass-card">
+        <div class="stat-icon">${icons.ticket}</div>
+        <div class="stat-info">
+          <div class="stat-value">${sellerStats.couponsGenerated}</div>
+          <div class="stat-label">Cupons</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Cupons usados</div>
-        <div class="stat-value">${sellerStats.couponsUsed}</div>
+      <div class="stat-card glass-card">
+        <div class="stat-icon">${icons.checkCircle}</div>
+        <div class="stat-info">
+          <div class="stat-value">${sellerStats.conversionRate}</div>
+          <div class="stat-label">Conversão</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-label">Conversão</div>
-        <div class="stat-value">${sellerStats.conversionRate}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Cliques</div>
-        <div class="stat-value">${sellerStats.totalClicks}</div>
+      <div class="stat-card glass-card">
+        <div class="stat-icon">${icons.eye}</div>
+        <div class="stat-info">
+          <div class="stat-value">${sellerStats.totalClicks}</div>
+          <div class="stat-label">Cliques</div>
+        </div>
       </div>
     </div>
 
-    <div class="seller-cta">
-      <h3>🚀 Venda dentro da sua instituição</h3>
-      <p>Cadastre um produto, aguarde aprovação e receba compradores pelo WhatsApp.</p>
-      <button class="btn btn-primary create-ad-cta">${icons.plus} Criar novo anúncio</button>
+    <div class="seller-cta-inline">
+      <button class="btn btn-primary create-ad-cta btn-block" style="display:flex; justify-content:center; align-items:center; gap:8px;">${icons.plus} Criar Novo Anúncio</button>
     </div>
 
     <!-- Ads by status -->
@@ -146,33 +154,31 @@ function renderAdsByStatus() {
 }
 
 function renderSellerAdCard(ad) {
+  const isAct = ad.status === 'active';
   const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: 'Recusado' };
   const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: 'badge-danger' };
   return `
-    <div class="seller-ad-card">
+    <div class="seller-ad-card glass-card">
       <div class="seller-ad-card-inner">
-        <div class="seller-ad-thumb">${getProductImage(ad.images[0], 72, 72)}</div>
+        <div class="seller-ad-thumb">${getProductImage(ad.images[0], 120, 120, ad.category)}</div>
         <div class="seller-ad-info">
-          <h4>${ad.title}</h4>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <h4 class="ad-title">${ad.title}</h4>
+            ${isAct ? '<div class="pulse-light"></div>' : ''}
+          </div>
           <div class="ad-category">${categories.find(c => c.id === ad.category)?.name || ad.category}</div>
-          <div class="seller-ad-stats">
-            <span>${icons.eye} ${ad.clicks}</span>
-            <span>${icons.ticket} ${ad.couponsGenerated}</span>
-            <span>${icons.check} ${ad.couponsUsed}</span>
+          <div class="seller-ad-metrics">
+            <span title="Cliques">${icons.eye} ${ad.clicks}</span>
+            <span title="Gerados">${icons.ticket} ${ad.couponsGenerated}</span>
+            <span title="Usados" class="highlight">${icons.checkCircle} ${ad.couponsUsed}</span>
           </div>
         </div>
       </div>
+      ${!isAct || ad.status === 'expired' ? `
       <div class="seller-ad-status">
         <span class="badge ${statusBadge[ad.status]}">${statusLabels[ad.status]}</span>
-        ${ad.status === 'active' ? `<span class="timer">${icons.clock} ${ad.timeLeft || ad.expiresIn}</span>` : ''}
-        ${ad.status === 'queue' ? `<span class="queue-position">Posição ${ad.queuePosition} · Estimativa: ${ad.estimatedEntry}</span>` : ''}
-        ${ad.status === 'pending' ? `<span style="color:var(--text-secondary);font-size:var(--font-size-xs);">Aguardando análise da coordenação</span>` : ''}
         ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm">Renovar</button>` : ''}
-        ${ad.status === 'rejected' ? '' : ''}
-      </div>
-      ${ad.status === 'rejected' && ad.rejectionReason ? `
-        <div class="rejection-reason">⚠️ Motivo: ${ad.rejectionReason}</div>
-      ` : ''}
+      </div>` : ''}
     </div>
   `;
 }
@@ -511,7 +517,7 @@ function bindSellerEvents(container) {
   }, 100);
 
   // Bottom nav
-  container.querySelectorAll('.nav-item').forEach(item => {
+  container.querySelectorAll('.bottom-nav-item').forEach(item => {
     item.addEventListener('click', () => {
       const nav = item.dataset.nav;
       if (nav === 'dashboard') { sellerView = 'dashboard'; activeTab = 'active'; }
@@ -538,65 +544,82 @@ function drawSimpleChart(canvas) {
   const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   const w = rect.width;
   const h = rect.height;
-  const padding = { top: 20, right: 20, bottom: 30, left: 30 };
+  const padding = { top: 30, right: 20, bottom: 30, left: 40 };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
-  const maxVal = Math.max(...data);
+  const maxVal = Math.max(...data) + 2; // Extra headroom
 
-  // Grid lines
+  // Y-axis labels and grid lines
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '10px Plus Jakarta Sans, sans-serif';
+  ctx.textAlign = 'right';
   ctx.lineWidth = 1;
+  
   for (let i = 0; i <= 4; i++) {
     const y = padding.top + (chartH / 4) * i;
+    const val = Math.round(maxVal - (maxVal / 4) * i);
+    ctx.fillText(val, padding.left - 10, y + 3);
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
     ctx.lineTo(w - padding.right, y);
     ctx.stroke();
   }
 
+  // Calculate points
+  const points = data.map((val, i) => ({
+    x: padding.left + (chartW / (data.length - 1)) * i,
+    y: padding.top + chartH - (val / maxVal) * chartH
+  }));
+
+  // Spline Path
+  const splinePath = new Path2D();
+  splinePath.moveTo(points[0].x, points[0].y);
+  
+  for (let i = 0; i < points.length - 1; i++) {
+    const xc = (points[i].x + points[i + 1].x) / 2;
+    const yc = (points[i].y + points[i + 1].y) / 2;
+    splinePath.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+  }
+  splinePath.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+
   // Line
-  ctx.beginPath();
-  ctx.strokeStyle = '#00E5A0';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#00F0A0';
+  ctx.lineWidth = 3;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  data.forEach((val, i) => {
-    const x = padding.left + (chartW / (data.length - 1)) * i;
-    const y = padding.top + chartH - (val / maxVal) * chartH;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
-  ctx.stroke();
+  ctx.stroke(splinePath);
 
   // Gradient fill
+  const fillPath = new Path2D(splinePath);
+  fillPath.lineTo(points[points.length - 1].x, h - padding.bottom);
+  fillPath.lineTo(points[0].x, h - padding.bottom);
+  fillPath.closePath();
+  
   const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
-  gradient.addColorStop(0, 'rgba(0,229,160,0.15)');
-  gradient.addColorStop(1, 'rgba(0,229,160,0)');
-  ctx.lineTo(padding.left + chartW, h - padding.bottom);
-  ctx.lineTo(padding.left, h - padding.bottom);
-  ctx.closePath();
+  gradient.addColorStop(0, 'rgba(0, 240, 160, 0.25)');
+  gradient.addColorStop(1, 'rgba(0, 240, 160, 0)');
   ctx.fillStyle = gradient;
-  ctx.fill();
+  ctx.fill(fillPath);
 
   // Dots
-  data.forEach((val, i) => {
-    const x = padding.left + (chartW / (data.length - 1)) * i;
-    const y = padding.top + chartH - (val / maxVal) * chartH;
+  points.forEach((pt) => {
     ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#00E5A0';
+    ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#00F0A0';
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(x, y, 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#0A0A0F';
+    ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#0B0B0B';
     ctx.fill();
   });
 
-  // Labels
-  ctx.fillStyle = '#55556a';
+  // X-axis Labels
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.font = '11px Plus Jakarta Sans, sans-serif';
   ctx.textAlign = 'center';
   labels.forEach((label, i) => {
     const x = padding.left + (chartW / (data.length - 1)) * i;
-    ctx.fillText(label, x, h - 8);
+    ctx.fillText(label, x, h - 10);
   });
 }
