@@ -1,0 +1,390 @@
+/* ========== SELLER PAGE ========== */
+.seller-header-info {
+  padding: var(--space-5);
+  padding-top: calc(var(--header-height) + var(--space-4));
+}
+.seller-header-info h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+}
+.seller-header-info p {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+/* Stats row */
+.seller-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  padding: 0 var(--space-5);
+  margin-bottom: var(--space-5);
+}
+@media (min-width: 640px) {
+  .seller-stats { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) {
+  .seller-stats { grid-template-columns: repeat(5, 1fr); }
+}
+
+/* CTA card */
+.seller-cta {
+  margin: 0 var(--space-5) var(--space-5);
+  background: var(--gradient-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  border: 1px solid var(--primary-100);
+}
+.seller-cta h3 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-900);
+  margin-bottom: var(--space-2);
+}
+.seller-cta p {
+  font-size: var(--font-size-sm);
+  color: var(--primary-700);
+  margin-bottom: var(--space-4);
+  line-height: var(--line-height-relaxed);
+}
+
+/* Create ad form */
+.create-ad-form {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.form-section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  margin-bottom: var(--space-2);
+}
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+@media (max-width: 480px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+.discount-preview {
+  background: var(--success-50);
+  border: 1px solid var(--success-100);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.discount-preview .final-price {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-extrabold);
+  color: var(--success-700);
+}
+.photo-upload {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.photo-upload-slot {
+  aspect-ratio: 1;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+  position: relative;
+}
+.photo-upload-slot:hover { border-color: var(--primary-400); color: var(--primary-500); }
+.photo-upload-slot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+}
+
+/* Ad preview */
+.ad-preview-container {
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.ad-preview-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-3);
+}
+
+/* Seller ad cards */
+.seller-ads-list {
+  padding: 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+.seller-ad-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+.seller-ad-card-inner {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.seller-ad-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  background: var(--gray-100);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.seller-ad-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.seller-ad-info { flex: 1; min-width: 0; }
+.seller-ad-info h4 {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seller-ad-info .ad-category {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.seller-ad-stats {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+.seller-ad-stats span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.seller-ad-status {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+}
+.seller-ad-status .queue-position {
+  color: var(--warning-700);
+  font-weight: var(--font-weight-medium);
+}
+.rejection-reason {
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-50);
+  border-top: 1px solid var(--danger-100);
+  font-size: var(--font-size-xs);
+  color: var(--danger-700);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* Seller coupons */
+.seller-coupons-list {
+  padding: 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Performance section */
+.performance-section {
+  padding: var(--space-5);
+}
+.chart-container {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 1px solid var(--border-light);
+  margin-bottom: var(--space-4);
+}
+.chart-container h4 {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-4);
+}
+.chart-container canvas {
+  width: 100% !important;
+  max-height: 220px;
+}
+
+.motivational-msg {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+}
+
+/* Seller tabs */
+.seller-tabs-container {
+  padding: 0 var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+/* ========== MERCADO PAGO CONNECT ========== */
+
+/* Connect banner */
+.mp-connect-banner {
+  margin: 0 var(--space-5) var(--space-4);
+  background: linear-gradient(135deg, #e8f4fd 0%, #d1ecf9 100%);
+  border: 1px solid #b6dff6;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  animation: fadeInUp 0.4s ease;
+}
+
+.mp-connect-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mp-connect-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #009ee3, #00b1ea);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mp-connect-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-connect-text strong {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: #005a87;
+  margin-bottom: 2px;
+}
+
+.mp-connect-text span {
+  font-size: var(--font-size-xs);
+  color: #3a7ca5;
+  line-height: var(--line-height-snug);
+}
+
+/* Connected badge */
+.mp-connected-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-5) var(--space-4);
+  padding: var(--space-3);
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid var(--success-100);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--success-700);
+}
+
+.mp-connected-badge svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Mercado Pago Button */
+.btn-mp {
+  background: linear-gradient(135deg, #009ee3 0%, #00b1ea 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 158, 227, 0.3);
+  transition: all var(--transition-base);
+}
+
+.btn-mp:hover {
+  box-shadow: 0 6px 20px rgba(0, 158, 227, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-mp:active {
+  transform: scale(0.97);
+}
+
+/* ========== COMMISSION INFO ========== */
+.commission-info-bar {
+  margin: 0 var(--space-5) var(--space-4);
+  background: var(--gray-50);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.commission-info-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.commission-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.commission-label strong {
+  color: var(--primary-700);
+}
+
+.commission-detail {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 480px) {
+  .mp-connect-inner {
+    flex-wrap: wrap;
+  }
+  .mp-connect-text {
+    flex-basis: calc(100% - 56px);
+  }
+  .mp-connect-inner .btn-mp {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+  .commission-info-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}

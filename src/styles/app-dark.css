@@ -1,0 +1,1071 @@
+/* ============================================================
+   LINKA APP DARK THEME
+   Applies the premium dark aesthetic to buyer, seller & admin
+   ============================================================ */
+
+/* --- Dark Token Overrides --- */
+.buyer-page, .seller-page, .admin-page {
+  --surface: #111118;
+  --surface-alt: #0A0A0F;
+  --surface-raised: #16161e;
+  --surface-card: #151520;
+  --backdrop: rgba(0,0,0,0.7);
+
+  --text-primary: #f0f0f5;
+  --text-secondary: #8b8b9e;
+  --text-tertiary: #55556a;
+  --text-inverse: #0A0A0F;
+
+  --border-light: rgba(255,255,255,0.06);
+  --border: rgba(255,255,255,0.1);
+  --border-strong: rgba(255,255,255,0.15);
+
+  --gray-50: #0e0e16;
+  --gray-100: #151520;
+  --gray-200: #1e1e2a;
+  --gray-300: #2a2a3a;
+  --gray-400: #55556a;
+  --gray-500: #6e6e85;
+  --gray-600: #8b8b9e;
+  --gray-700: #a5a5b5;
+  --gray-800: #d0d0dd;
+  --gray-900: #f0f0f5;
+
+  --primary-50: rgba(0,229,160,0.06);
+  --primary-100: rgba(0,229,160,0.12);
+  --primary-200: rgba(0,229,160,0.2);
+  --primary-300: #00cc8e;
+  --primary-400: #00E5A0;
+  --primary-500: #00E5A0;
+  --primary-600: #00E5A0;
+  --primary-700: #00E5A0;
+
+  --success-50: rgba(0,229,160,0.06);
+  --success-100: rgba(0,229,160,0.12);
+  --success-600: #00E5A0;
+  --success-700: #00cc8e;
+
+  --warning-50: rgba(245,166,35,0.08);
+  --warning-100: rgba(245,166,35,0.15);
+  --warning-500: #F5A623;
+  --warning-700: #F5A623;
+
+  --danger-50: rgba(239,68,68,0.08);
+  --danger-100: rgba(239,68,68,0.15);
+  --danger-500: #ef4444;
+  --danger-600: #ef4444;
+  --danger-700: #ef4444;
+
+  --gradient-card: linear-gradient(135deg, rgba(0,229,160,0.06) 0%, rgba(0,229,160,0.02) 100%);
+  --gradient-brand: linear-gradient(135deg, #00E5A0 0%, #00cc8e 100%);
+
+  --shadow-xs: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-card-hover: 0 8px 30px rgba(0,0,0,0.5);
+  --shadow-brand: 0 4px 20px rgba(0,229,160,0.2);
+
+  background: #0A0A0F;
+  color: var(--text-primary);
+}
+
+/* --- App Header Dark --- */
+.buyer-page .app-header,
+.seller-page .app-header,
+.admin-page .app-header {
+  background: rgba(10,10,15,0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+/* --- Bottom Nav Dark --- */
+.buyer-page .bottom-nav,
+.seller-page .bottom-nav,
+.admin-page .bottom-nav {
+  background: rgba(10,10,15,0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-light);
+}
+.buyer-page .nav-item,
+.seller-page .nav-item,
+.admin-page .nav-item {
+  color: var(--text-tertiary);
+}
+.buyer-page .nav-item.active,
+.seller-page .nav-item.active,
+.admin-page .nav-item.active {
+  color: #00E5A0;
+}
+
+/* --- Avatar Dark --- */
+.buyer-page .avatar,
+.seller-page .avatar,
+.admin-page .avatar {
+  background: linear-gradient(135deg, #00E5A0, #00cc8e);
+  color: #0A0A0F;
+  font-weight: 700;
+}
+
+/* --- Stat Cards Dark --- */
+.buyer-page .stat-card,
+.seller-page .stat-card,
+.admin-page .stat-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+}
+.buyer-page .stat-value,
+.seller-page .stat-value,
+.admin-page .stat-value {
+  color: #fff;
+}
+.buyer-page .stat-label,
+.seller-page .stat-label,
+.admin-page .stat-label {
+  color: var(--text-secondary);
+}
+.stat-change.positive { color: #00E5A0; }
+
+/* --- Buttons Dark --- */
+.buyer-page .btn-primary,
+.seller-page .btn-primary,
+.admin-page .btn-primary {
+  background: #00E5A0;
+  color: #0A0A0F;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(0,229,160,0.25);
+}
+.buyer-page .btn-primary:hover,
+.seller-page .btn-primary:hover,
+.admin-page .btn-primary:hover {
+  background: #00cc8e;
+  box-shadow: 0 6px 24px rgba(0,229,160,0.35);
+  transform: translateY(-1px);
+}
+.buyer-page .btn-secondary,
+.seller-page .btn-secondary,
+.admin-page .btn-secondary {
+  background: var(--gray-200);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.buyer-page .btn-ghost,
+.seller-page .btn-ghost,
+.admin-page .btn-ghost {
+  color: var(--text-secondary);
+}
+.buyer-page .btn-ghost:hover,
+.seller-page .btn-ghost:hover,
+.admin-page .btn-ghost:hover {
+  background: rgba(255,255,255,0.05);
+  color: #00E5A0;
+}
+.buyer-page .btn-success,
+.seller-page .btn-success,
+.admin-page .btn-success {
+  background: #00E5A0;
+  color: #0A0A0F;
+  border: none;
+  font-weight: 700;
+}
+.buyer-page .btn-danger,
+.seller-page .btn-danger,
+.admin-page .btn-danger {
+  background: rgba(239,68,68,0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+.buyer-page .btn-icon,
+.seller-page .btn-icon,
+.admin-page .btn-icon {
+  color: var(--text-secondary);
+}
+
+/* --- Chips / Tabs Dark --- */
+.buyer-page .chip,
+.seller-page .chip,
+.admin-page .chip {
+  background: var(--gray-200);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+}
+.buyer-page .chip.active,
+.seller-page .chip.active,
+.admin-page .chip.active {
+  background: rgba(0,229,160,0.12);
+  color: #00E5A0;
+  border-color: rgba(0,229,160,0.3);
+}
+.buyer-page .tab,
+.seller-page .tab,
+.admin-page .tab {
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+}
+.buyer-page .tab.active,
+.seller-page .tab.active,
+.admin-page .tab.active {
+  color: #00E5A0;
+  border-bottom: 2px solid #00E5A0;
+}
+.tab-count {
+  background: rgba(0,229,160,0.12);
+  color: #00E5A0;
+}
+
+/* --- Badges Dark --- */
+.buyer-page .badge-success,
+.seller-page .badge-success,
+.admin-page .badge-success {
+  background: rgba(0,229,160,0.12);
+  color: #00E5A0;
+}
+.buyer-page .badge-warning,
+.seller-page .badge-warning,
+.admin-page .badge-warning {
+  background: rgba(245,166,35,0.12);
+  color: #F5A623;
+}
+.buyer-page .badge-danger,
+.seller-page .badge-danger,
+.admin-page .badge-danger {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+}
+.buyer-page .badge-primary,
+.seller-page .badge-primary,
+.admin-page .badge-primary {
+  background: rgba(0,229,160,0.12);
+  color: #00E5A0;
+}
+.buyer-page .badge-neutral,
+.seller-page .badge-neutral,
+.admin-page .badge-neutral {
+  background: var(--gray-200);
+  color: var(--text-secondary);
+}
+
+/* --- Input Fields Dark --- */
+.buyer-page .input-field,
+.seller-page .input-field,
+.admin-page .input-field {
+  background: var(--gray-100);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.buyer-page .input-field:focus,
+.seller-page .input-field:focus,
+.admin-page .input-field:focus {
+  border-color: #00E5A0;
+  box-shadow: 0 0 0 3px rgba(0,229,160,0.15);
+}
+.buyer-page .input-field::placeholder,
+.seller-page .input-field::placeholder,
+.admin-page .input-field::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* --- Cards / Surfaces --- */
+.buyer-page .product-card,
+.seller-page .seller-ad-card,
+.admin-page .moderation-card,
+.admin-page .category-heat-card,
+.admin-page .alert-card,
+.admin-page .seller-row,
+.admin-page .setting-item {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-xs);
+}
+.buyer-page .product-card:hover {
+  border-color: rgba(0,229,160,0.2);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+
+/* Product image overlay */
+.buyer-page .product-image {
+  background: var(--gray-200);
+}
+.buyer-page .product-category {
+  background: rgba(10,10,15,0.75);
+  backdrop-filter: blur(8px);
+  color: var(--text-secondary);
+}
+.buyer-page .discount-badge {
+  background: #00E5A0;
+  color: #0A0A0F;
+}
+
+/* Pricing dark */
+.buyer-page .price-discount,
+.seller-page .price-discount {
+  color: #00E5A0;
+}
+.buyer-page .price-original,
+.seller-page .price-original {
+  color: var(--text-tertiary);
+}
+
+/* Timer dark */
+.buyer-page .timer,
+.seller-page .timer {
+  color: var(--text-tertiary);
+}
+
+/* --- Search Bar Dark --- */
+.buyer-page .search-bar {
+  position: relative;
+}
+.buyer-page .search-bar .input-field {
+  background: var(--gray-100);
+  border: 1px solid var(--border);
+}
+.buyer-page .search-icon {
+  color: var(--text-tertiary);
+}
+
+/* --- Banner Dark --- */
+.buyer-page .buyer-banner {
+  background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,229,160,0.03));
+  border: 1px solid rgba(0,229,160,0.15);
+}
+.buyer-page .buyer-banner h3 {
+  color: #00E5A0;
+}
+.buyer-page .buyer-banner p {
+  color: var(--text-secondary);
+}
+
+/* Seller CTA */
+.seller-page .seller-cta {
+  background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,229,160,0.03));
+  border: 1px solid rgba(0,229,160,0.15);
+}
+.seller-page .seller-cta h3 {
+  color: #00E5A0;
+}
+.seller-page .seller-cta p {
+  color: var(--text-secondary);
+}
+
+/* --- Coupon Items Dark --- */
+.buyer-page .coupon-item,
+.seller-page .coupon-item {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+}
+.buyer-page .coupon-item-code,
+.seller-page .coupon-item-code {
+  color: #00E5A0;
+}
+
+/* --- Detail Page Dark --- */
+.buyer-page .product-detail {
+  background: var(--surface-alt);
+}
+.buyer-page .detail-gallery-item {
+  background: var(--gray-200);
+}
+.buyer-page .detail-seller {
+  background: var(--gray-100);
+}
+.buyer-page .detail-fixed-bottom {
+  background: rgba(10,10,15,0.92);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-light);
+}
+.buyer-page .btn-pix {
+  background: rgba(0,229,160,0.1);
+  color: #00E5A0;
+  border: 1px solid rgba(0,229,160,0.25);
+}
+
+/* --- Coupon Modal Dark --- */
+.buyer-page .coupon-code,
+.seller-page .coupon-code {
+  background: rgba(0,229,160,0.08);
+  border: 2px dashed rgba(0,229,160,0.3);
+  color: #00E5A0;
+}
+.buyer-page .coupon-modal-details,
+.seller-page .coupon-modal-details {
+  background: var(--gray-100);
+}
+.buyer-page .coupon-warning {
+  background: rgba(245,166,35,0.08);
+  color: #F5A623;
+}
+
+/* --- Modal Dark --- */
+.buyer-page .modal-content,
+.seller-page .modal-content,
+.admin-page .modal-content {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+}
+.buyer-page .modal-backdrop,
+.seller-page .modal-backdrop,
+.admin-page .modal-backdrop {
+  background: rgba(0,0,0,0.7);
+}
+.buyer-page .modal-handle,
+.seller-page .modal-handle,
+.admin-page .modal-handle {
+  background: var(--gray-300);
+}
+
+/* --- Empty State Dark --- */
+.buyer-page .empty-state,
+.seller-page .empty-state,
+.admin-page .empty-state {
+  color: var(--text-tertiary);
+}
+
+/* --- Seller Page Specifics --- */
+.seller-page .mp-connect-banner {
+  background: linear-gradient(135deg, rgba(0,158,227,0.1), rgba(0,177,234,0.05));
+  border-color: rgba(0,158,227,0.2);
+}
+.seller-page .mp-connect-text strong { color: #00b1ea; }
+.seller-page .mp-connect-text span { color: var(--text-secondary); }
+.seller-page .mp-connected-badge {
+  background: rgba(0,229,160,0.08);
+  border-color: rgba(0,229,160,0.2);
+  color: #00E5A0;
+}
+.seller-page .btn-mp {
+  background: linear-gradient(135deg, #009ee3, #00b1ea);
+  color: white;
+}
+.seller-page .seller-ad-status {
+  border-top-color: var(--border-light);
+}
+.seller-page .rejection-reason {
+  background: rgba(239,68,68,0.08);
+  border-top-color: rgba(239,68,68,0.15);
+  color: #ef4444;
+}
+.seller-page .ad-preview-container {
+  background: var(--gray-100);
+}
+.seller-page .photo-upload-slot {
+  border-color: var(--border);
+  color: var(--text-tertiary);
+}
+.seller-page .photo-upload-slot:hover {
+  border-color: #00E5A0;
+  color: #00E5A0;
+}
+.seller-page .discount-preview {
+  background: rgba(0,229,160,0.06);
+  border-color: rgba(0,229,160,0.15);
+}
+.seller-page .discount-preview .final-price { color: #00E5A0; }
+.seller-page .commission-info-bar {
+  background: var(--gray-100);
+  border-color: var(--border-light);
+}
+.seller-page .commission-label strong { color: #00E5A0; }
+
+/* Seller Chart Dark */
+.seller-page .chart-container,
+.admin-page .chart-container {
+  background: var(--surface-card);
+  border-color: var(--border-light);
+}
+
+/* --- Admin Page Specifics --- */
+.admin-page .period-filter {
+  background: var(--gray-100);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.admin-page .admin-section-count {
+  background: rgba(245,166,35,0.12);
+  color: #F5A623;
+}
+.admin-page .alert-card {
+  border-left-color: #F5A623;
+}
+.admin-page .alert-card.critical {
+  border-left-color: #ef4444;
+}
+.admin-page .alert-card-icon {
+  background: rgba(245,166,35,0.12);
+  color: #F5A623;
+}
+.admin-page .alert-card.critical .alert-card-icon {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+}
+.admin-page .moderation-actions {
+  border-top-color: var(--border-light);
+}
+.admin-page .moderation-pricing span[style*="primary-700"] {
+  color: #00E5A0 !important;
+}
+
+/* Category heat progress */
+.admin-page .progress-bar {
+  background: var(--gray-200);
+}
+.admin-page .progress-fill.success { background: #00E5A0; }
+.admin-page .progress-fill.warning { background: #F5A623; }
+.admin-page .progress-fill.danger { background: #ef4444; }
+
+/* Settings toggle dark */
+.admin-page .toggle {
+  background: var(--gray-300);
+}
+.admin-page .toggle.active {
+  background: #00E5A0;
+}
+
+/* Reject modal dark */
+.admin-page .reject-reason-option,
+.seller-page .reject-reason-option {
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.admin-page .reject-reason-option:hover,
+.seller-page .reject-reason-option:hover {
+  border-color: rgba(0,229,160,0.3);
+}
+.admin-page .reject-reason-option.selected,
+.seller-page .reject-reason-option.selected {
+  border-color: #00E5A0;
+  background: rgba(0,229,160,0.06);
+}
+.admin-page .reject-reason-radio {
+  border-color: var(--gray-400);
+}
+.admin-page .reject-reason-option.selected .reject-reason-radio {
+  border-color: #00E5A0;
+}
+.admin-page .reject-reason-option.selected .reject-reason-radio::after {
+  background: #00E5A0;
+}
+
+/* Seller payments section */
+.seller-page .payments-stats-grid {
+  padding: 0 var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.seller-page .payment-stat-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: var(--space-4);
+}
+.seller-page .payment-stat-card.revenue {
+  border-color: rgba(0,229,160,0.2);
+}
+.seller-page .revenue-value { color: #00E5A0; }
+.seller-page .success-value { color: #00E5A0; }
+.seller-page .payment-list-item {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.seller-page .paid-amount { color: #00E5A0; font-weight: 700; }
+.seller-page .confirmed-indicator { color: #00E5A0; }
+
+/* Payment screen dark */
+.buyer-page .payment-screen {
+  background: var(--surface-alt);
+}
+.buyer-page .payment-premium-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+}
+.buyer-page .payment-header {
+  background: linear-gradient(135deg, #0e1a12, #0A0A0F) !important;
+}
+.buyer-page .payment-header-bg {
+  background: linear-gradient(135deg, rgba(0,229,160,0.08), transparent) !important;
+}
+.buyer-page .qr-code-wrapper {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+.buyer-page .pix-code-field {
+  background: var(--gray-100);
+  border: 1px solid var(--border);
+}
+.buyer-page .pix-code-copy-btn {
+  background: #00E5A0;
+  color: #0A0A0F;
+}
+.buyer-page .payment-summary {
+  background: var(--surface-card);
+  border: 1px solid var(--border-light);
+}
+.buyer-page .payment-instruction {
+  background: rgba(0,229,160,0.06);
+  border: 1px solid rgba(0,229,160,0.12);
+}
+
+/* Payment success overlay */
+.payment-success-overlay {
+  background: rgba(0,0,0,0.8);
+}
+.payment-success-content {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+}
+
+/* --- Scrollbar Dark --- */
+.buyer-page ::-webkit-scrollbar,
+.seller-page ::-webkit-scrollbar,
+.admin-page ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.buyer-page ::-webkit-scrollbar-track,
+.seller-page ::-webkit-scrollbar-track,
+.admin-page ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.buyer-page ::-webkit-scrollbar-thumb,
+.seller-page ::-webkit-scrollbar-thumb,
+.admin-page ::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 3px;
+}
+
+/* --- Divider Dark --- */
+.buyer-page .divider,
+.seller-page .divider,
+.admin-page .divider {
+  background: var(--border-light);
+}
+
+/* ============================================================
+   PREMIUM REFINEMENTS V2
+   ============================================================ */
+
+/* --- Notification dot fix --- */
+.buyer-page .btn-icon span[style*="border:2px solid white"],
+.admin-page .btn-icon span[style*="border:2px solid white"] {
+  border-color: #0A0A0F !important;
+}
+
+/* --- Product Card Glassmorphism --- */
+.buyer-page .product-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+.buyer-page .product-card:hover {
+  border-color: rgba(0,229,160,0.25);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 30px rgba(0,229,160,0.06);
+  transform: translateY(-4px);
+}
+.buyer-page .product-image {
+  background: linear-gradient(135deg, #1a1a28, #12121e);
+  height: 200px;
+}
+.buyer-page .product-body {
+  padding: 16px 18px 18px;
+}
+.buyer-page .product-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.buyer-page .product-actions .btn {
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+/* Discount badge premium */
+.buyer-page .discount-badge {
+  background: #00E5A0;
+  color: #0A0A0F;
+  font-weight: 800;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,229,160,0.3);
+}
+
+/* Search premium */
+.buyer-page .search-bar .input-field {
+  background: rgba(21,21,32,0.8);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  height: 48px;
+  transition: all 0.25s ease;
+}
+.buyer-page .search-bar .input-field:focus {
+  border-color: rgba(0,229,160,0.3);
+  box-shadow: 0 0 0 3px rgba(0,229,160,0.08);
+  background: rgba(21,21,32,0.95);
+}
+.buyer-page .search-icon {
+  color: #00E5A0;
+  opacity: 0.6;
+}
+
+/* Banner premium glow */
+.buyer-page .buyer-banner {
+  background: linear-gradient(135deg, rgba(0,229,160,0.08) 0%, rgba(0,229,160,0.02) 100%);
+  border: 1px solid rgba(0,229,160,0.12);
+  border-radius: 16px;
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+}
+.buyer-page .buyer-banner::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(0,229,160,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Chip hover animation */
+.buyer-page .chip,
+.seller-page .chip {
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.buyer-page .chip:hover,
+.seller-page .chip:hover {
+  background: rgba(255,255,255,0.06);
+  transform: translateY(-1px);
+}
+
+/* --- Stat Cards Premium --- */
+.seller-page .stat-card,
+.admin-page .stat-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+.seller-page .stat-card:hover,
+.admin-page .stat-card:hover {
+  border-color: rgba(0,229,160,0.15);
+  transform: translateY(-2px);
+}
+.seller-page .stat-card::before,
+.admin-page .stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: #00E5A0;
+  opacity: 0.4;
+  border-radius: 0 2px 2px 0;
+}
+.seller-page .stat-card:nth-child(2)::before { background: #3b82f6; }
+.seller-page .stat-card:nth-child(3)::before { background: #F5A623; }
+.seller-page .stat-card:nth-child(4)::before { background: #a855f7; }
+.seller-page .stat-card:nth-child(5)::before { background: #f472b6; }
+.admin-page .stat-card:nth-child(2)::before { background: #3b82f6; }
+.admin-page .stat-card:nth-child(3)::before { background: #F5A623; }
+.admin-page .stat-card:nth-child(4)::before { background: #a855f7; }
+.admin-page .stat-card:nth-child(5)::before { background: #f472b6; }
+.admin-page .stat-card:nth-child(6)::before { background: #ef4444; }
+
+.stat-value {
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.5px;
+}
+
+/* --- Seller Ad Cards — Status Accent --- */
+.seller-page .seller-ad-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  border-left: 3px solid #00E5A0;
+  transition: all 0.25s ease;
+}
+.seller-page .seller-ad-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* --- Seller CTA Premium --- */
+.seller-page .seller-cta {
+  background: linear-gradient(135deg, rgba(0,229,160,0.06) 0%, rgba(0,229,160,0.02) 100%);
+  border: 1px solid rgba(0,229,160,0.12);
+  border-radius: 16px;
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+}
+.seller-page .seller-cta::after {
+  content: '';
+  position: absolute;
+  top: -30%;
+  right: -10%;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(0,229,160,0.06), transparent 70%);
+  pointer-events: none;
+}
+
+/* --- Form Premium --- */
+.seller-page .create-ad-form label,
+.admin-page .settings-section label {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.seller-page .input-field,
+.admin-page .input-field {
+  background: rgba(21,21,32,0.8) !important;
+  border: 1px solid rgba(255,255,255,0.08) !important;
+  border-radius: 10px !important;
+  transition: all 0.25s ease !important;
+}
+.seller-page .input-field:focus,
+.admin-page .input-field:focus {
+  border-color: rgba(0,229,160,0.35) !important;
+  box-shadow: 0 0 0 3px rgba(0,229,160,0.08) !important;
+}
+.seller-page select.input-field {
+  color: var(--text-primary);
+}
+.seller-page select.input-field option {
+  background: #151520;
+  color: var(--text-primary);
+}
+
+/* --- Admin Alert Premium --- */
+.admin-page .alert-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: all 0.25s ease;
+}
+.admin-page .alert-card:hover {
+  transform: translateX(4px);
+  border-left-width: 5px;
+}
+.admin-page .alert-card.critical {
+  background: rgba(239,68,68,0.04);
+  border-color: rgba(239,68,68,0.1);
+}
+
+/* --- Admin Moderation Premium --- */
+.admin-page .moderation-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+.admin-page .moderation-card:hover {
+  border-color: rgba(0,229,160,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.admin-page .moderation-thumb {
+  background: linear-gradient(135deg, #1a1a28, #12121e);
+  border-radius: 10px;
+}
+.admin-page .moderation-wait {
+  color: #F5A623;
+}
+
+/* --- Admin Settings Premium --- */
+.admin-page .setting-item {
+  background: rgba(21,21,32,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.admin-page .setting-item:hover {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(21,21,32,0.95);
+}
+.admin-page .toggle {
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--gray-300);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+.admin-page .toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.admin-page .toggle.active {
+  background: #00E5A0;
+}
+.admin-page .toggle.active::after {
+  transform: translateX(22px);
+  box-shadow: 0 0 8px rgba(0,229,160,0.3);
+}
+
+/* --- Category Heat Premium --- */
+.admin-page .category-heat-card {
+  background: rgba(21,21,32,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+.admin-page .category-heat-card:hover {
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+}
+.admin-page .progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.admin-page .progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s ease;
+}
+.admin-page .progress-fill.success { background: linear-gradient(90deg, #00E5A0, #00cc8e); }
+.admin-page .progress-fill.warning { background: linear-gradient(90deg, #F5A623, #e09520); }
+.admin-page .progress-fill.danger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+/* --- Seller Row Premium --- */
+.admin-page .seller-row {
+  background: rgba(21,21,32,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+.admin-page .seller-row:hover {
+  border-color: rgba(0,229,160,0.15);
+  transform: translateX(4px);
+}
+
+/* --- Payment Cards Premium --- */
+.seller-page .payment-stat-card {
+  background: rgba(21,21,32,0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  transition: all 0.25s ease;
+}
+.seller-page .payment-stat-card:hover {
+  transform: translateY(-2px);
+}
+.seller-page .payment-stat-card.revenue {
+  border-left: 3px solid #00E5A0;
+}
+.seller-page .payment-list-item {
+  background: rgba(21,21,32,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  transition: all 0.2s ease;
+}
+.seller-page .payment-list-item:hover {
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* --- Coupon Items Premium --- */
+.buyer-page .coupon-item,
+.seller-page .coupon-item {
+  background: rgba(21,21,32,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid #00E5A0;
+  border-radius: 14px;
+  transition: all 0.2s ease;
+}
+.buyer-page .coupon-item:hover,
+.seller-page .coupon-item:hover {
+  transform: translateX(4px);
+  border-left-color: #00cc8e;
+}
+
+/* Coupon modal premium */
+.coupon-modal-content .coupon-icon {
+  background: rgba(0,229,160,0.1) !important;
+  color: #00E5A0 !important;
+}
+
+/* --- Empty State Premium --- */
+.buyer-page .empty-state,
+.seller-page .empty-state,
+.admin-page .empty-state {
+  padding: 48px 24px;
+  text-align: center;
+}
+.buyer-page .empty-state svg,
+.seller-page .empty-state svg,
+.admin-page .empty-state svg {
+  color: #00E5A0;
+  opacity: 0.3;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+}
+.buyer-page .empty-state h3,
+.seller-page .empty-state h3,
+.admin-page .empty-state h3 {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+.buyer-page .empty-state p,
+.seller-page .empty-state p,
+.admin-page .empty-state p {
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+
+/* --- Micro Animations --- */
+@keyframes app-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.buyer-page .product-card {
+  animation: app-fade-in 0.4s ease both;
+}
+.buyer-page .product-card:nth-child(1) { animation-delay: 0s; }
+.buyer-page .product-card:nth-child(2) { animation-delay: 0.05s; }
+.buyer-page .product-card:nth-child(3) { animation-delay: 0.1s; }
+.buyer-page .product-card:nth-child(4) { animation-delay: 0.15s; }
+.buyer-page .product-card:nth-child(5) { animation-delay: 0.2s; }
+.buyer-page .product-card:nth-child(6) { animation-delay: 0.25s; }
