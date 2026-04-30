@@ -22,6 +22,13 @@
   background: var(--lk-bg);
   color: var(--lk-text);
   font-family: var(--lk-font-b);
+  font-family: var(--lk-font-b);
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
+}
+
+body {
   overflow-x: hidden;
 }
 
@@ -104,7 +111,23 @@
 .lk-eco__ring--1 { width: 250px; height: 250px; border-style: dashed; animation: spin 20s linear infinite; }
 .lk-eco__ring--2 { width: 350px; height: 350px; border: 1px solid rgba(255, 184, 0, 0.1); animation: spin-reverse 30s linear infinite; }
 
-.lk-eco__phone { position: relative; z-index: 10; width: 180px; height: 360px; transform: rotate(-5deg); animation: float 6s ease-in-out infinite; }
+.lk-eco__phone {
+  position: relative; z-index: 10; width: 220px;
+  background: rgba(20, 20, 25, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px; box-shadow: 0 16px 32px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; gap: 16px;
+  transform: rotate(-5deg); animation: float 6s ease-in-out infinite;
+}
+.lk-mock-hdr { display: flex; justify-content: space-between; align-items: center; }
+.lk-mock-hdr__name { font-size: 0.875rem; color: var(--lk-text2); }
+.lk-mock-hdr__inst { font-size: 0.75rem; color: var(--lk-text3); }
+.lk-mock-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--lk-mint); color: #000; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+
+.lk-mock-product { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 12px; border: 1px solid rgba(255, 255, 255, 0.08); }
+.lk-mock-product__img { height: 80px; background: linear-gradient(135deg, #2A1A10, #3E291B); border-radius: 8px; margin-bottom: 12px; }
+.lk-mock-product__name { font-size: 1rem; font-weight: 700; color: var(--lk-white); }
+.lk-mock-product__price { font-size: 1.125rem; font-weight: 800; color: var(--lk-mint); margin-top: 4px; }
 
 .lk-eco__float {
   position: absolute; width: 48px; height: 48px; background: var(--lk-bg-card2);
@@ -133,7 +156,7 @@
   .lk-hero__btns { flex-direction: row; }
   .lk-hero__btns .lk-btn-primary { width: auto; }
   .lk-hero__visual { flex: 1; height: 600px; margin-top: 0; }
-  .lk-eco__phone { width: 260px; height: 520px; }
+  .lk-eco__phone { width: 260px; }
   .lk-eco__ring--1 { width: 400px; height: 400px; }
   .lk-eco__ring--2 { width: 550px; height: 550px; }
   .lk-eco__float { width: 64px; height: 64px; }

@@ -56,6 +56,17 @@ export function getBottomHTML() {
         </div>
       </div>
     </section>
+    <!-- STUDENT BANNER (BREAKOUT SECTION) -->
+    <section class="lk-student-banner lk-reveal">
+      <div class="lk-student-banner__bg"></div>
+      <div class="lk-student-banner__content">
+        <div class="lk-student-banner__text">
+          <h2 class="lk-student-banner__title">É estudante? Descubra o que rola no seu campus.</h2>
+          <p class="lk-student-banner__sub">Compre lanches, resumos e produtos direto dos seus colegas.</p>
+        </div>
+        <a href="#/buyer" class="lk-btn-ghost">Acessar Marketplace</a>
+      </div>
+    </section>
 
     <!-- FEATURES BENTO (2-column grid) -->
     <section class="lk-section lk-section--dark" id="funcionalidades">
