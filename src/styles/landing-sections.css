@@ -39,10 +39,10 @@
 
 /* Timeline */
 .lk-timeline {
-  position: relative; max-width: 600px; margin: 0 auto; padding-left: 32px;
+  position: relative; max-width: 600px; margin: 0 auto; padding-left: 56px;
 }
 .lk-timeline__line {
-  position: absolute; left: 15px; top: 0; bottom: 0; width: 4px;
+  position: absolute; left: 22px; top: 0; bottom: 0; width: 4px;
   background: var(--lk-border); border-radius: 4px; overflow: hidden;
 }
 .lk-timeline__glow {
@@ -57,7 +57,7 @@
 .lk-timeline__item:last-child { padding-bottom: 0; }
 
 .lk-timeline__point {
-  position: absolute; left: -16px; transform: translateX(-50%);
+  position: absolute; left: -32px; transform: translateX(-50%);
   width: 32px; height: 32px; background: var(--lk-bg-card2); border: 2px solid var(--lk-border);
   border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 2;
   transition: all 0.3s ease; color: var(--lk-text2);
