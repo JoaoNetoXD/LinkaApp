@@ -274,11 +274,11 @@ function renderHome(container) {
   container.querySelectorAll('.get-coupon-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!btn.disabled) {
-        if (!globalSession) {
-          showToast('Crie uma conta ou faça login para comprar.', 'info');
-          window.location.hash = '#/auth';
-          return;
-        }
+        // if (!globalSession) {
+        //   showToast('Crie uma conta ou faça login para comprar.', 'info');
+        //   window.location.hash = '#/auth';
+        //   return;
+        // }
         const productId = btn.dataset.id;
         const product = products.find(p => p.id == productId);
         showPaymentSelectionModal(product, container);

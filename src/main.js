@@ -86,8 +86,27 @@ const placeholderIcons = {
   others: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
 };
 
+const mockImages = {
+  brownie: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=400&q=80',
+  camiseta: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&q=80',
+  aula: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&q=80',
+  'logo-design': 'https://images.unsplash.com/photo-1626785774573-4b799315345d?w=400&q=80',
+  acai: 'https://images.unsplash.com/photo-1590137876181-2a5a7e340308?w=400&q=80',
+  caderno: 'https://images.unsplash.com/photo-1531346878377-a5445203b57f?w=400&q=80',
+  brigadeiro: 'https://images.unsplash.com/photo-1541783245831-57d6fb0926d3?w=400&q=80',
+  bolo: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80',
+  sanduiche: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80',
+  salgado: 'https://images.unsplash.com/photo-1628198758814-14227183e2f5?w=400&q=80',
+  espetinho: 'https://images.unsplash.com/photo-1603360946369-dc9bb6258143?w=400&q=80',
+  corte: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400&q=80',
+  pulseira: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400&q=80'
+};
+
 // Product image placeholder generator
 export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
+  if (mockImages[imageKey]) {
+    return `<img src="${mockImages[imageKey]}" alt="${imageKey}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
+  }
   const iconSvg = placeholderIcons[categoryId] || placeholderIcons.others;
   const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A1A24'/%3E%3C/svg%3E")`;
   
