@@ -113,7 +113,7 @@ async function handleRoute() {
   }
 
   // Check auth for protected routes
-  const isProtectedRoute = path.startsWith('/buyer') || path.startsWith('/seller') || path.startsWith('/admin') || path === 'buyer' || path === 'seller' || path === 'admin';
+  const isProtectedRoute = path.startsWith('/seller') || path.startsWith('/admin') || path === 'seller' || path === 'admin';
   
   if (isProtectedRoute) {
     const session = await getCurrentSession();

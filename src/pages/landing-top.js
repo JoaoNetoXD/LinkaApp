@@ -35,7 +35,16 @@ export function getTopHTML() {
             <h1 class="lk-hero__title">O marketplace que transforma alunos em <span class="lk-hero__hl">empreendedores de verdade.</span></h1>
             <p class="lk-hero__sub">Uma vitrine educacional com cupons rastreáveis, WhatsApp integrado e gestão institucional. O comércio estudantil sem burocracia.</p>
             <div class="lk-hero__btns">
-              <a href="#contato" class="lk-btn-primary lk-btn-primary--large" aria-label="Quero Conhecer">Quero Conhecer ${arrowRight}</a>
+              <a href="#contato" class="lk-btn-primary lk-btn-primary--large" aria-label="Quero Conhecer a Linka">Quero Conhecer ${arrowRight}</a>
+            </div>
+            
+            <div class="lk-hero__portals" style="margin-top: 40px; display: flex; flex-direction: column; gap: 16px;">
+              <span style="font-size: 0.875rem; color: var(--lk-text3); text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Já possui acesso? Entre aqui:</span>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="#/buyer" class="lk-btn-ghost" style="flex: 1; min-width: 110px; font-size: 0.875rem; padding: 10px 16px;">🛍️ Comprar</a>
+                <a href="#/seller" class="lk-btn-ghost" style="flex: 1; min-width: 110px; font-size: 0.875rem; padding: 10px 16px;">🏪 Vender</a>
+                <a href="#/admin" class="lk-btn-ghost" style="flex: 1; min-width: 110px; font-size: 0.875rem; padding: 10px 16px;">🏛️ Painel</a>
+              </div>
             </div>
           </div>
           <div class="lk-hero__visual">
