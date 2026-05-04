@@ -136,22 +136,22 @@ function renderHome(container) {
           ${icons.search}
           <input type="text" placeholder="Buscar ofertas, categorias..." />
         </div>
+        
+        <!-- CATEGORY CHIPS (Now in header for stickiness) -->
+        <div class="category-scroll">
+          <div class="category-chips">
+            ${categories.map(c => `
+              <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
+                ${icons[c.id] || icons.others}
+                <span>${c.name}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
       </header>
 
-      <!-- CATEGORY CHIPS -->
-      <div class="category-scroll">
-        <div class="category-chips">
-          ${categories.map(c => `
-            <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
-              ${icons[c.id] || icons.others}
-              <span>${c.name}</span>
-            </button>
-          `).join('')}
-        </div>
-      </div>
-
       <!-- INSTITUTION BANNER -->
-      <div class="inst-banner">
+      <div class="inst-banner" style="margin-top: 16px;">
         <div class="banner-icon">${icons.shield}</div>
         <div class="banner-text">
           <strong>Ofertas verificadas pela sua instituição</strong>
@@ -186,7 +186,13 @@ function renderHome(container) {
             
             <div class="card-body">
               <h3 class="card-title">${p.title}</h3>
+              <p class="card-desc">${p.description || 'Aproveite esta oferta imperdível e garanta o seu produto com desconto exclusivo.'}</p>
               
+              <div class="card-reviews">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>${(Math.random() * (5.0 - 4.2) + 4.2).toFixed(1)} (${Math.floor(Math.random() * 200 + 10)} avaliações)</span>
+              </div>
+
               <div class="card-price-row">
                 <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
                 <span class="price-original">${formatCurrency(p.originalPrice)}</span>
@@ -212,7 +218,7 @@ function renderHome(container) {
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
                   Pegar cupom
                 </button>
-                <button class="btn-outline view-details-btn" data-id="${p.id}">
+                <button class="btn-details view-details-btn" data-id="${p.id}">
                   Ver detalhes
                 </button>
               </div>

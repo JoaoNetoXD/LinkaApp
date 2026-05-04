@@ -12,18 +12,20 @@ export function renderAdmin(container, subpage) {
 function renderAdminPage(container) {
   container.innerHTML = `
     <div class="page admin-page">
-      <header class="app-header">
-        <div>
-          <div style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);">Painel administrativo</div>
-          <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${institution.fullName}</div>
+      <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
+        <div style="display:flex; align-items:center; gap: 12px;">
+          <div class="avatar" style="width: 40px; height: 40px; background:var(--gray-800); flex-shrink: 0;">AD</div>
+          <div style="min-width: 0;">
+            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Painel Administrativo</div>
+            <div style="font-size:var(--font-size-xs);color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${institution.fullName}</div>
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:var(--space-2);">
-          <button class="period-filter">${icons.clock} 7 dias ${icons.chevronDown}</button>
+        <div style="display:flex;align-items:center;gap:12px; flex-shrink: 0;">
+          <button class="period-filter" style="padding: 6px 10px;">${icons.clock} <span class="hide-mobile">7d</span></button>
           <button class="btn-icon" style="position:relative;">
             ${icons.bell}
-            <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid white;"></span>
+            <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
           </button>
-          <div class="avatar" style="background:var(--gray-800);">AD</div>
         </div>
       </header>
       <div class="app-body">
@@ -65,20 +67,25 @@ function getAdminContent() {
 
 function renderAdminDashboard() {
   const stats = [
-    { label: 'Alunos', value: adminStats.students.value, change: adminStats.students.change, positive: true },
-    { label: 'Cliques', value: adminStats.clicks.value, change: adminStats.clicks.change, positive: true },
-    { label: 'Cupons gerados', value: adminStats.couponsGenerated.value, change: adminStats.couponsGenerated.change, positive: true },
-    { label: 'Cupons usados', value: adminStats.couponsUsed.value, change: adminStats.couponsUsed.change, positive: true },
-    { label: 'Conversão', value: adminStats.conversionRate.value, change: adminStats.conversionRate.change, positive: true },
-    { label: 'Pendentes', value: adminStats.pendingAds.value, change: adminStats.pendingAds.change, positive: true },
+    { label: 'Alunos', value: adminStats.students.value, change: adminStats.students.change, positive: true, icon: icons.user },
+    { label: 'Cliques', value: adminStats.clicks.value, change: adminStats.clicks.change, positive: true, icon: icons.eye },
+    { label: 'Cupons gerados', value: adminStats.couponsGenerated.value, change: adminStats.couponsGenerated.change, positive: true, icon: icons.ticket },
+    { label: 'Cupons usados', value: adminStats.couponsUsed.value, change: adminStats.couponsUsed.change, positive: true, icon: icons.checkCircle },
+    { label: 'Conversão', value: adminStats.conversionRate.value, change: adminStats.conversionRate.change, positive: true, icon: icons.checkCircle },
+    { label: 'Pendentes', value: adminStats.pendingAds.value, change: adminStats.pendingAds.change, positive: true, icon: icons.clock },
   ];
   return `
-    <div class="admin-stats">
+    <div class="admin-stats-grid">
       ${stats.map(s => `
-        <div class="stat-card">
-          <div class="stat-label">${s.label}</div>
-          <div class="stat-value">${s.value}</div>
-          <span class="stat-change positive">${s.change}</span>
+        <div class="stat-card glass-card">
+          <div class="stat-icon-wrapper">
+            <div class="stat-icon">${s.icon || ''}</div>
+            <span class="stat-change ${s.positive ? 'positive' : 'negative'}">${s.change}</span>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">${s.value}</div>
+            <div class="stat-label">${s.label}</div>
+          </div>
         </div>
       `).join('')}
     </div>
