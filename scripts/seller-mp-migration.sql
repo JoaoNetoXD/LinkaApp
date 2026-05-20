@@ -86,7 +86,7 @@ CREATE OR REPLACE FUNCTION register_payment_intent(
   p_qr_code_string text DEFAULT NULL,
   p_external_reference text DEFAULT NULL
 )
-RETURNS public.payments AS $$
+RETURNS public.payments AS $linka_register_payment_intent$
 DECLARE
   v_payment public.payments%ROWTYPE;
   v_product public.products%ROWTYPE;
@@ -225,13 +225,13 @@ BEGIN
 
   RETURN v_payment;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$linka_register_payment_intent$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id uuid)
-RETURNS public.coupons AS $$
+RETURNS public.coupons AS $linka_issue_coupon_for_payment$
 DECLARE
   v_payment public.payments%ROWTYPE;
   v_coupon public.coupons%ROWTYPE;
@@ -317,7 +317,7 @@ BEGIN
 
   RETURN v_coupon;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$linka_issue_coupon_for_payment$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION issue_coupon_for_payment(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION issue_coupon_for_payment(uuid) TO authenticated;
