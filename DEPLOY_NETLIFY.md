@@ -12,6 +12,14 @@ scripts/seller-mp-migration.sql
 
 Essa migration cria as tabelas privadas para conexao Mercado Pago dos vendedores e garante comissao Linka 0%.
 
+Se voce ja criou um usuario admin e ele continua entrando como comprador, rode tambem:
+
+```text
+scripts/admin-role-fix.sql
+```
+
+Depois substitua `SEU_EMAIL_AQUI` no bloco comentado desse arquivo e execute o bloco para promover seu usuario real a admin.
+
 ## 2. Deploy no Netlify
 
 Use deploy conectado ao repositorio GitHub ou Netlify CLI. Nao use apenas drag-and-drop da pasta `dist`, porque o app precisa das Netlify Functions em `netlify/functions`.

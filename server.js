@@ -19,6 +19,7 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || `${FRONTEND_URL}/api/webhook`;
 const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
 const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
 const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI || `${FRONTEND_URL}/api/mercadopago/oauth/callback`;
+const MP_AUTHORIZATION_URL = process.env.MP_AUTHORIZATION_URL || 'https://auth.mercadopago.com.br/authorization';
 
 const configStatus = {
   mpConfigured: !!MP_ACCESS_TOKEN,
@@ -107,6 +108,18 @@ function requireMercadoPagoOAuthConfig() {
   if (!MP_CLIENT_ID || !MP_CLIENT_SECRET || !MP_REDIRECT_URI) {
     throw new Error('Configure MP_CLIENT_ID, MP_CLIENT_SECRET e MP_REDIRECT_URI no .env.');
   }
+}
+
+function buildMercadoPagoAuthorizationUrl(state) {
+  const params = new URLSearchParams({
+    client_id: MP_CLIENT_ID,
+    response_type: 'code',
+    platform_id: 'mp',
+    state,
+    redirect_uri: MP_REDIRECT_URI,
+  });
+
+  return `${MP_AUTHORIZATION_URL}?${params.toString()}`;
 }
 
 async function requestMercadoPagoToken(body) {
@@ -287,6 +300,7 @@ app.get('/api/mercadopago/status', async (req, res) => {
         expiresAt: account.expires_at,
       } : null,
       oauthConfigured: configStatus.mpOAuthConfigured,
+      redirectUri: MP_REDIRECT_URI,
     });
   } catch (error) {
     console.error('Erro ao consultar Mercado Pago:', error);
@@ -314,17 +328,12 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     });
     if (error) throw error;
 
-    const params = new URLSearchParams({
-      client_id: MP_CLIENT_ID,
-      response_type: 'code',
-      platform_id: 'mp',
-      state,
-      redirect_uri: MP_REDIRECT_URI,
-    });
+    const authorizationUrl = buildMercadoPagoAuthorizationUrl(state);
 
     res.json({
       success: true,
-      url: `https://auth.mercadopago.com.br/authorization?${params.toString()}`,
+      url: authorizationUrl,
+      redirectUri: MP_REDIRECT_URI,
     });
   } catch (error) {
     console.error('Erro ao iniciar OAuth Mercado Pago:', error);

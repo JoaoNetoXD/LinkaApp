@@ -6,7 +6,7 @@ import { getBuyerCoupons } from '../services/coupon-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { supabase } from '../lib/supabase.js';
-import { becomeSeller } from '../services/auth-service.js';
+import { becomeSeller, signOutUser } from '../services/auth-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -112,6 +112,8 @@ async function syncInstitutionForUser() {
 export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
     currentView = 'coupons';
+  } else if (subpage === 'profile') {
+    currentView = 'profile';
   } else {
     currentView = 'home';
   }
@@ -663,7 +665,7 @@ async function renderCoupons(container) {
   });
 }
 
-function renderProfile(container) {
+function renderProfileLegacy(container) {
   const user = getUser();
   const isLoggedIn = !!globalSession;
   const role = getAccountRole();
@@ -773,7 +775,259 @@ function renderProfile(container) {
   // Logout button
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
     try {
-      const { signOutUser } = await import('../services/auth-service.js');
+      await signOutUser();
+      showToast('Logout realizado!', 'success');
+      window.location.hash = '#/';
+    } catch {
+      window.location.hash = '#/';
+    }
+  });
+
+  bindBuyerBottomNav(container);
+}
+
+function getProfileRoleMeta(role) {
+  if (role === 'admin') {
+    return {
+      label: 'Administrador',
+      status: 'Acesso total',
+      description: 'Controle moderacao, categorias, relatorios e tambem venda produtos.',
+    };
+  }
+
+  if (role === 'seller') {
+    return {
+      label: 'Vendedor',
+      status: 'Conta de vendas ativa',
+      description: 'Cadastre produtos, conecte o Mercado Pago e acompanhe pedidos.',
+    };
+  }
+
+  return {
+    label: 'Comprador',
+    status: 'Conta de compras ativa',
+    description: 'Explore ofertas, salve cupons e ative vendas quando quiser vender.',
+  };
+}
+
+function renderProfileActions(role) {
+  const sellerAccess = ['seller', 'admin'].includes(role);
+
+  return `
+    <div class="profile-action-grid">
+      <button type="button" class="profile-action-card" id="btnOpenBuyerHome">
+        <span class="profile-action-icon">${icons.home}</span>
+        <span>
+          <strong>Vitrine</strong>
+          <small>Comprar e pegar cupons</small>
+        </span>
+      </button>
+
+      ${sellerAccess ? `
+        <button type="button" class="profile-action-card" id="btnOpenSellerPanel">
+          <span class="profile-action-icon">${icons.wallet}</span>
+          <span>
+            <strong>Vendas</strong>
+            <small>Produtos e Mercado Pago</small>
+          </span>
+        </button>
+      ` : `
+        <button type="button" class="profile-action-card profile-action-card--accent" id="btnProfileSellerFlow">
+          <span class="profile-action-icon">${icons.plus}</span>
+          <span>
+            <strong>Comecar a vender</strong>
+            <small>Ativar painel de vendedor</small>
+          </span>
+        </button>
+      `}
+
+      ${role === 'admin' ? `
+        <button type="button" class="profile-action-card profile-action-card--admin" id="btnOpenAdminPanel">
+          <span class="profile-action-icon">${icons.shield}</span>
+          <span>
+            <strong>Admin</strong>
+            <small>Moderacao e relatorios</small>
+          </span>
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderProfile(container) {
+  const user = getUser();
+  const isLoggedIn = !!globalSession;
+  const role = getAccountRole();
+  const roleMeta = getProfileRoleMeta(role);
+  const displayName = user.fullName || user.name || 'Usuario';
+  const email = user.email || '';
+  const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
+  const whatsappStatus = user.whatsapp ? 'Configurado' : 'Nao informado';
+
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header profile-header">
+        <div>
+          <span class="profile-kicker">Conta Linka</span>
+          <h1>Perfil</h1>
+        </div>
+        ${isLoggedIn ? `<span class="profile-role-pill">${escapeHTML(roleMeta.label)}</span>` : ''}
+      </header>
+
+      <div class="profile-container">
+        ${!isLoggedIn ? `
+          <section class="profile-panel profile-login-panel">
+            <div class="profile-panel-icon">${icons.user}</div>
+            <div>
+              <h2>Entre para personalizar sua experiencia</h2>
+              <p>Com uma conta voce salva dados, pega cupons, compra e ativa o modo vendedor.</p>
+            </div>
+            <button type="button" class="btn-primary" id="btnGoLogin">Fazer login</button>
+          </section>
+        ` : `
+          <section class="profile-hero-panel">
+            <div class="profile-avatar-large">${escapeHTML(initials)}</div>
+            <div class="profile-identity">
+              <div class="profile-status-row">
+                <span class="profile-live-dot"></span>
+                <span>${escapeHTML(roleMeta.status)}</span>
+              </div>
+              <h2>${escapeHTML(displayName)}</h2>
+              <p>${escapeHTML(email)}</p>
+            </div>
+          </section>
+
+          <section class="profile-panel profile-account-panel">
+            <div class="profile-panel-heading">
+              <div class="profile-panel-icon">${icons.shield}</div>
+              <div>
+                <h2>${escapeHTML(roleMeta.label)}</h2>
+                <p>${escapeHTML(roleMeta.description)}</p>
+              </div>
+            </div>
+            <div class="profile-metrics-grid">
+              <div>
+                <span>Instituicao</span>
+                <strong>${escapeHTML(activeInstitution.name || 'Instituicao')}</strong>
+              </div>
+              <div>
+                <span>WhatsApp</span>
+                <strong>${escapeHTML(whatsappStatus)}</strong>
+              </div>
+              <div>
+                <span>Conta</span>
+                <strong>${user.verified ? 'Verificada' : 'Padrao'}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="profile-panel">
+            <div class="profile-panel-heading">
+              <div class="profile-panel-icon">${icons.grid}</div>
+              <div>
+                <h2>Acessos rapidos</h2>
+                <p>Entre direto no fluxo certo para sua conta.</p>
+              </div>
+            </div>
+            ${renderProfileActions(role)}
+          </section>
+
+          <section class="profile-panel">
+            <div class="profile-panel-heading">
+              <div class="profile-panel-icon">${icons.settings}</div>
+              <div>
+                <h2>Dados do perfil</h2>
+                <p>Essas informacoes aparecem em compras, cupons e contatos.</p>
+              </div>
+            </div>
+
+            <div class="profile-form-grid">
+              <label class="profile-field" for="profileName">
+                <span>Nome completo</span>
+                <input type="text" value="${escapeHTML(displayName)}" id="profileName" class="profile-input" autocomplete="name" />
+              </label>
+
+              <label class="profile-field" for="profileWhatsapp">
+                <span>WhatsApp</span>
+                <input type="tel" value="${escapeHTML(user.whatsapp || '')}" id="profileWhatsapp" class="profile-input" autocomplete="tel" inputmode="tel" placeholder="(00) 00000-0000" />
+              </label>
+            </div>
+
+            <button type="button" class="btn-primary profile-save-btn" id="btnSaveProfile">${icons.check} Salvar dados</button>
+          </section>
+
+          <section class="profile-panel profile-session-panel">
+            <div>
+              <h2>Sessao</h2>
+              <p>Saia desta conta neste navegador.</p>
+            </div>
+            <button type="button" class="profile-logout-btn" id="btnLogout">Sair da conta</button>
+          </section>
+        `}
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item" data-nav="home">
+        ${icons.home}
+        <span>Inicio</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="cats">
+        ${icons.grid}
+        <span>Categorias</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="coupons">
+        ${icons.ticket}
+        <span>Cupons</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item active" data-nav="profile">
+        ${icons.user}
+        <span>Perfil</span>
+        <div class="nav-indicator"></div>
+      </div>
+    </nav>
+  `;
+
+  document.getElementById('btnSaveProfile')?.addEventListener('click', async () => {
+    const name = document.getElementById('profileName').value.trim();
+    const whatsapp = document.getElementById('profileWhatsapp').value.trim();
+    if (!name) { showToast('Preencha seu nome.', 'error'); return; }
+
+    const btn = document.getElementById('btnSaveProfile');
+    btn.textContent = 'Salvando...';
+    btn.disabled = true;
+
+    try {
+      if (globalSession?.user?.id) {
+        const { error } = await supabase.from('profiles').update({ name, whatsapp }).eq('id', globalSession.user.id);
+        if (error) throw error;
+        await refreshCurrentProfile();
+      }
+      showToast('Perfil atualizado com sucesso!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Nao foi possivel atualizar o perfil.', 'error');
+    }
+    btn.innerHTML = `${icons.check} Salvar dados`;
+    btn.disabled = false;
+  });
+
+  document.getElementById('btnGoLogin')?.addEventListener('click', () => {
+    window.location.hash = '#/auth';
+  });
+
+  document.getElementById('btnProfileSellerFlow')?.addEventListener('click', openSellerFlow);
+  document.getElementById('btnOpenSellerPanel')?.addEventListener('click', () => { window.location.hash = '#/seller'; });
+  document.getElementById('btnOpenAdminPanel')?.addEventListener('click', () => { window.location.hash = '#/admin'; });
+  document.getElementById('btnOpenBuyerHome')?.addEventListener('click', () => {
+    currentView = 'home';
+    renderBuyerPage(container);
+  });
+
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    try {
       await signOutUser();
       showToast('Logout realizado!', 'success');
       window.location.hash = '#/';

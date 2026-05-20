@@ -201,10 +201,20 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION enforce_profile_role_rules()
 RETURNS trigger AS $$
 DECLARE
-  caller_role TEXT := COALESCE(auth.role(), '');
+  caller_uid UUID := auth.uid();
+  request_role TEXT := COALESCE(
+    NULLIF(current_setting('request.jwt.claim.role', true), ''),
+    NULLIF(auth.role(), ''),
+    current_role,
+    ''
+  );
+  is_privileged_context BOOLEAN := caller_uid IS NULL AND request_role NOT IN ('anon', 'authenticated');
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW.role NOT IN ('buyer', 'seller') THEN
+    IF NEW.role NOT IN ('buyer', 'seller', 'admin') THEN
+      NEW.role := 'buyer';
+    END IF;
+    IF NEW.role = 'admin' AND request_role <> 'service_role' AND NOT is_privileged_context THEN
       NEW.role := 'buyer';
     END IF;
     IF NEW.name IS NULL OR NEW.name = '' THEN
@@ -214,13 +224,13 @@ BEGIN
   END IF;
 
   IF TG_OP = 'UPDATE' AND NEW.role IS DISTINCT FROM OLD.role THEN
-    IF caller_role = 'service_role' THEN
+    IF request_role = 'service_role' OR is_privileged_context THEN
       RETURN NEW;
     END IF;
 
     IF EXISTS (
       SELECT 1 FROM profiles
-      WHERE id = auth.uid() AND role = 'admin'
+      WHERE id = caller_uid AND role = 'admin'
     ) THEN
       RETURN NEW;
     END IF;
@@ -552,13 +562,17 @@ CREATE POLICY "Profiles are viewable by everyone" ON profiles
   FOR SELECT USING (true);
 
 CREATE POLICY "Users can insert own profile" ON profiles
-  FOR INSERT WITH CHECK ((select auth.uid()) = id OR (select auth.uid()) IS NULL OR (select auth.role()) = 'service_role');
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = id);
 
 CREATE POLICY "Users can manage own profile" ON profiles
-  FOR UPDATE USING (
+  FOR UPDATE TO authenticated USING (
     (select auth.uid()) = id
     OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
-    OR (select auth.role()) = 'service_role'
+  )
+  WITH CHECK (
+    (select auth.uid()) = id
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
   );
 
 CREATE POLICY "Categories are viewable by everyone" ON categories

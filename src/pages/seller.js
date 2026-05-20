@@ -23,6 +23,48 @@ let activeInstitution = institution;
 let mpConnection = { connected: false, oauthConfigured: false };
 let lastMpNotice = '';
 
+function getMercadoPagoNotice(mpResult, reason) {
+  if (mpResult === 'connected') {
+    return { message: 'Mercado Pago conectado com sucesso.', type: 'success' };
+  }
+
+  const normalizedReason = String(reason || '').trim();
+  const knownReasons = {
+    missing_params: 'O Mercado Pago voltou sem os dados de autorizacao. Tente conectar novamente.',
+    invalid_state: 'A tentativa de conexao expirou ou foi aberta em outra sessao. Tente novamente.',
+    oauth_failed: 'Nao foi possivel concluir a conexao com o Mercado Pago.',
+    invalid_grant: 'O codigo do Mercado Pago expirou. Inicie a conexao novamente.',
+    invalid_redirect_uri: 'A Redirect URL do Mercado Pago nao bate com a URL configurada no Netlify.',
+  };
+
+  if (knownReasons[normalizedReason]) {
+    return { message: knownReasons[normalizedReason], type: 'error' };
+  }
+
+  if (normalizedReason) {
+    return { message: `Mercado Pago nao conectou: ${normalizedReason}`, type: 'error' };
+  }
+
+  return { message: 'Nao foi possivel conectar o Mercado Pago.', type: 'error' };
+}
+
+function renderMercadoPagoRedirectState(url, redirectUri) {
+  return `
+    <div class="modal-backdrop" id="mp-modal">
+      <div class="modal-content mp-connect-modal">
+        <div class="modal-handle"></div>
+        <div class="mp-connect-logo" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
+        </div>
+        <h3>Redirecionando para o Mercado Pago</h3>
+        <p>Vamos abrir a autorizacao em uma pagina segura do Mercado Pago. Depois de aprovar, voce volta automaticamente para a Linka.</p>
+        <a class="btn btn-mp btn-block btn-lg" id="manual-open-mp" href="${escapeHTML(url)}">Continuar no Mercado Pago</a>
+        <p class="mp-connect-helper">Se a pagina nao abrir, use o botao acima. Redirect URL configurada: <code>${escapeHTML(redirectUri || '')}</code></p>
+      </div>
+    </div>
+  `;
+}
+
 async function syncInstitutionForUser() {
   const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
   if (institutionId) {
@@ -55,10 +97,14 @@ async function renderSellerPage(container) {
     };
   }
   const isMPConnected = Boolean(mpConnection.connected);
-  const mpResult = new URLSearchParams((window.location.hash.split('?')[1] || '')).get('mp');
-  if (mpResult && mpResult !== lastMpNotice) {
-    lastMpNotice = mpResult;
-    showToast(mpResult === 'connected' ? 'Mercado Pago conectado com sucesso.' : 'Nao foi possivel conectar o Mercado Pago.', mpResult === 'connected' ? 'success' : 'error');
+  const mpParams = new URLSearchParams((window.location.hash.split('?')[1] || ''));
+  const mpResult = mpParams.get('mp');
+  const mpReason = mpParams.get('reason');
+  const mpNoticeKey = `${mpResult || ''}:${mpReason || ''}`;
+  if (mpResult && mpNoticeKey !== lastMpNotice) {
+    lastMpNotice = mpNoticeKey;
+    const notice = getMercadoPagoNotice(mpResult, mpReason);
+    showToast(notice.message, notice.type);
   }
 
   // Load ads from Supabase (or fallback to mock)
@@ -542,13 +588,16 @@ function bindSellerEvents(container) {
     const modalRoot = document.getElementById('modal-root');
     modalRoot.innerHTML = `
       <div class="modal-backdrop" id="mp-modal">
-        <div class="modal-content" style="text-align:center;">
+        <div class="modal-content mp-connect-modal">
           <div class="modal-handle"></div>
-          <div style="width:64px;height:64px;border-radius:var(--radius-full);background:linear-gradient(135deg,#009ee3,#00b1ea);display:flex;align-items:center;justify-content:center;margin:0 auto var(--space-4);">
+          <div class="mp-connect-logo" aria-hidden="true">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
           </div>
-          <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Conectar Mercado Pago</h3>
-          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);line-height:var(--line-height-relaxed);">Ao conectar sua conta, voce recebera pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissao</strong>; 100% do valor do pedido vai para o vendedor.</p>
+          <h3>Conectar Mercado Pago</h3>
+          <p>Ao conectar sua conta, voce recebe pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissao</strong>; 100% do valor do pedido vai para o vendedor.</p>
+          ${mpConnection.oauthConfigured === false ? `
+            <div class="mp-connect-warning">${icons.alertTriangle} A integracao OAuth ainda nao foi carregada neste ambiente. Verifique as variaveis do Netlify se o botao falhar.</div>
+          ` : ''}
           <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
           <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>
         </div>
@@ -562,7 +611,14 @@ function bindSellerEvents(container) {
       btn.textContent = 'Abrindo Mercado Pago...';
       try {
         const url = await startMercadoPagoOAuth();
-        window.location.href = url;
+        sessionStorage.setItem('mp_oauth_started_at', String(Date.now()));
+        modalRoot.innerHTML = renderMercadoPagoRedirectState(url, mpConnection.redirectUri);
+        modalRoot.querySelector('#manual-open-mp')?.addEventListener('click', () => {
+          sessionStorage.setItem('mp_oauth_manual_open', 'true');
+        });
+        setTimeout(() => {
+          window.location.assign(url);
+        }, 700);
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Conectar minha conta';
