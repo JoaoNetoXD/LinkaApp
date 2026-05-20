@@ -58,6 +58,15 @@ function getDatabaseSetupError() {
   );
 }
 
+function formatReadinessError(error) {
+  return [
+    error?.code,
+    error?.message,
+    error?.details,
+    error?.hint,
+  ].filter(Boolean).join(' - ') || 'erro sem detalhes retornado pelo Supabase';
+}
+
 const allowedOrigins = new Set(
   [FRONTEND_URL, 'http://localhost:5173', 'http://127.0.0.1:5173']
     .filter(Boolean)
@@ -490,17 +499,17 @@ async function checkDatabaseReadiness() {
   const checks = [
     {
       name: 'seller_payment_accounts',
-      run: () => supabaseAdmin.from('seller_payment_accounts').select('seller_id', { head: true }).limit(1),
+      run: () => supabaseAdmin.from('seller_payment_accounts').select('seller_id').limit(1),
     },
     {
       name: 'payment_oauth_states',
-      run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id', { head: true }).limit(1),
+      run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id').limit(1),
     },
     {
       name: 'payments marketplace columns',
       run: () => supabaseAdmin
         .from('payments')
-        .select('seller_id,product_title,buyer_name,mercado_pago_id,preference_id,coupon_id,coupon_code,platform_fee,seller_amount,product_snapshot,paid_at', { head: true })
+        .select('seller_id,product_title,buyer_name,mercado_pago_id,preference_id,coupon_id,coupon_code,platform_fee,seller_amount,product_snapshot,paid_at')
         .limit(1),
     },
   ];
@@ -509,9 +518,9 @@ async function checkDatabaseReadiness() {
   for (const check of checks) {
     try {
       const { error } = await check.run();
-      if (error) missingDatabaseObjects.push(`${check.name}: ${error.message}`);
+      if (error) missingDatabaseObjects.push(`${check.name}: ${formatReadinessError(error)}`);
     } catch (error) {
-      missingDatabaseObjects.push(`${check.name}: ${error.message || 'erro desconhecido'}`);
+      missingDatabaseObjects.push(`${check.name}: ${formatReadinessError(error)}`);
     }
   }
 
