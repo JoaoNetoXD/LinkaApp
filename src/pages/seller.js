@@ -326,8 +326,9 @@ function renderAdsByStatus() {
 
 function renderSellerAdCard(ad) {
   const isAct = ad.status === 'active';
-  const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: 'Recusado' };
-  const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: 'badge-danger' };
+  const needsAdjustment = ad.status === 'rejected' && ad.rejectionReason?.startsWith('Ajuste solicitado:');
+  const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: needsAdjustment ? 'Ajuste solicitado' : 'Recusado' };
+  const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
   return `
     <div class="seller-ad-card glass-card">
       <div class="seller-ad-card-inner">

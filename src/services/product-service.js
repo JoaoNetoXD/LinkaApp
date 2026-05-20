@@ -293,6 +293,19 @@ export async function rejectProduct(productId, reason) {
 }
 
 /**
+ * Request product changes from seller.
+ * The current database status model stores this as rejected with a clear reason
+ * so it leaves moderation and appears in the seller's rejected/needs-fix list.
+ */
+export async function requestProductAdjustment(productId, reason, note = '') {
+  const details = [reason, note].filter(Boolean).join(' - ');
+  return updateProduct(productId, {
+    status: 'rejected',
+    rejectionReason: `Ajuste solicitado: ${details || 'Revise as informacoes do anuncio.'}`,
+  });
+}
+
+/**
  * Renew an expired product
  */
 export async function renewProduct(productId) {

@@ -403,21 +403,47 @@
 }
 
 /* --- Modal Dark --- */
+#modal-root .modal-content,
 .buyer-page .modal-content,
 .seller-page .modal-content,
 .admin-page .modal-content {
   background: var(--surface-raised);
   border: 1px solid var(--border-light);
+  color: var(--text-primary);
 }
+#modal-root .modal-backdrop,
 .buyer-page .modal-backdrop,
 .seller-page .modal-backdrop,
 .admin-page .modal-backdrop {
   background: rgba(0,0,0,0.7);
 }
+#modal-root .modal-handle,
 .buyer-page .modal-handle,
 .seller-page .modal-handle,
 .admin-page .modal-handle {
   background: var(--gray-300);
+}
+
+#modal-root .modal-content h3,
+#modal-root .modal-content label {
+  color: var(--text-primary);
+}
+
+#modal-root .modal-content p,
+#modal-root .modal-content span {
+  color: var(--text-secondary);
+}
+
+#modal-root .input-field,
+#modal-root textarea.input-field {
+  background: rgba(6, 8, 14, 0.72) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+#modal-root .input-field::placeholder,
+#modal-root textarea.input-field::placeholder {
+  color: var(--text-tertiary) !important;
 }
 
 /* --- Empty State Dark --- */
@@ -528,26 +554,33 @@
 }
 
 /* Reject modal dark */
+#modal-root .reject-reason-option,
 .admin-page .reject-reason-option,
 .seller-page .reject-reason-option {
   border-color: var(--border);
   color: var(--text-primary);
+  background: rgba(255,255,255,0.02);
 }
+#modal-root .reject-reason-option:hover,
 .admin-page .reject-reason-option:hover,
 .seller-page .reject-reason-option:hover {
   border-color: rgba(0,229,160,0.3);
 }
+#modal-root .reject-reason-option.selected,
 .admin-page .reject-reason-option.selected,
 .seller-page .reject-reason-option.selected {
   border-color: #00E5A0;
   background: rgba(0,229,160,0.06);
 }
+#modal-root .reject-reason-radio,
 .admin-page .reject-reason-radio {
   border-color: var(--gray-400);
 }
+#modal-root .reject-reason-option.selected .reject-reason-radio,
 .admin-page .reject-reason-option.selected .reject-reason-radio {
   border-color: #00E5A0;
 }
+#modal-root .reject-reason-option.selected .reject-reason-radio::after,
 .admin-page .reject-reason-option.selected .reject-reason-radio::after {
   background: #00E5A0;
 }

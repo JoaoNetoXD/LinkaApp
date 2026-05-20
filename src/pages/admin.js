@@ -1,7 +1,8 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, alerts, rejectReasons, categories, institution } from '../data/mock.js';
-import { getPendingProducts, approveProduct, rejectProduct, getCategoryStats, getAllProducts } from '../services/product-service.js';
+import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution } from '../services/institution-service.js';
+import { signOutUser } from '../services/auth-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -9,6 +10,29 @@ let adminView = 'dashboard';
 let loadedPendingAds = null;
 let loadedStats = null;
 let activeInstitution = institution;
+
+function removePendingAd(adId) {
+  if (!Array.isArray(loadedPendingAds)) return;
+  loadedPendingAds = loadedPendingAds.filter((ad) => String(ad.id) !== String(adId));
+}
+
+function setModerationBusy(card, activeButton, label) {
+  if (!card) return;
+  card.classList.add('is-processing');
+  card.querySelectorAll('button').forEach((button) => {
+    button.disabled = true;
+  });
+  if (activeButton) activeButton.innerHTML = `${icons.loader} ${label}`;
+}
+
+function resetModerationBusy(card, activeButton, originalHtml) {
+  if (!card) return;
+  card.classList.remove('is-processing');
+  card.querySelectorAll('button').forEach((button) => {
+    button.disabled = false;
+  });
+  if (activeButton) activeButton.innerHTML = originalHtml;
+}
 
 async function syncInstitutionForUser() {
   const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
@@ -56,6 +80,7 @@ async function renderAdminPage(container) {
             ${icons.bell}
             <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
           </button>
+          <button class="btn btn-secondary btn-sm admin-logout-btn" id="btnAdminLogout" type="button">Sair</button>
         </div>
       </header>
       <div class="app-body">
@@ -355,6 +380,49 @@ function bindAdminEvents(container) {
     item.addEventListener('click', () => { adminView = item.dataset.nav; renderAdminPage(container); });
   });
 
+  container.addEventListener('click', async (event) => {
+    const approveBtn = event.target.closest?.('.approve-btn');
+    if (approveBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const card = approveBtn.closest('.moderation-card');
+      const originalHtml = approveBtn.innerHTML;
+      const adId = approveBtn.dataset.adId;
+      setModerationBusy(card, approveBtn, 'Aprovando...');
+      try {
+        const result = await approveProduct(adId);
+        if (!result?.success) throw new Error(result?.error || 'Nao foi possivel aprovar o anuncio.');
+        removePendingAd(adId);
+        showToast('Anuncio aprovado com sucesso!', 'success');
+        await renderAdminPage(container);
+      } catch (err) {
+        showToast(err.message || 'Nao foi possivel aprovar o anuncio.', 'error');
+        resetModerationBusy(card, approveBtn, originalHtml);
+      }
+      return;
+    }
+
+    const adjustBtn = event.target.closest?.('.adjust-btn');
+    if (adjustBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showAdjustModal(adjustBtn.dataset.adId, container);
+    }
+  }, true);
+
+  container.querySelector('#btnAdminLogout')?.addEventListener('click', async () => {
+    const logoutBtn = container.querySelector('#btnAdminLogout');
+    logoutBtn.disabled = true;
+    logoutBtn.textContent = 'Saindo...';
+    try {
+      await signOutUser();
+      showToast('Voce saiu da conta admin.', 'success');
+      window.location.hash = '#/auth';
+    } catch {
+      window.location.hash = '#/auth';
+    }
+  });
+
   // Approve
   container.querySelectorAll('.approve-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -554,11 +622,15 @@ function showRejectModal(adId, container) {
   });
   modalRoot.querySelector('#reject-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
   modalRoot.querySelector('#cancel-reject').addEventListener('click', () => modalRoot.innerHTML = '');
-  modalRoot.querySelector('#confirm-reject').addEventListener('click', async () => {
+  const confirmRejectBtn = modalRoot.querySelector('#confirm-reject');
+  confirmRejectBtn.addEventListener('click', async () => {
     if (selectedReason === -1) { showToast('Selecione um motivo.', 'error'); return; }
+    confirmRejectBtn.disabled = true;
+    confirmRejectBtn.textContent = 'Recusando...';
     const result = await rejectProduct(adId, rejectReasons[selectedReason]);
     if (result?.success) {
       modalRoot.innerHTML = '';
+      removePendingAd(adId);
       showToast('Anúncio recusado.', 'error');
       if (container) renderAdminPage(container);
     } else {
@@ -567,7 +639,7 @@ function showRejectModal(adId, container) {
   });
 }
 
-function showAdjustModal(adId) {
+function showAdjustModal(adId, container) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="adjust-modal">
@@ -594,17 +666,33 @@ function showAdjustModal(adId) {
       </div>
     </div>
   `;
+  let selectedAdjustReason = -1;
   modalRoot.querySelectorAll('.reject-reason-option').forEach(opt => {
     opt.addEventListener('click', () => {
       modalRoot.querySelectorAll('.reject-reason-option').forEach(o => o.classList.remove('selected'));
       opt.classList.add('selected');
+      selectedAdjustReason = parseInt(opt.dataset.reason);
     });
   });
   modalRoot.querySelector('#adjust-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
   modalRoot.querySelector('#cancel-adjust').addEventListener('click', () => modalRoot.innerHTML = '');
-  modalRoot.querySelector('#confirm-adjust').addEventListener('click', () => {
-    modalRoot.innerHTML = '';
-    showToast('Ajuste solicitado com sucesso!', 'success');
+  const confirmAdjustBtn = modalRoot.querySelector('#confirm-adjust');
+  confirmAdjustBtn.addEventListener('click', async () => {
+    if (selectedAdjustReason === -1) { showToast('Selecione um motivo.', 'error'); return; }
+    const note = modalRoot.querySelector('#adjust-note')?.value?.trim() || '';
+    confirmAdjustBtn.disabled = true;
+    confirmAdjustBtn.textContent = 'Enviando...';
+    const result = await requestProductAdjustment(adId, rejectReasons[selectedAdjustReason], note);
+    if (result?.success) {
+      modalRoot.innerHTML = '';
+      removePendingAd(adId);
+      showToast('Ajuste solicitado com sucesso!', 'success');
+      if (container) renderAdminPage(container);
+    } else {
+      confirmAdjustBtn.disabled = false;
+      confirmAdjustBtn.textContent = 'Enviar';
+      showToast(result?.error || 'Nao foi possivel solicitar ajuste.', 'error');
+    }
   });
 }
 

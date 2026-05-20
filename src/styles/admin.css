@@ -131,6 +131,12 @@
   box-shadow: var(--shadow-xs);
   margin-bottom: var(--space-3);
   overflow: hidden;
+  transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease;
+}
+.moderation-card.is-processing {
+  opacity: 0.58;
+  pointer-events: none;
+  border-color: rgba(0, 229, 160, 0.28);
 }
 .moderation-card-inner {
   padding: var(--space-4);
@@ -181,6 +187,11 @@
   gap: var(--space-2);
 }
 .moderation-actions .btn { flex: 1; min-height: 40px; font-size: var(--font-size-sm); }
+
+.admin-logout-btn {
+  min-width: 72px;
+  color: var(--text-primary) !important;
+}
 
 /* Category heat map */
 .category-heat-grid {
@@ -374,6 +385,7 @@
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all var(--transition-fast);
   display: flex;
