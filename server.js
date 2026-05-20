@@ -19,7 +19,7 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL || `${FRONTEND_URL}/api/webhook`;
 const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
 const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
 const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI || `${FRONTEND_URL}/api/mercadopago/oauth/callback`;
-const MP_AUTHORIZATION_URL = process.env.MP_AUTHORIZATION_URL || 'https://auth.mercadopago.com.br/authorization';
+const MP_AUTHORIZATION_URL = process.env.MP_AUTHORIZATION_URL || 'https://auth.mercadopago.com/authorization';
 
 const configStatus = {
   mpConfigured: !!MP_ACCESS_TOKEN,

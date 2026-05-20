@@ -69,6 +69,14 @@ Evento: payments / payment
 
 Use as credenciais de producao da sua conta Mercado Pago nas variaveis `MP_ACCESS_TOKEN`, `MP_CLIENT_ID` e `MP_CLIENT_SECRET`.
 
+O app usa por padrao o endpoint OAuth oficial:
+
+```text
+https://auth.mercadopago.com/authorization
+```
+
+Nao defina `MP_AUTHORIZATION_URL` no Netlify, a menos que o Mercado Pago instrua explicitamente outro endpoint. Evite testar a autorizacao com emulacao mobile do DevTools, porque o Mercado Pago pode tentar abrir fluxo de aplicativo em vez do callback web.
+
 ## 5. Teste final
 
 Abra:
