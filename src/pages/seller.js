@@ -41,6 +41,7 @@ function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
     oauth_failed: 'Nao foi possivel concluir a conexao com o Mercado Pago.',
     invalid_grant: 'O codigo do Mercado Pago expirou. Inicie a conexao novamente.',
     invalid_redirect_uri: 'A Redirect URL do Mercado Pago nao bate com a URL configurada no Netlify.',
+    missing_code_verifier: 'A tabela OAuth ainda nao tem a coluna de seguranca PKCE. Rode scripts/mercadopago-pkce-migration.sql no Supabase.',
   };
 
   if (knownReasons[normalizedReason]) {

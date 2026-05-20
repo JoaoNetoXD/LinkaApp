@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 
@@ -154,13 +154,29 @@ function requireMercadoPagoOAuthConfig() {
   }
 }
 
-function buildMercadoPagoAuthorizationUrl(state) {
+function toBase64Url(buffer) {
+  return Buffer.from(buffer)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function createPkcePair() {
+  const codeVerifier = toBase64Url(randomBytes(64));
+  const codeChallenge = toBase64Url(createHash('sha256').update(codeVerifier).digest());
+  return { codeVerifier, codeChallenge };
+}
+
+function buildMercadoPagoAuthorizationUrl(state, codeChallenge) {
   const params = new URLSearchParams({
     client_id: MP_CLIENT_ID,
     response_type: 'code',
     platform_id: 'mp',
     state,
     redirect_uri: MP_REDIRECT_URI,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
 
   return `${MP_AUTHORIZATION_URL}?${params.toString()}`;
@@ -368,16 +384,18 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     }
 
     const state = randomUUID();
+    const { codeVerifier, codeChallenge } = createPkcePair();
     const redirectTo = `${FRONTEND_URL}/#/seller?mp=connected`;
     const { error } = await admin.from('payment_oauth_states').insert({
       seller_id: auth.user.id,
       provider: 'mercado_pago',
       state,
+      code_verifier: codeVerifier,
       redirect_to: redirectTo,
     });
     if (error) throw error;
 
-    const authorizationUrl = buildMercadoPagoAuthorizationUrl(state);
+    const authorizationUrl = buildMercadoPagoAuthorizationUrl(state, codeChallenge);
 
     res.json({
       success: true,
@@ -388,6 +406,13 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao iniciar OAuth Mercado Pago:', error);
+    if (isDatabaseSchemaError(error)) {
+      return res.status(503).json({
+        success: false,
+        code: 'MP_PKCE_SCHEMA_MISSING',
+        error: 'Banco OAuth do Mercado Pago precisa da migration PKCE. Rode scripts/mercadopago-pkce-migration.sql no Supabase.',
+      });
+    }
     res.status(error.statusCode || 500).json({ success: false, code: error.code || 'MP_OAUTH_START_ERROR', error: error.message || 'Erro ao conectar Mercado Pago' });
   }
 });
@@ -415,12 +440,16 @@ app.get('/api/mercadopago/oauth/callback', async (req, res) => {
     if (!savedState || savedState.used_at || new Date(savedState.expires_at) < new Date()) {
       return res.redirect(`${failUrl}&reason=invalid_state`);
     }
+    if (!savedState.code_verifier) {
+      return res.redirect(`${failUrl}&reason=missing_code_verifier`);
+    }
 
     const tokenData = await requestMercadoPagoToken({
       client_id: MP_CLIENT_ID,
       client_secret: MP_CLIENT_SECRET,
       grant_type: 'authorization_code',
       code: String(code),
+      code_verifier: savedState.code_verifier,
       redirect_uri: MP_REDIRECT_URI,
     });
 
@@ -523,7 +552,7 @@ async function checkDatabaseReadiness() {
     },
     {
       name: 'payment_oauth_states',
-      run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id').limit(1),
+      run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id,code_verifier').limit(1),
     },
     {
       name: 'payments marketplace columns',

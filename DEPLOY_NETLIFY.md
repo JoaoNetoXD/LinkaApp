@@ -12,6 +12,14 @@ scripts/seller-mp-migration.sql
 
 Essa migration cria as tabelas privadas para conexao Mercado Pago dos vendedores e garante comissao Linka 0%.
 
+Se o OAuth do Mercado Pago mostrar erro `invalid session` ou o `/api/health` apontar falta de `payment_oauth_states.code_verifier`, rode tambem:
+
+```text
+scripts/mercadopago-pkce-migration.sql
+```
+
+Essa migration adiciona a coluna usada pelo fluxo OAuth seguro com PKCE.
+
 Se voce ja criou um usuario admin e ele continua entrando como comprador, rode tambem:
 
 ```text

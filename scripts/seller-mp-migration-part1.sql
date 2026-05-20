@@ -20,11 +20,14 @@ CREATE TABLE IF NOT EXISTS public.payment_oauth_states (
   seller_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   provider text NOT NULL DEFAULT 'mercado_pago' CHECK (provider = 'mercado_pago'),
   state text NOT NULL UNIQUE,
+  code_verifier text,
   redirect_to text,
   created_at timestamptz DEFAULT now(),
   expires_at timestamptz NOT NULL DEFAULT (now() + interval '15 minutes'),
   used_at timestamptz
 );
+
+ALTER TABLE public.payment_oauth_states ADD COLUMN IF NOT EXISTS code_verifier text;
 
 ALTER TABLE public.seller_payment_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_oauth_states ENABLE ROW LEVEL SECURITY;
