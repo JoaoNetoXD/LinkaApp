@@ -23,8 +23,14 @@ let activeInstitution = institution;
 let mpConnection = { connected: false, oauthConfigured: false };
 let lastMpNotice = '';
 
-function getMercadoPagoNotice(mpResult, reason) {
+function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
   if (mpResult === 'connected') {
+    if (!isConnected) {
+      return {
+        message: 'A autorizacao voltou, mas a conta Mercado Pago ainda nao foi gravada. Tente conectar novamente e confira se a Redirect URI termina em /api/mercadopago/oauth/callback.',
+        type: 'error',
+      };
+    }
     return { message: 'Mercado Pago conectado com sucesso.', type: 'success' };
   }
 
@@ -104,7 +110,7 @@ async function renderSellerPage(container) {
   const mpNoticeKey = `${mpResult || ''}:${mpReason || ''}`;
   if (mpResult && mpNoticeKey !== lastMpNotice) {
     lastMpNotice = mpNoticeKey;
-    const notice = getMercadoPagoNotice(mpResult, mpReason);
+    const notice = getMercadoPagoNotice(mpResult, mpReason, isMPConnected);
     showToast(notice.message, notice.type);
   }
 

@@ -18,7 +18,23 @@ const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || `${FRONTEND_URL}/api/webhook`;
 const MP_CLIENT_ID = process.env.MP_CLIENT_ID;
 const MP_CLIENT_SECRET = process.env.MP_CLIENT_SECRET;
-const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI || `${FRONTEND_URL}/api/mercadopago/oauth/callback`;
+const CANONICAL_MP_REDIRECT_URI = `${FRONTEND_URL}/api/mercadopago/oauth/callback`;
+const RAW_MP_REDIRECT_URI = process.env.MP_REDIRECT_URI || '';
+function getValidatedMercadoPagoRedirectUri(rawRedirectUri) {
+  if (!rawRedirectUri) return CANONICAL_MP_REDIRECT_URI;
+  try {
+    const raw = new URL(rawRedirectUri);
+    const canonical = new URL(CANONICAL_MP_REDIRECT_URI);
+    if (raw.origin === canonical.origin && raw.pathname === canonical.pathname) {
+      return raw.toString();
+    }
+  } catch {
+    // Fall through to canonical callback.
+  }
+  return CANONICAL_MP_REDIRECT_URI;
+}
+const MP_REDIRECT_URI = getValidatedMercadoPagoRedirectUri(RAW_MP_REDIRECT_URI);
+const MP_REDIRECT_URI_OVERRIDDEN = Boolean(RAW_MP_REDIRECT_URI && RAW_MP_REDIRECT_URI !== MP_REDIRECT_URI);
 const MP_AUTHORIZATION_URL = process.env.MP_AUTHORIZATION_URL || 'https://auth.mercadopago.com/authorization';
 
 const configStatus = {
@@ -332,6 +348,8 @@ app.get('/api/mercadopago/status', async (req, res) => {
       } : null,
       oauthConfigured: configStatus.mpOAuthConfigured,
       redirectUri: MP_REDIRECT_URI,
+      expectedRedirectUri: CANONICAL_MP_REDIRECT_URI,
+      redirectUriOverridden: MP_REDIRECT_URI_OVERRIDDEN,
     });
   } catch (error) {
     console.error('Erro ao consultar Mercado Pago:', error);
@@ -365,6 +383,8 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
       success: true,
       url: authorizationUrl,
       redirectUri: MP_REDIRECT_URI,
+      expectedRedirectUri: CANONICAL_MP_REDIRECT_URI,
+      redirectUriOverridden: MP_REDIRECT_URI_OVERRIDDEN,
     });
   } catch (error) {
     console.error('Erro ao iniciar OAuth Mercado Pago:', error);
@@ -1097,6 +1117,9 @@ app.get('/api/health', async (req, res) => {
     ...configStatus,
     ...database,
     frontendUrl: FRONTEND_URL,
+    mercadoPagoRedirectUri: MP_REDIRECT_URI,
+    expectedMercadoPagoRedirectUri: CANONICAL_MP_REDIRECT_URI,
+    mercadoPagoRedirectUriOverridden: MP_REDIRECT_URI_OVERRIDDEN,
     missingProductionConfig,
     readyForProduction: missingProductionConfig.length === 0 && database.schemaReady,
   });
