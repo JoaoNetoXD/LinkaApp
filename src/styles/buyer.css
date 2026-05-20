@@ -81,6 +81,27 @@ body:has(.buyer-wrapper) {
   gap: 12px;
 }
 
+.buyer-mode-btn {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 160, 0.22);
+  background: rgba(0, 229, 160, 0.08);
+  color: #00E5A0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.buyer-mode-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 .notification-btn {
   background: transparent;
   border: none;
@@ -263,6 +284,77 @@ body:has(.buyer-wrapper) {
   gap: 24px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.market-empty-state {
+  padding: 34px 22px;
+  text-align: center;
+  color: #9CA3AF;
+  border: 1px dashed #2A2A35;
+  border-radius: 18px;
+  background: #111118;
+}
+
+.market-empty-icon {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  background: rgba(0, 229, 160, 0.08);
+  color: #00E5A0;
+  display: grid;
+  place-items: center;
+}
+
+.market-empty-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.market-empty-state h3 {
+  margin: 0 0 8px;
+  color: #FFF;
+  font-size: 18px;
+}
+
+.market-empty-state p {
+  margin: 0 auto 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 360px;
+}
+
+.market-empty-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.profile-mode-card {
+  display: grid;
+  gap: 14px;
+  background: rgba(0, 229, 160, 0.06);
+  border: 1px solid rgba(0, 229, 160, 0.18);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.profile-mode-card strong,
+.profile-mode-card span {
+  display: block;
+}
+
+.profile-mode-card strong {
+  color: #FFF;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.profile-mode-card span {
+  color: #9CA3AF;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .product-card {

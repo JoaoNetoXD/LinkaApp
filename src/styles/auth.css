@@ -47,6 +47,37 @@ body:has(.auth-wrapper) {
 .auth-subtitle {
   color: #6B7280;
   font-size: 14px;
+  line-height: 1.5;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.auth-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  background: #111118;
+  border: 1px solid #1E1E2A;
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+
+.auth-mode-switch button {
+  height: 42px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #A0A0B0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-mode-switch button.active {
+  background: #00E5A0;
+  color: #050508;
 }
 
 .auth-form {
@@ -88,9 +119,14 @@ body:has(.auth-wrapper) {
   border-color: #00E5A0;
 }
 
+.auth-role-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
 .auth-role-btn {
-  flex: 1;
-  min-height: 42px;
+  min-height: 72px;
   border-radius: 10px;
   border: 1px solid #2A2A40;
   background: #161620;
@@ -100,12 +136,33 @@ body:has(.auth-wrapper) {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  text-align: left;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-role-btn strong {
+  color: #FFFFFF;
+  font-size: 14px;
+}
+
+.auth-role-btn span {
+  color: #6B7280;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .auth-role-btn.active {
   background: rgba(0, 229, 160, 0.12);
   color: #00E5A0;
   border-color: #00E5A0;
+}
+
+.auth-role-btn.active strong,
+.auth-role-btn.active span {
+  color: #00E5A0;
 }
 
 .auth-btn {
@@ -169,4 +226,10 @@ body:has(.auth-wrapper) {
 
 .auth-error.visible {
   display: block;
+}
+
+.auth-error.success {
+  color: #00E5A0;
+  background: rgba(0, 229, 160, 0.1);
+  border-color: rgba(0, 229, 160, 0.35);
 }

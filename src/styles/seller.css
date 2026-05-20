@@ -12,6 +12,12 @@
   color: var(--text-secondary);
 }
 
+.seller-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Stats row */
 .seller-stats-grid {
   display: grid;
@@ -63,6 +69,87 @@
 .seller-cta-inline {
   padding: 0 var(--space-5);
   margin-bottom: var(--space-6);
+}
+
+.seller-setup-card {
+  margin: 0 var(--space-5) var(--space-6);
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(0, 229, 160, 0.18);
+  background: linear-gradient(135deg, rgba(0, 229, 160, 0.08), rgba(59, 130, 246, 0.06));
+}
+
+.seller-setup-kicker {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: #00E5A0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.seller-setup-card h3 {
+  margin: 0 0 6px;
+  color: #FFF;
+  font-size: 18px;
+}
+
+.seller-setup-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.seller-setup-steps {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.seller-setup-steps div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.seller-setup-steps span {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #1E1E2A;
+  color: #A0A0B0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.seller-setup-steps .done {
+  color: #00E5A0;
+}
+
+.seller-setup-steps .done span {
+  background: rgba(0, 229, 160, 0.14);
+  color: #00E5A0;
+}
+
+.seller-setup-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.seller-first-empty {
+  align-items: center;
+  text-align: center;
+}
+
+.seller-first-empty .btn {
+  margin-top: 10px;
 }
 
 /* Create ad form */

@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile } from '../main.js';
 import { products as mockProducts, categories, coupons, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
@@ -6,6 +6,7 @@ import { getBuyerCoupons } from '../services/coupon-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { supabase } from '../lib/supabase.js';
+import { becomeSeller } from '../services/auth-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -14,6 +15,37 @@ function getUser() {
   if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'U' };
   if (globalSession?.user) return { ...currentUser, id: globalSession.user.id, email: globalSession.user.email, name: globalSession.user.user_metadata?.full_name || currentUser.name, role: globalSession.user.user_metadata?.role || 'buyer' };
   return currentUser;
+}
+
+function getAccountRole() {
+  return globalProfile?.role || globalSession?.user?.user_metadata?.role || 'buyer';
+}
+
+function canUseSellerMode() {
+  return ['seller', 'admin'].includes(getAccountRole());
+}
+
+async function openSellerFlow() {
+  if (!globalSession?.user?.id) {
+    window.location.hash = '#/auth?role=seller';
+    return;
+  }
+
+  if (canUseSellerMode()) {
+    window.location.hash = '#/seller';
+    return;
+  }
+
+  const result = await becomeSeller();
+  if (!result.success) {
+    showToast(result.error === 'AUTH_REQUIRED' ? 'Entre para vender.' : result.error || 'Nao foi possivel ativar o modo vendedor.', 'error');
+    if (result.error === 'AUTH_REQUIRED') window.location.hash = '#/auth?role=seller';
+    return;
+  }
+
+  await refreshCurrentProfile();
+  showToast('Modo vendedor ativado. Vamos configurar sua loja.', 'success');
+  window.location.hash = '#/seller';
 }
 
 let activeCategory = 'all';
@@ -201,6 +233,23 @@ function getSlotsInfo(used, total) {
   return { percent, colorClass, text: `${available} de ${total} vagas`, almostEmpty: available === 1 };
 }
 
+function renderEmptyProductsState() {
+  const isSeller = canUseSellerMode();
+  return `
+    <div class="market-empty-state">
+      <div class="market-empty-icon">${icons.package}</div>
+      <h3>Nenhuma oferta disponivel ainda</h3>
+      <p>${isSeller
+        ? 'Voce esta no modo compra. Abra seu painel de vendedor para cadastrar e acompanhar seus produtos.'
+        : 'Se voce quer vender, ative o modo vendedor e cadastre o primeiro produto da instituicao.'}</p>
+      <div class="market-empty-actions">
+        <button class="btn-primary" id="btnEmptySellerFlow">${isSeller ? 'Abrir painel de vendas' : 'Quero vender no Linka'}</button>
+        ${!globalSession ? `<button class="btn-details" id="btnEmptyLogin">Entrar para comprar</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 async function renderHome(container, { skipFetch = false, loading = false } = {}) {
   // Load products from Supabase (or mock fallback)
   let products;
@@ -220,6 +269,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   }
 
   const filteredProducts = products;
+  const showSellerAccess = Boolean(globalSession?.user?.id);
 
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
@@ -231,6 +281,17 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
           </div>
           <div class="buyer-actions">
+            ${showSellerAccess ? `
+              <button class="buyer-mode-btn" id="btnSellerMode" title="${canUseSellerMode() ? 'Abrir painel de vendas' : 'Ativar modo vendedor'}">
+                ${icons.package}
+                <span>Vender</span>
+              </button>
+            ` : `
+              <button class="buyer-mode-btn" id="btnLoginHeader" title="Entrar">
+                ${icons.user}
+                <span>Entrar</span>
+              </button>
+            `}
             <button class="icon-btn notification-btn" id="btnNotifications">
               ${icons.bell}
               <span class="badge" id="notifBadge">0</span>
@@ -272,13 +333,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
       <!-- PRODUCTS LIST -->
       <div class="products-list ${loading ? 'buyer-home-loading' : ''}">
-        ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? `
-          <div style="padding:40px 20px;text-align:center;color:#9CA3AF;border:1px dashed #1E1E2A;border-radius:16px;background:#111118;">
-            ${icons.package}
-            <h3 style="margin:12px 0 6px;color:#FFF;">Nenhuma oferta disponível</h3>
-            <p style="font-size:13px;line-height:1.6;">Quando anúncios aprovados estiverem ativos, eles aparecerão aqui automaticamente.</p>
-          </div>
-        ` : filteredProducts.map(p => {
+        ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? renderEmptyProductsState() : filteredProducts.map(p => {
           const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
           const catIcon = icons[p.category] || icons.others;
           const timer = getTimerInfo(p.expiresIn);
@@ -374,6 +429,15 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
     currentView = 'notifications';
     renderBuyerPage(container);
+  });
+
+  container.querySelector('#btnSellerMode')?.addEventListener('click', openSellerFlow);
+  container.querySelector('#btnEmptySellerFlow')?.addEventListener('click', openSellerFlow);
+  container.querySelector('#btnLoginHeader')?.addEventListener('click', () => {
+    window.location.hash = '#/auth';
+  });
+  container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
+    window.location.hash = '#/auth';
   });
 
   // Load notification badge count
@@ -602,6 +666,8 @@ async function renderCoupons(container) {
 function renderProfile(container) {
   const user = getUser();
   const isLoggedIn = !!globalSession;
+  const role = getAccountRole();
+  const isSeller = ['seller', 'admin'].includes(role);
 
   container.innerHTML = `
     <div class="buyer-wrapper">
@@ -621,7 +687,15 @@ function renderProfile(container) {
             <p style="color:#9CA3AF;font-size:13px;margin-bottom:12px;">Faça login para salvar seu perfil</p>
             <button class="btn-primary" id="btnGoLogin" style="padding:10px 24px;">Fazer Login</button>
           </div>
-        ` : ''}
+        ` : `
+          <div class="profile-mode-card">
+            <div>
+              <strong>${isSeller ? 'Painel de vendas ativo' : 'Modo comprador ativo'}</strong>
+              <span>${isSeller ? 'Voce pode comprar e tambem gerenciar produtos.' : 'Ative o modo vendedor para cadastrar produtos.'}</span>
+            </div>
+            <button class="btn-primary" id="btnProfileSellerFlow">${isSeller ? 'Abrir vendas' : 'Comecar a vender'}</button>
+          </div>
+        `}
 
         <div class="form-group" style="margin-bottom: 16px;">
           <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">Nome Completo</label>
@@ -693,6 +767,8 @@ function renderProfile(container) {
   document.getElementById('btnGoLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
   });
+
+  document.getElementById('btnProfileSellerFlow')?.addEventListener('click', openSellerFlow);
 
   // Logout button
   document.getElementById('btnLogout')?.addEventListener('click', async () => {

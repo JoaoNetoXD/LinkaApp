@@ -1,15 +1,57 @@
-import { signInUser, signUpUser, getCurrentProfile } from '../services/auth-service.js';
+import { signInUser, signUpUser } from '../services/auth-service.js';
 import { icons } from '../main.js';
 
 let isLoginMode = true;
 let selectedRole = 'buyer';
+let lastIntent = '';
+
+function readAuthParams() {
+  const raw = window.location.hash.startsWith('#/auth') ? window.location.hash.split('?')[1] || '' : '';
+  return new URLSearchParams(raw);
+}
+
+function syncIntentFromUrl() {
+  const params = readAuthParams();
+  const intent = params.get('role') || params.get('intent') || '';
+  if (intent && intent !== lastIntent) {
+    lastIntent = intent;
+    if (intent === 'seller') {
+      selectedRole = 'seller';
+      isLoginMode = false;
+    }
+  }
+}
+
+function showAuthMessage(text, type = 'error') {
+  const errorBox = document.getElementById('authError');
+  if (!errorBox) return;
+  errorBox.textContent = text;
+  errorBox.className = `auth-error visible ${type}`;
+}
+
+function setLoading(button, isLoading, text) {
+  button.disabled = isLoading;
+  button.innerHTML = isLoading ? `${icons.loader || ''} Aguarde...` : text;
+}
 
 export function renderAuth(container) {
+  syncIntentFromUrl();
+  const subtitle = isLoginMode
+    ? 'Entre e volte para o seu fluxo correto.'
+    : selectedRole === 'seller'
+      ? 'Crie sua conta de vendedor e publique seu primeiro produto.'
+      : 'Crie sua conta para comprar com cupom e acompanhar pedidos.';
+
   container.innerHTML = `
     <div class="auth-wrapper">
       <div class="auth-header">
         <div class="auth-logo">Link<span>a</span></div>
-        <p class="auth-subtitle">${isLoginMode ? 'Bem-vindo de volta!' : 'Crie sua conta para acessar'}</p>
+        <p class="auth-subtitle">${subtitle}</p>
+      </div>
+
+      <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso">
+        <button type="button" class="${isLoginMode ? 'active' : ''}" id="authModeLogin">Entrar</button>
+        <button type="button" class="${!isLoginMode ? 'active' : ''}" id="authModeSignup">Criar conta</button>
       </div>
 
       <div class="auth-form">
@@ -17,49 +59,72 @@ export function renderAuth(container) {
 
         ${!isLoginMode ? `
           <div class="auth-form-group">
-            <label for="authName">Nome Completo</label>
-            <input type="text" id="authName" class="auth-input" placeholder="Seu nome" />
+            <label for="authName">Nome completo</label>
+            <input type="text" id="authName" class="auth-input" placeholder="Seu nome" autocomplete="name" />
           </div>
+
           <div class="auth-form-group">
-            <label>Tipo de conta</label>
-            <div style="display:flex;gap:8px;">
-              <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer">Comprador</button>
-              <button type="button" class="auth-role-btn ${selectedRole === 'seller' ? 'active' : ''}" data-role="seller">Vendedor</button>
+            <label>Como voce vai usar o Linka?</label>
+            <div class="auth-role-grid">
+              <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer">
+                <strong>Comprar</strong>
+                <span>Ver ofertas, pagar e receber cupons.</span>
+              </button>
+              <button type="button" class="auth-role-btn ${selectedRole === 'seller' ? 'active' : ''}" data-role="seller">
+                <strong>Vender</strong>
+                <span>Cadastrar produtos e receber no Mercado Pago.</span>
+              </button>
             </div>
           </div>
+
+          ${selectedRole === 'seller' ? `
+            <div class="auth-form-group">
+              <label for="authWhatsapp">WhatsApp do vendedor</label>
+              <input type="tel" id="authWhatsapp" class="auth-input" placeholder="(86) 99900-1122" autocomplete="tel" />
+            </div>
+          ` : ''}
         ` : ''}
 
         <div class="auth-form-group">
-          <label for="authEmail">E-mail Universitário (ou Pessoal)</label>
-          <input type="email" id="authEmail" class="auth-input" placeholder="exemplo@email.com" />
+          <label for="authEmail">E-mail</label>
+          <input type="email" id="authEmail" class="auth-input" placeholder="voce@email.com" autocomplete="email" />
         </div>
 
         <div class="auth-form-group">
           <label for="authPassword">Senha</label>
-          <input type="password" id="authPassword" class="auth-input" placeholder="••••••••" />
+          <input type="password" id="authPassword" class="auth-input" placeholder="Minimo 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
         </div>
 
         <button id="btnSubmitAuth" class="auth-btn">
-          ${isLoginMode ? 'Entrar na Plataforma' : 'Criar minha conta'}
+          ${isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Criar conta de vendedor' : 'Criar conta de comprador'}
         </button>
       </div>
 
       <div class="auth-switch">
-        ${isLoginMode 
-          ? `Não tem uma conta? <span id="btnSwitchMode">Cadastre-se</span>` 
-          : `Já tem uma conta? <span id="btnSwitchMode">Fazer Login</span>`
+        ${isLoginMode
+          ? `Ainda nao tem conta? <span id="btnSwitchMode">Cadastre-se</span>`
+          : `Ja tem conta? <span id="btnSwitchMode">Fazer login</span>`
         }
       </div>
     </div>
   `;
 
-  document.getElementById('btnSwitchMode').addEventListener('click', () => {
-    isLoginMode = !isLoginMode;
-    if (!isLoginMode) selectedRole = 'buyer';
+  document.getElementById('authModeLogin').addEventListener('click', () => {
+    isLoginMode = true;
     renderAuth(container);
   });
 
-  document.querySelectorAll('[data-role]').forEach(btn => {
+  document.getElementById('authModeSignup').addEventListener('click', () => {
+    isLoginMode = false;
+    renderAuth(container);
+  });
+
+  document.getElementById('btnSwitchMode').addEventListener('click', () => {
+    isLoginMode = !isLoginMode;
+    renderAuth(container);
+  });
+
+  document.querySelectorAll('[data-role]').forEach((btn) => {
     btn.addEventListener('click', () => {
       selectedRole = btn.dataset.role;
       renderAuth(container);
@@ -69,61 +134,67 @@ export function renderAuth(container) {
   document.getElementById('btnSubmitAuth').addEventListener('click', async () => {
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
-    const errorBox = document.getElementById('authError');
     const btn = document.getElementById('btnSubmitAuth');
+    const defaultText = isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Criar conta de vendedor' : 'Criar conta de comprador';
 
     if (!email || !password) {
-      errorBox.textContent = 'Preencha todos os campos.';
-      errorBox.classList.add('visible');
+      showAuthMessage('Preencha e-mail e senha.');
       return;
     }
 
-    btn.disabled = true;
-    btn.innerHTML = `${icons.loader || '...'} Aguarde...`;
-    errorBox.classList.remove('visible');
+    if (password.length < 6) {
+      showAuthMessage('A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    setLoading(btn, true, defaultText);
+    document.getElementById('authError').classList.remove('visible', 'success');
 
     if (isLoginMode) {
       const res = await signInUser(email, password);
       if (res.success) {
-        const profile = await getCurrentProfile(res.data.user.id);
-        const role = profile?.role || res.data.user?.user_metadata?.role || 'buyer';
-        window.location.hash = role === 'seller' ? '#/seller' : role === 'admin' ? '#/admin' : '#/buyer';
-      } else {
-        errorBox.textContent = res.error || 'Erro ao fazer login. Verifique suas credenciais.';
-        errorBox.classList.add('visible');
-        btn.disabled = false;
-        btn.innerHTML = 'Entrar na Plataforma';
-      }
-    } else {
-      const name = document.getElementById('authName').value.trim();
-      if (!name) {
-        errorBox.textContent = 'Preencha seu nome.';
-        errorBox.classList.add('visible');
-        btn.disabled = false;
-        btn.innerHTML = 'Criar minha conta';
+        window.location.hash = res.homePath || '#/buyer';
         return;
       }
-      
-      const res = await signUpUser(email, password, name, selectedRole);
-      if (res.success) {
-        // Automatically redirects or shows success
-        errorBox.textContent = selectedRole === 'seller'
-          ? 'Conta de vendedor criada! Acesse o painel após entrar.'
-          : 'Conta criada! Confirme seu e-mail se necessário.';
-        errorBox.classList.add('visible');
-        errorBox.style.background = 'rgba(0, 229, 160, 0.1)';
-        errorBox.style.color = '#00E5A0';
-        errorBox.style.borderColor = '#00E5A0';
-        
-        setTimeout(() => {
-          window.location.hash = selectedRole === 'seller' ? '#/seller' : '#/buyer';
-        }, 1500);
-      } else {
-        errorBox.textContent = res.error || 'Erro ao criar conta.';
-        errorBox.classList.add('visible');
-        btn.disabled = false;
-        btn.innerHTML = 'Criar minha conta';
-      }
+
+      showAuthMessage(res.error || 'Nao foi possivel entrar. Verifique os dados.');
+      setLoading(btn, false, defaultText);
+      return;
     }
+
+    const name = document.getElementById('authName').value.trim();
+    const whatsapp = document.getElementById('authWhatsapp')?.value.trim() || '';
+    if (!name) {
+      showAuthMessage('Preencha seu nome.');
+      setLoading(btn, false, defaultText);
+      return;
+    }
+
+    if (selectedRole === 'seller' && !whatsapp) {
+      showAuthMessage('Informe um WhatsApp para seus compradores falarem com voce.');
+      setLoading(btn, false, defaultText);
+      return;
+    }
+
+    const res = await signUpUser(email, password, name, selectedRole, { whatsapp });
+    if (!res.success) {
+      showAuthMessage(res.error || 'Nao foi possivel criar a conta.');
+      setLoading(btn, false, defaultText);
+      return;
+    }
+
+    if (res.needsEmailConfirmation) {
+      showAuthMessage('Conta criada. Confirme seu e-mail e depois faca login.', 'success');
+      setLoading(btn, false, defaultText);
+      return;
+    }
+
+    showAuthMessage(selectedRole === 'seller'
+      ? 'Conta criada. Abrindo seu painel de vendas...'
+      : 'Conta criada. Abrindo marketplace...', 'success');
+
+    setTimeout(() => {
+      window.location.hash = res.homePath || (selectedRole === 'seller' ? '#/seller' : '#/buyer');
+    }, 500);
   });
 }

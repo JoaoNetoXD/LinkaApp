@@ -21,6 +21,7 @@ let loadedAds = null;
 let loadedCoupons = null;
 let activeInstitution = institution;
 let mpConnection = { connected: false, oauthConfigured: false };
+let lastMpNotice = '';
 
 async function syncInstitutionForUser() {
   const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
@@ -54,6 +55,11 @@ async function renderSellerPage(container) {
     };
   }
   const isMPConnected = Boolean(mpConnection.connected);
+  const mpResult = new URLSearchParams((window.location.hash.split('?')[1] || '')).get('mp');
+  if (mpResult && mpResult !== lastMpNotice) {
+    lastMpNotice = mpResult;
+    showToast(mpResult === 'connected' ? 'Mercado Pago conectado com sucesso.' : 'Nao foi possivel conectar o Mercado Pago.', mpResult === 'connected' ? 'success' : 'error');
+  }
 
   // Load ads from Supabase (or fallback to mock)
   try {
@@ -77,13 +83,16 @@ async function renderSellerPage(container) {
             <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${escapeHTML(activeInstitution.name)}</div>
           </div>
         </div>
-        ${isMPConnected ? `
-          <div class="mp-status-icon" title="Mercado Pago Conectado">
-            ${icons.checkCircle}
-          </div>
-        ` : `
-          <button class="btn btn-mp btn-sm" id="connect-mp-btn" style="padding: 6px 12px; font-size: 12px;">${icons.wallet} Conectar</button>
-        `}
+        <div class="seller-header-actions">
+          <button class="btn btn-secondary btn-sm" id="open-buyer-mode" style="padding: 6px 12px; font-size: 12px;">${icons.home} Comprar</button>
+          ${isMPConnected ? `
+            <div class="mp-status-icon" title="Mercado Pago Conectado">
+              ${icons.checkCircle}
+            </div>
+          ` : `
+            <button class="btn btn-mp btn-sm connect-mp-trigger" style="padding: 6px 12px; font-size: 12px;">${icons.wallet} Conectar</button>
+          `}
+        </div>
       </header>
 
       <div class="app-body" id="seller-content">
@@ -133,6 +142,7 @@ function renderDashboard() {
   const convRate = computedStats.couponsGenerated > 0
     ? Math.round((computedStats.couponsUsed / computedStats.couponsGenerated) * 100) + '%'
     : '0%';
+  const setupBlock = renderSellerOnboarding(ads, Boolean(mpConnection.connected));
 
   return `
     <div class="seller-stats-grid">
@@ -165,6 +175,8 @@ function renderDashboard() {
         </div>
       </div>
     </div>
+
+    ${setupBlock}
 
     <div class="seller-cta-inline">
       <button class="btn btn-primary create-ad-cta btn-block" style="display:flex; justify-content:center; align-items:center; gap:8px;">${icons.plus} Criar Novo Anúncio</button>
@@ -200,9 +212,59 @@ function renderDashboard() {
   `;
 }
 
+function renderSellerOnboarding(ads, isMPConnected) {
+  const hasAds = ads.length > 0;
+  const hasActive = ads.some((ad) => ad.status === 'active');
+  const hasPending = ads.some((ad) => ad.status === 'pending' || ad.status === 'queue');
+
+  if (isMPConnected && hasAds) {
+    if (hasActive) return '';
+    return `
+      <section class="seller-setup-card">
+        <div>
+          <span class="seller-setup-kicker">Quase pronto</span>
+          <h3>Seu produto ja foi criado</h3>
+          <p>Agora falta a aprovacao para ele aparecer na vitrine dos compradores. Quando estiver ativo, o pagamento cai direto no seu Mercado Pago.</p>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="seller-setup-card">
+      <div>
+        <span class="seller-setup-kicker">${hasAds ? 'Configuracao de venda' : 'Primeiro acesso de vendedor'}</span>
+        <h3>${hasAds ? 'Conecte o Mercado Pago para receber' : 'Configure sua loja em dois passos'}</h3>
+        <p>${hasPending
+          ? 'Voce ja tem anuncio em analise. Conecte sua conta Mercado Pago para estar pronto quando ele for aprovado.'
+          : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovacao por aqui.'}</p>
+      </div>
+      <div class="seller-setup-steps">
+        <div class="${isMPConnected ? 'done' : ''}"><span>1</span> Mercado Pago ${isMPConnected ? 'conectado' : 'pendente'}</div>
+        <div class="${hasAds ? 'done' : ''}"><span>2</span> Produto ${hasAds ? 'cadastrado' : 'nao cadastrado'}</div>
+        <div class="${hasActive ? 'done' : ''}"><span>3</span> Vitrine ${hasActive ? 'ativa' : 'aguardando aprovacao'}</div>
+      </div>
+      <div class="seller-setup-actions">
+        ${!isMPConnected ? `<button class="btn btn-mp connect-mp-trigger">${icons.wallet} Conectar Mercado Pago</button>` : ''}
+        <button class="btn btn-primary new-ad-trigger">${icons.plus} ${hasAds ? 'Criar outro produto' : 'Cadastrar primeiro produto'}</button>
+      </div>
+    </section>
+  `;
+}
+
 function renderAdsByStatus() {
   const ads = loadedAds || (USE_MOCKS ? sellerAds : []);
   const filtered = ads.filter(a => a.status === activeTab);
+  if (ads.length === 0) {
+    return `
+      <div class="empty-state seller-first-empty">
+        ${icons.package}
+        <h3>Nenhum produto cadastrado</h3>
+        <p>Cadastre uma oferta para ela entrar em aprovacao e aparecer na vitrine depois de liberada.</p>
+        <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar primeiro anuncio</button>
+      </div>
+    `;
+  }
   if (filtered.length === 0) {
     const messages = {
       active: 'Nenhum anúncio ativo no momento.',
@@ -467,10 +529,16 @@ function bindSellerEvents(container) {
   // New ad button
   container.querySelector('#new-ad-btn')?.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
   container.querySelector('.create-ad-cta')?.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
+  container.querySelectorAll('.new-ad-trigger').forEach((btn) => {
+    btn.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
+  });
   container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { sellerView = 'dashboard'; renderSellerPage(container); });
+  container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
+    window.location.hash = '#/buyer';
+  });
 
   // Mercado Pago connect button
-  container.querySelector('#connect-mp-btn')?.addEventListener('click', () => {
+  container.querySelectorAll('.connect-mp-trigger').forEach((trigger) => trigger.addEventListener('click', () => {
     const modalRoot = document.getElementById('modal-root');
     modalRoot.innerHTML = `
       <div class="modal-backdrop" id="mp-modal">
@@ -501,7 +569,7 @@ function bindSellerEvents(container) {
         showToast(err.message || 'Nao foi possivel iniciar a conexao.', 'error');
       }
     });
-  });
+  }));
 
   // Tabs
   container.querySelectorAll('[data-tab]').forEach(tab => {
@@ -587,6 +655,38 @@ function bindSellerEvents(container) {
   // Form submit — real Supabase creation
   container.querySelector('#create-ad-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const title = container.querySelector('#ad-title')?.value.trim() || '';
+    const description = container.querySelector('#ad-desc')?.value.trim() || '';
+    const categoryId = container.querySelector('#ad-category')?.value || '';
+    const originalPrice = parseFloat(container.querySelector('#ad-price')?.value) || 0;
+    const discount = parseInt(container.querySelector('#ad-discount')?.value) || 0;
+    const whatsapp = container.querySelector('#ad-whatsapp')?.value.trim() || '';
+
+    if (!title || title.length < 3) {
+      showToast('Informe um titulo claro para o produto.', 'error');
+      return;
+    }
+    if (!description || description.length < 10) {
+      showToast('Descreva o produto com pelo menos 10 caracteres.', 'error');
+      return;
+    }
+    if (!categoryId) {
+      showToast('Selecione uma categoria.', 'error');
+      return;
+    }
+    if (originalPrice <= 0) {
+      showToast('Informe o preco original.', 'error');
+      return;
+    }
+    if (discount < 10 || discount > 50) {
+      showToast('O desconto precisa ficar entre 10% e 50%.', 'error');
+      return;
+    }
+    if (!whatsapp) {
+      showToast('Informe o WhatsApp para contato.', 'error');
+      return;
+    }
+
     const btn = e.target.querySelector('button[type="submit"]');
     const origText = btn.textContent;
     btn.textContent = 'Enviando...';
@@ -608,13 +708,13 @@ function bindSellerEvents(container) {
       const user = getUser();
       const result = await createProduct({
         sellerId: globalSession?.user?.id || user.id,
-        title: container.querySelector('#ad-title')?.value || '',
-        description: container.querySelector('#ad-desc')?.value || '',
-        categoryId: container.querySelector('#ad-category')?.value || 'others',
-        originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
-        discount: parseInt(container.querySelector('#ad-discount')?.value) || 10,
+        title,
+        description,
+        categoryId,
+        originalPrice,
+        discount,
         images: imageUrls,
-        whatsapp: container.querySelector('#ad-whatsapp')?.value || '',
+        whatsapp,
       });
 
       if (result.success) {

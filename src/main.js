@@ -3,7 +3,7 @@ import { renderBuyer } from './pages/buyer.js';
 import { renderSeller } from './pages/seller.js';
 import { renderAdmin } from './pages/admin.js';
 import { renderAuth } from './pages/auth.js';
-import { getCurrentSession, onAuthStateChange, getCurrentProfile } from './services/auth-service.js';
+import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -150,6 +150,23 @@ export function formatCurrency(value) {
 export let globalSession = null;
 export let globalProfile = null;
 
+async function loadProfileForSession(session, { force = false } = {}) {
+  if (!session?.user?.id) return null;
+  if (!force && globalProfile?.id === session.user.id) return globalProfile;
+  globalProfile = await getCurrentProfile(session.user.id);
+  return globalProfile;
+}
+
+export async function refreshCurrentProfile() {
+  const session = await getCurrentSession();
+  globalSession = session;
+  return loadProfileForSession(session, { force: true });
+}
+
+function getSessionRole(session, profile = globalProfile) {
+  return profile?.role || session?.user?.user_metadata?.role || 'buyer';
+}
+
 // Simple client-side routing (supports both hash and path)
 async function handleRoute() {
   const rawRoute = window.location.hash.slice(1) || window.location.pathname;
@@ -164,22 +181,28 @@ async function handleRoute() {
   const modalRoot = document.getElementById('modal-root');
   if (modalRoot) modalRoot.innerHTML = '';
 
+  const session = await getCurrentSession();
+  globalSession = session;
+
   // Check auth for protected routes
   const isProtectedRoute = path.startsWith('/seller') || path.startsWith('/admin') || path === 'seller' || path === 'admin';
   
   if (isProtectedRoute) {
-    const session = await getCurrentSession();
     if (!session) {
-      window.location.hash = '#/auth';
+      window.location.hash = path.startsWith('/seller') || path === 'seller' ? '#/auth?role=seller' : '#/auth';
       return;
     }
     // Load profile if missing and validate role
-    if (!globalProfile || globalProfile.id !== session.user.id) {
-      globalProfile = await getCurrentProfile(session.user.id);
-    }
-    const role = globalProfile?.role || session.user.user_metadata?.role || 'buyer';
+    await loadProfileForSession(session);
+    let role = getSessionRole(session);
     const wantsAdmin = path.startsWith('/admin') || path === 'admin';
     const wantsSeller = path.startsWith('/seller') || path === 'seller';
+
+    if ((wantsSeller && !['seller', 'admin'].includes(role)) || (wantsAdmin && role !== 'admin')) {
+      await loadProfileForSession(session, { force: true });
+      role = getSessionRole(session);
+    }
+
     if ((wantsAdmin && role !== 'admin') || (wantsSeller && !['seller', 'admin'].includes(role))) {
       window.location.hash = '#/buyer';
       showToast('Acesso restrito ao seu perfil.', 'error');
@@ -189,11 +212,12 @@ async function handleRoute() {
 
   if (path.startsWith('/auth') || path === 'auth') {
     renderAuth(app);
-    getCurrentSession().then((session) => {
-      if (session && (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth'))) {
-        window.location.hash = '#/buyer';
+    if (session) {
+      const profile = await loadProfileForSession(session);
+      if (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth')) {
+        window.location.hash = getHomePathForRole(getSessionRole(session, profile));
       }
-    }).catch(() => {});
+    }
   } else if (path.startsWith('/buyer') || path === 'buyer') {
     const parts = path.split('/').filter(Boolean);
     renderBuyer(app, parts[1]?.split('?')[0]);
@@ -206,6 +230,14 @@ async function handleRoute() {
   } else if (path.startsWith('/landing') || path === 'landing') {
     renderLanding(app);
   } else {
+    if (session) {
+      const profile = await loadProfileForSession(session);
+      const home = getHomePathForRole(getSessionRole(session, profile));
+      if (home !== '#/buyer') {
+        window.location.hash = home;
+        return;
+      }
+    }
     renderBuyer(app);
   }
 }
@@ -217,7 +249,13 @@ onAuthStateChange(async (event, session) => {
     try {
       globalProfile = await getCurrentProfile(session.user.id);
     } catch { globalProfile = null; }
-    handleRoute();
+    const rawRoute = window.location.hash.slice(1) || window.location.pathname;
+    const [path] = rawRoute.split('?');
+    if (!path || path === '/' || path === 'auth' || path.startsWith('/auth')) {
+      window.location.hash = getHomePathForRole(getSessionRole(session));
+    } else {
+      handleRoute();
+    }
   } else if (event === 'SIGNED_OUT') {
     globalProfile = null;
     globalSession = null;

@@ -245,6 +245,32 @@ async function getProfile(client, userId) {
   return data || null;
 }
 
+app.post('/api/profile/become-seller', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+
+    const admin = requireSupabaseAdmin();
+    const currentRole = auth.profile?.role || auth.user.user_metadata?.role || 'buyer';
+    if (currentRole === 'admin') {
+      return res.json({ success: true, profile: auth.profile });
+    }
+
+    const { data, error } = await admin
+      .from('profiles')
+      .update({ role: 'seller' })
+      .eq('id', auth.user.id)
+      .select('id, name, email, whatsapp, avatar, role, course, semester, verified, institution_id')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, profile: data });
+  } catch (error) {
+    console.error('Erro ao ativar vendedor:', error);
+    res.status(500).json({ success: false, error: error.message || 'Erro ao ativar modo vendedor' });
+  }
+});
+
 app.get('/api/mercadopago/status', async (req, res) => {
   try {
     const auth = await getAuthContext(req, res);

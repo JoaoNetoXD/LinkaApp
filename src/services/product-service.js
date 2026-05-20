@@ -115,6 +115,13 @@ export async function createProduct({ sellerId, title, description, categoryId, 
   const discountPrice = Math.round(originalPrice * (1 - discount / 100) * 100) / 100;
 
   try {
+    if (whatsapp) {
+      await supabase
+        .from('profiles')
+        .update({ whatsapp })
+        .eq('id', sellerId);
+    }
+
     const productData = {
       seller_id: sellerId,
       title,
