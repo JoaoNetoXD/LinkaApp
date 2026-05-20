@@ -8,6 +8,16 @@ import { products as mockProducts, sellerAds as mockSellerAds, categories as moc
 
 const USE_MOCKS = import.meta.env.DEV;
 const QUERY_TIMEOUT_MS = 3500;
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('AUTH_REQUIRED');
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  };
+}
 
 function withTimeout(promise, ms = QUERY_TIMEOUT_MS) {
   let timer;
@@ -277,9 +287,24 @@ export async function getPendingProducts(institutionId = null) {
  * Approve a product (admin action)
  */
 export async function approveProduct(productId) {
-  return updateProduct(productId, {
-    status: 'active',
-  });
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/admin/products/${productId}/approve`, {
+      method: 'POST',
+      headers,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Nao foi possivel aprovar o produto.');
+    }
+    return { success: true, product: transformProduct(data.product) };
+  } catch (err) {
+    if (USE_MOCKS) {
+      console.warn('approveProduct: API unavailable.', err.message);
+      return { success: true, product: { id: productId, status: 'active' } };
+    }
+    return { success: false, error: err.message };
+  }
 }
 
 /**

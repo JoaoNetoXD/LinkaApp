@@ -1,5 +1,5 @@
 // Linka — Service Worker (v1.2)
-const CACHE_NAME = 'linka-v1.5';
+const CACHE_NAME = 'linka-v1.6';
 const ASSETS = [
   '/',
   '/index.html',

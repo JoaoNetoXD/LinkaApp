@@ -90,10 +90,11 @@ async function renderSellerPage(container) {
   await syncInstitutionForUser();
   try {
     mpConnection = await getMercadoPagoStatus();
-  } catch {
+  } catch (err) {
     mpConnection = {
       connected: sessionStorage.getItem('mp_connected') === 'true',
       oauthConfigured: false,
+      setupError: err.message || 'Nao foi possivel consultar Mercado Pago.',
     };
   }
   const isMPConnected = Boolean(mpConnection.connected);
@@ -596,8 +597,8 @@ function bindSellerEvents(container) {
           </div>
           <h3>Conectar Mercado Pago</h3>
           <p>Ao conectar sua conta, voce recebe pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissao</strong>; 100% do valor do pedido vai para o vendedor.</p>
-          ${mpConnection.oauthConfigured === false ? `
-            <div class="mp-connect-warning">${icons.alertTriangle} A integracao OAuth ainda nao foi carregada neste ambiente. Verifique as variaveis do Netlify se o botao falhar.</div>
+          ${mpConnection.setupError || mpConnection.oauthConfigured === false ? `
+            <div class="mp-connect-warning">${icons.alertTriangle} ${escapeHTML(mpConnection.setupError || 'A integracao OAuth ainda nao foi carregada neste ambiente. Verifique as variaveis do Netlify se o botao falhar.')}</div>
           ` : ''}
           <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
           <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>

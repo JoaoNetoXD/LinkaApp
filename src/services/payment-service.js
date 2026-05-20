@@ -68,6 +68,27 @@ export async function createCheckoutPreference(product, couponCode, buyer) {
   }
 }
 
+export async function checkProductPaymentReady(productId) {
+  try {
+    const response = await fetch(`${API_URL}/products/${productId}/payment-ready`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      return {
+        ready: false,
+        code: data.code || 'PAYMENT_READY_ERROR',
+        message: data.message || data.error || 'Nao foi possivel verificar o pagamento.',
+      };
+    }
+    return data;
+  } catch (err) {
+    return {
+      ready: false,
+      code: 'PAYMENT_READY_ERROR',
+      message: err.message || 'Nao foi possivel verificar o pagamento.',
+    };
+  }
+}
+
 /**
  * Check payment status (polls backend)
  */

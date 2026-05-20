@@ -1,6 +1,6 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile } from '../main.js';
 import { products as mockProducts, categories, coupons, currentUser, institution } from '../data/mock.js';
-import { createPixPayment, checkPaymentStatus, createCheckoutPreference } from '../services/payment-service.js';
+import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons } from '../services/coupon-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
@@ -508,7 +508,53 @@ function renderProductSkeletons() {
   `).join('');
 }
 
-function showPaymentSelectionModal(product, container) {
+function getPaymentUnavailableMessage(message = '') {
+  if (message.includes('seller-mp-migration') || message.includes('Banco de pagamentos')) {
+    return 'Pagamento ainda nao configurado no banco. O administrador precisa rodar a migration de pagamentos no Supabase.';
+  }
+  if (message.includes('Mercado Pago') || message.includes('vendedor')) {
+    return 'Este vendedor ainda precisa conectar o Mercado Pago antes de receber pagamentos.';
+  }
+  return message || 'Pagamento indisponivel para este produto agora.';
+}
+
+function showPaymentUnavailableModal(product, container, message) {
+  const modalHTML = `
+    <div class="payment-modal-overlay" id="paymentSelectionModal">
+      <div class="payment-modal-content">
+        <div class="payment-modal-header">
+          <h3>Pagamento indisponivel</h3>
+          <button class="icon-btn close-modal-btn">${icons.plus}</button>
+        </div>
+        <div class="payment-modal-body">
+          <p class="payment-modal-desc">${escapeHTML(getPaymentUnavailableMessage(message))}</p>
+          ${product?.seller?.whatsapp ? `
+            <a class="btn-payment-option" href="https://wa.me/${encodeURIComponent(product.seller.whatsapp)}?text=Oi! Quero comprar ${encodeURIComponent(product.title)}, mas o pagamento ainda nao esta disponivel." target="_blank" rel="noopener">
+              ${icons.whatsapp}
+              <span>Falar com vendedor</span>
+              <small>Avise para conectar o Mercado Pago</small>
+            </a>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', modalHTML);
+  const modal = document.getElementById('paymentSelectionModal');
+  setTimeout(() => modal.classList.add('visible'), 10);
+  modal.querySelector('.close-modal-btn').addEventListener('click', () => {
+    modal.classList.remove('visible');
+    setTimeout(() => modal.remove(), 300);
+  });
+}
+
+async function showPaymentSelectionModal(product, container) {
+  const readiness = await checkProductPaymentReady(product.id);
+  if (!readiness.ready) {
+    showPaymentUnavailableModal(product, container, readiness.message);
+    return;
+  }
+
   const modalHTML = `
     <div class="payment-modal-overlay" id="paymentSelectionModal">
       <div class="payment-modal-content">
@@ -571,7 +617,7 @@ function showPaymentSelectionModal(product, container) {
         window.location.hash = '#/auth';
         return;
       }
-      showToast('Erro ao redirecionar', 'error');
+      showToast(getPaymentUnavailableMessage(err.message), 'error');
       btn.innerHTML = `<span>Tentar novamente</span>`;
     }
   });
@@ -1143,7 +1189,17 @@ async function initPixFlow(product, container) {
     }
     const pixContainer = document.getElementById('pixContainer');
     if (pixContainer) {
-      pixContainer.innerHTML = `<p style="color:#E24B4A;">Erro ao gerar Pix. Tente novamente.</p>`;
+      pixContainer.innerHTML = `
+        <div style="text-align:center;">
+          <p style="color:#E24B4A;font-weight:700;margin-bottom:8px;">Nao foi possivel gerar o Pix</p>
+          <p style="color:#9CA3AF;font-size:13px;line-height:1.5;margin:0 auto 16px;max-width:520px;">${escapeHTML(getPaymentUnavailableMessage(err.message))}</p>
+          <button class="btn-primary" id="btnBackAfterPixError" style="padding:10px 18px;">Voltar para ofertas</button>
+        </div>
+      `;
+      document.getElementById('btnBackAfterPixError')?.addEventListener('click', () => {
+        currentView = 'home';
+        renderBuyerPage(container);
+      });
     }
   }
 }

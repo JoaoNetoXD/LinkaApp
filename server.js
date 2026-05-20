@@ -39,6 +39,25 @@ function getMissingProductionConfig() {
   ].filter(Boolean);
 }
 
+function makeHttpError(message, statusCode = 500, code = 'SERVER_ERROR') {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+function isDatabaseSchemaError(error) {
+  return ['PGRST205', '42703', '42P01', '42883'].includes(error?.code);
+}
+
+function getDatabaseSetupError() {
+  return makeHttpError(
+    'Banco de pagamentos incompleto. Rode scripts/seller-mp-migration.sql no SQL Editor do Supabase.',
+    503,
+    'PAYMENT_SCHEMA_MISSING'
+  );
+}
+
 const allowedOrigins = new Set(
   [FRONTEND_URL, 'http://localhost:5173', 'http://127.0.0.1:5173']
     .filter(Boolean)
@@ -180,7 +199,10 @@ async function getSellerPaymentAccount(sellerId, { refresh = true } = {}) {
     .eq('seller_id', sellerId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (isDatabaseSchemaError(error)) throw getDatabaseSetupError();
+    throw error;
+  }
   if (!data) return null;
 
   const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
@@ -201,7 +223,7 @@ async function getSellerPaymentAccount(sellerId, { refresh = true } = {}) {
 async function requireSellerPaymentAccount(sellerId) {
   const account = await getSellerPaymentAccount(sellerId);
   if (!account?.access_token) {
-    throw new Error('Vendedor ainda nao conectou o Mercado Pago.');
+    throw makeHttpError('Vendedor ainda nao conectou o Mercado Pago. Este produto nao pode receber pagamento ainda.', 409, 'SELLER_MP_NOT_CONNECTED');
   }
   return account;
 }
@@ -304,7 +326,7 @@ app.get('/api/mercadopago/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao consultar Mercado Pago:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao consultar Mercado Pago' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'MP_STATUS_ERROR', error: error.message || 'Erro ao consultar Mercado Pago' });
   }
 });
 
@@ -337,7 +359,7 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao iniciar OAuth Mercado Pago:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao conectar Mercado Pago' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'MP_OAUTH_START_ERROR', error: error.message || 'Erro ao conectar Mercado Pago' });
   }
 });
 
@@ -455,6 +477,90 @@ function mapPaymentRow(row) {
 
 function getPaymentClient(client) {
   return client || null;
+}
+
+async function checkDatabaseReadiness() {
+  if (!supabaseAdmin) {
+    return {
+      schemaReady: false,
+      missingDatabaseObjects: ['SUPABASE_SERVICE_ROLE_KEY'],
+    };
+  }
+
+  const checks = [
+    {
+      name: 'seller_payment_accounts',
+      run: () => supabaseAdmin.from('seller_payment_accounts').select('seller_id', { head: true }).limit(1),
+    },
+    {
+      name: 'payment_oauth_states',
+      run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id', { head: true }).limit(1),
+    },
+    {
+      name: 'payments marketplace columns',
+      run: () => supabaseAdmin
+        .from('payments')
+        .select('seller_id,product_title,buyer_name,mercado_pago_id,preference_id,coupon_id,coupon_code,platform_fee,seller_amount,product_snapshot,paid_at', { head: true })
+        .limit(1),
+    },
+  ];
+
+  const missingDatabaseObjects = [];
+  for (const check of checks) {
+    try {
+      const { error } = await check.run();
+      if (error) missingDatabaseObjects.push(`${check.name}: ${error.message}`);
+    } catch (error) {
+      missingDatabaseObjects.push(`${check.name}: ${error.message || 'erro desconhecido'}`);
+    }
+  }
+
+  return {
+    schemaReady: missingDatabaseObjects.length === 0,
+    missingDatabaseObjects,
+  };
+}
+
+async function getProductPaymentReadiness(productId, { requireActive = true } = {}) {
+  const admin = requireSupabaseAdmin();
+  const { data: product, error } = await admin
+    .from('products')
+    .select('id,title,status,seller_id,slots_total,slots_used')
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!product) {
+    return { ready: false, code: 'PRODUCT_NOT_FOUND', message: 'Produto nao encontrado.' };
+  }
+  if (requireActive && product.status !== 'active') {
+    return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'Produto ainda nao esta ativo para venda.' };
+  }
+  if ((product.slots_used || 0) >= (product.slots_total || 5)) {
+    return { ready: false, code: 'PRODUCT_SOLD_OUT', message: 'Produto esgotado.' };
+  }
+
+  try {
+    const account = await getSellerPaymentAccount(product.seller_id, { refresh: false });
+    if (!account?.access_token) {
+      return {
+        ready: false,
+        code: 'SELLER_MP_NOT_CONNECTED',
+        message: 'O vendedor ainda precisa conectar o Mercado Pago antes de receber pagamentos.',
+      };
+    }
+  } catch (error) {
+    if (error.code === 'PAYMENT_SCHEMA_MISSING' || isDatabaseSchemaError(error)) {
+      return {
+        ready: false,
+        code: 'PAYMENT_SCHEMA_MISSING',
+        message: 'Banco de pagamentos incompleto. Rode scripts/seller-mp-migration.sql no Supabase.',
+      };
+    }
+    throw error;
+  }
+
+  return { ready: true, code: 'READY', message: 'Produto pronto para pagamento.' };
 }
 
 async function registerPaymentIntent(client, payload) {
@@ -639,6 +745,7 @@ app.post('/api/pix', async (req, res) => {
         notification_url: WEBHOOK_URL || undefined,
         external_reference: externalReference,
       },
+      requestOptions: { idempotencyKey: externalReference },
     });
 
     const qrData = response.point_of_interaction?.transaction_data;
@@ -664,7 +771,22 @@ app.post('/api/pix', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao criar Pix:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao gerar Pix' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'PIX_ERROR', error: error.message || 'Erro ao gerar Pix' });
+  }
+});
+
+app.get('/api/products/:productId/payment-ready', async (req, res) => {
+  try {
+    const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: true });
+    res.json({ success: true, ...readiness });
+  } catch (error) {
+    console.error('Erro ao verificar prontidao de pagamento:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      ready: false,
+      code: error.code || 'PAYMENT_READY_ERROR',
+      message: error.message || 'Nao foi possivel verificar o pagamento.',
+    });
   }
 });
 
@@ -674,9 +796,17 @@ app.get('/api/payment/:id', async (req, res) => {
     if (!auth) return;
 
     const paymentRef = req.params.id;
-    const synced = await syncPaymentByReference(auth.client, paymentRef);
+    const syncClient = supabaseAdmin || auth.client;
+    const synced = await syncPaymentByReference(syncClient, paymentRef);
     if (!synced) {
       return res.status(404).json({ success: false, error: 'Pagamento nao encontrado' });
+    }
+
+    const canViewPayment = auth.profile?.role === 'admin'
+      || synced.buyerId === auth.user.id
+      || synced.sellerId === auth.user.id;
+    if (!canViewPayment) {
+      return res.status(403).json({ success: false, error: 'Acesso negado' });
     }
 
     if (synced.status === 'paid') {
@@ -699,7 +829,7 @@ app.get('/api/payment/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao verificar pagamento:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao verificar pagamento' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'PAYMENT_STATUS_ERROR', error: error.message || 'Erro ao verificar pagamento' });
   }
 });
 
@@ -741,6 +871,7 @@ app.post('/api/preference', async (req, res) => {
           failure: `${FRONTEND_URL}/#/buyer`,
           pending: `${FRONTEND_URL}/#/buyer`,
         },
+        auto_return: 'approved',
         notification_url: WEBHOOK_URL || undefined,
         external_reference: externalReference,
       },
@@ -761,7 +892,7 @@ app.post('/api/preference', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao criar preferencia:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao gerar checkout' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'CHECKOUT_ERROR', error: error.message || 'Erro ao gerar checkout' });
   }
 });
 
@@ -915,15 +1046,50 @@ app.get('/api/admin/stats', async (req, res) => {
   }
 });
 
-app.get('/api/health', (req, res) => {
+app.post('/api/admin/products/:productId/approve', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    if (auth.profile?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Acesso restrito a administradores.' });
+    }
+
+    const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: false });
+    if (!readiness.ready) {
+      return res.status(409).json({
+        success: false,
+        code: readiness.code,
+        error: readiness.message,
+      });
+    }
+
+    const admin = requireSupabaseAdmin();
+    const { data, error } = await admin
+      .from('products')
+      .update({ status: 'active', rejection_reason: null })
+      .eq('id', req.params.productId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, product: data });
+  } catch (error) {
+    console.error('Erro ao aprovar produto:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_APPROVE_ERROR', error: error.message || 'Erro ao aprovar produto' });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
   const missingProductionConfig = getMissingProductionConfig();
+  const database = await checkDatabaseReadiness();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     ...configStatus,
+    ...database,
     frontendUrl: FRONTEND_URL,
     missingProductionConfig,
-    readyForProduction: missingProductionConfig.length === 0,
+    readyForProduction: missingProductionConfig.length === 0 && database.schemaReady,
   });
 });
 

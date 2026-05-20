@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 CREATE TABLE IF NOT EXISTS public.seller_payment_accounts (
   seller_id uuid PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   provider text NOT NULL DEFAULT 'mercado_pago' CHECK (provider = 'mercado_pago'),
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.payment_oauth_states (
 
 ALTER TABLE public.seller_payment_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_oauth_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
 CREATE INDEX IF NOT EXISTS seller_payment_accounts_provider_idx
   ON public.seller_payment_accounts(provider);
@@ -33,6 +36,46 @@ CREATE INDEX IF NOT EXISTS payment_oauth_states_state_idx
   ON public.payment_oauth_states(state);
 CREATE INDEX IF NOT EXISTS payment_oauth_states_seller_idx
   ON public.payment_oauth_states(seller_id);
+
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS seller_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS product_title text;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS buyer_name text;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS mercado_pago_id text;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS preference_id text;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS coupon_id uuid REFERENCES public.coupons(id) ON DELETE SET NULL;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS coupon_code text;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS platform_fee numeric(10, 2) DEFAULT 0;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS seller_amount numeric(10, 2) DEFAULT 0;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS product_snapshot jsonb DEFAULT '{}'::jsonb;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS paid_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS payments_seller_idx ON public.payments(seller_id);
+CREATE INDEX IF NOT EXISTS payments_mercado_pago_idx ON public.payments(mercado_pago_id);
+CREATE INDEX IF NOT EXISTS payments_preference_idx ON public.payments(preference_id);
+CREATE INDEX IF NOT EXISTS payments_external_reference_idx ON public.payments(external_reference);
+CREATE UNIQUE INDEX IF NOT EXISTS coupons_payment_unique_idx
+  ON public.coupons(payment_id)
+  WHERE payment_id IS NOT NULL;
+
+REVOKE ALL ON public.seller_payment_accounts FROM anon, authenticated;
+REVOKE ALL ON public.payment_oauth_states FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.seller_payment_accounts TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.payment_oauth_states TO service_role;
+GRANT SELECT ON public.payments TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.payments TO service_role;
+
+DROP POLICY IF EXISTS "Payments are viewable by participants" ON public.payments;
+CREATE POLICY "Payments are viewable by participants" ON public.payments
+  FOR SELECT USING (
+    buyer_id = (select auth.uid())
+    OR seller_id = (select auth.uid())
+    OR EXISTS (
+      SELECT 1
+      FROM public.profiles p
+      WHERE p.id = (select auth.uid()) AND p.role = 'admin'
+    )
+    OR (select auth.role()) = 'service_role'
+  );
 
 CREATE OR REPLACE FUNCTION register_payment_intent(
   p_product_id uuid,
@@ -43,11 +86,11 @@ CREATE OR REPLACE FUNCTION register_payment_intent(
   p_qr_code_string text DEFAULT NULL,
   p_external_reference text DEFAULT NULL
 )
-RETURNS payments AS $$
+RETURNS public.payments AS $$
 DECLARE
-  v_payment payments%ROWTYPE;
-  v_product products%ROWTYPE;
-  v_profile profiles%ROWTYPE;
+  v_payment public.payments%ROWTYPE;
+  v_product public.products%ROWTYPE;
+  v_profile public.profiles%ROWTYPE;
   v_amount numeric(10, 2);
   v_fee numeric(10, 2) := 0;
   v_seller_amount numeric(10, 2);
@@ -59,19 +102,37 @@ BEGIN
   END IF;
 
   SELECT * INTO v_product
-  FROM products
+  FROM public.products
   WHERE id = p_product_id;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Produto não encontrado';
+    RAISE EXCEPTION 'Produto nao encontrado';
+  END IF;
+
+  IF v_product.status <> 'active' THEN
+    RAISE EXCEPTION 'Produto indisponivel para pagamento';
+  END IF;
+
+  IF COALESCE(v_product.slots_used, 0) >= COALESCE(v_product.slots_total, 5) THEN
+    RAISE EXCEPTION 'Produto esgotado';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.seller_payment_accounts
+    WHERE seller_id = v_product.seller_id
+      AND provider = 'mercado_pago'
+      AND access_token IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'Vendedor sem Mercado Pago conectado';
   END IF;
 
   SELECT * INTO v_profile
-  FROM profiles
+  FROM public.profiles
   WHERE id = auth.uid();
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Perfil não encontrado';
+    RAISE EXCEPTION 'Perfil nao encontrado';
   END IF;
 
   v_amount := COALESCE(v_product.discount_price, v_product.original_price);
@@ -95,7 +156,7 @@ BEGIN
 
   SELECT *
   INTO v_payment
-  FROM payments
+  FROM public.payments
   WHERE (p_external_reference IS NOT NULL AND external_reference = p_external_reference)
      OR (p_mercado_pago_id IS NOT NULL AND mercado_pago_id = p_mercado_pago_id)
      OR (p_preference_id IS NOT NULL AND preference_id = p_preference_id)
@@ -103,7 +164,7 @@ BEGIN
   LIMIT 1;
 
   IF FOUND THEN
-    UPDATE payments
+    UPDATE public.payments
     SET
       buyer_name = COALESCE(v_payment.buyer_name, v_profile.name),
       seller_id = v_product.seller_id,
@@ -125,7 +186,7 @@ BEGIN
     RETURN v_payment;
   END IF;
 
-  INSERT INTO payments (
+  INSERT INTO public.payments (
     buyer_id,
     seller_id,
     product_id,
@@ -166,7 +227,100 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
+REVOKE ALL ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) TO authenticated;
+
+CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id uuid)
+RETURNS public.coupons AS $$
+DECLARE
+  v_payment public.payments%ROWTYPE;
+  v_coupon public.coupons%ROWTYPE;
+  v_code text;
+  v_is_admin boolean := EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
+  );
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  SELECT * INTO v_payment
+  FROM public.payments
+  WHERE id = p_payment_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Pagamento nao encontrado';
+  END IF;
+
+  IF v_payment.buyer_id <> auth.uid() AND NOT v_is_admin THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  IF v_payment.status <> 'paid' THEN
+    RAISE EXCEPTION 'Pagamento ainda nao confirmado';
+  END IF;
+
+  SELECT * INTO v_coupon
+  FROM public.coupons
+  WHERE payment_id = v_payment.id
+  LIMIT 1;
+
+  IF FOUND THEN
+    UPDATE public.payments
+    SET coupon_id = v_coupon.id,
+        coupon_code = v_coupon.code,
+        updated_at = now()
+    WHERE id = v_payment.id;
+
+    RETURN v_coupon;
+  END IF;
+
+  FOR i IN 1..5 LOOP
+    v_code := 'LK' || upper(substring(replace(uuid_generate_v4()::text, '-', '') from 1 for 6));
+    BEGIN
+      INSERT INTO public.coupons (
+        code,
+        product_id,
+        buyer_id,
+        seller_id,
+        payment_id,
+        status,
+        valid_until
+      ) VALUES (
+        v_code,
+        v_payment.product_id,
+        v_payment.buyer_id,
+        v_payment.seller_id,
+        v_payment.id,
+        'active',
+        now() + interval '24 hours'
+      )
+      RETURNING * INTO v_coupon;
+      EXIT;
+    EXCEPTION WHEN unique_violation THEN
+      IF i = 5 THEN
+        RAISE;
+      END IF;
+    END;
+  END LOOP;
+
+  UPDATE public.payments
+  SET coupon_id = v_coupon.id,
+      coupon_code = v_coupon.code,
+      updated_at = now()
+  WHERE id = v_payment.id;
+
+  UPDATE public.products
+  SET slots_used = COALESCE(slots_used, 0) + 1
+  WHERE id = v_payment.product_id;
+
+  RETURN v_coupon;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+REVOKE ALL ON FUNCTION issue_coupon_for_payment(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION issue_coupon_for_payment(uuid) TO authenticated;
 
 UPDATE public.payments
 SET platform_fee = 0,
