@@ -3,14 +3,16 @@ import { supabase } from '../lib/supabase.js';
 /**
  * Cadastrar novo usuário (Sign Up)
  */
-export async function signUpUser(email, password, fullName) {
+export async function signUpUser(email, password, fullName, role = 'buyer') {
   try {
+    const accountRole = role === 'seller' ? 'seller' : 'buyer';
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          full_name: fullName
+          full_name: fullName,
+          role: accountRole
         }
       }
     });

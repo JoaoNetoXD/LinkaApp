@@ -1,7 +1,8 @@
-import { signInUser, signUpUser } from '../services/auth-service.js';
+import { signInUser, signUpUser, getCurrentProfile } from '../services/auth-service.js';
 import { icons } from '../main.js';
 
 let isLoginMode = true;
+let selectedRole = 'buyer';
 
 export function renderAuth(container) {
   container.innerHTML = `
@@ -18,6 +19,13 @@ export function renderAuth(container) {
           <div class="auth-form-group">
             <label for="authName">Nome Completo</label>
             <input type="text" id="authName" class="auth-input" placeholder="Seu nome" />
+          </div>
+          <div class="auth-form-group">
+            <label>Tipo de conta</label>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer">Comprador</button>
+              <button type="button" class="auth-role-btn ${selectedRole === 'seller' ? 'active' : ''}" data-role="seller">Vendedor</button>
+            </div>
           </div>
         ` : ''}
 
@@ -47,7 +55,15 @@ export function renderAuth(container) {
 
   document.getElementById('btnSwitchMode').addEventListener('click', () => {
     isLoginMode = !isLoginMode;
+    if (!isLoginMode) selectedRole = 'buyer';
     renderAuth(container);
+  });
+
+  document.querySelectorAll('[data-role]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedRole = btn.dataset.role;
+      renderAuth(container);
+    });
   });
 
   document.getElementById('btnSubmitAuth').addEventListener('click', async () => {
@@ -69,8 +85,9 @@ export function renderAuth(container) {
     if (isLoginMode) {
       const res = await signInUser(email, password);
       if (res.success) {
-        // App logic in main.js handles state change
-        window.location.hash = '#/buyer';
+        const profile = await getCurrentProfile(res.data.user.id);
+        const role = profile?.role || res.data.user?.user_metadata?.role || 'buyer';
+        window.location.hash = role === 'seller' ? '#/seller' : role === 'admin' ? '#/admin' : '#/buyer';
       } else {
         errorBox.textContent = res.error || 'Erro ao fazer login. Verifique suas credenciais.';
         errorBox.classList.add('visible');
@@ -87,17 +104,19 @@ export function renderAuth(container) {
         return;
       }
       
-      const res = await signUpUser(email, password, name);
+      const res = await signUpUser(email, password, name, selectedRole);
       if (res.success) {
         // Automatically redirects or shows success
-        errorBox.textContent = 'Conta criada! Confirme seu e-mail se necessário.';
+        errorBox.textContent = selectedRole === 'seller'
+          ? 'Conta de vendedor criada! Acesse o painel após entrar.'
+          : 'Conta criada! Confirme seu e-mail se necessário.';
         errorBox.classList.add('visible');
         errorBox.style.background = 'rgba(0, 229, 160, 0.1)';
         errorBox.style.color = '#00E5A0';
         errorBox.style.borderColor = '#00E5A0';
         
         setTimeout(() => {
-          window.location.hash = '#/buyer';
+          window.location.hash = selectedRole === 'seller' ? '#/seller' : '#/buyer';
         }, 1500);
       } else {
         errorBox.textContent = res.error || 'Erro ao criar conta.';

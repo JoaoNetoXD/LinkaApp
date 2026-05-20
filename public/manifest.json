@@ -1,7 +1,7 @@
 {
   "name": "Linka",
   "short_name": "Linka",
-  "description": "Vitrine digital que conecta vendedores e compradores dentro de instituições de ensino",
+  "description": "Fluxo real de compras, vendas e cupons dentro da instituição",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

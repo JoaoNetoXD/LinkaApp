@@ -2,20 +2,35 @@
  * Payment Service — Linka (Real Mercado Pago Integration)
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { supabase } from '../lib/supabase.js';
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('AUTH_REQUIRED');
+  }
+
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  };
+}
 
 /**
  * Create a Pix payment
  */
 export async function createPixPayment(product, couponCode, buyer) {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}/pix`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product, buyer, couponCode })
+      headers,
+      body: JSON.stringify({ productId: product.id, couponCode })
     });
     const data = await response.json();
-    if (!data.success) throw new Error(data.error);
+    if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao gerar Pix.');
     
     // Convert base64 qr to img tag for display
     const qrCodeSVG = `<img src="data:image/jpeg;base64,${data.payment.qrCodeBase64}" class="qr-code-image" alt="QR Code Pix" />`;
@@ -23,23 +38,13 @@ export async function createPixPayment(product, couponCode, buyer) {
     return {
       ...data.payment,
       qrCodeSVG,
+      qrCodeString: data.payment.pixCode || data.payment.qrCodeString || '',
       originalAmount: product.originalPrice,
       discount: product.discount,
       couponCode,
     };
   } catch (err) {
-    console.warn("Payment API failed, using fallback mock:", err);
-    // Mock Pix Payment for testing the flow without backend
-    return {
-      id: "mock_" + Math.floor(Math.random() * 1000000),
-      status: "pending",
-      qrCodeBase64: "", // Would be real base64
-      qrCodeSVG: `<div style="width:200px;height:200px;background:#fff;display:flex;align-items:center;justify-content:center;color:#000;border-radius:8px;margin:0 auto;">QR Code Pix<br>(Mock)</div>`,
-      qrCodeString: "00020126580014br.gov.bcb.pix0136mock-pix-key-12345",
-      originalAmount: product.originalPrice,
-      discount: product.discount,
-      couponCode,
-    };
+    throw new Error(err.message || 'Erro ao gerar Pix.');
   }
 }
 
@@ -48,19 +53,18 @@ export async function createPixPayment(product, couponCode, buyer) {
  */
 export async function createCheckoutPreference(product, couponCode, buyer) {
   try {
+    const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}/preference`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product, buyer, couponCode })
+      headers,
+      body: JSON.stringify({ productId: product.id, couponCode })
     });
     const data = await response.json();
-    if (!data.success) throw new Error(data.error);
+    if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao gerar checkout.');
     
     return data.initPoint;
   } catch (err) {
-    console.warn("Preference API failed, using fallback mock:", err);
-    // Return a mock redirect URL (just redirects to app root or a success page)
-    return "https://sandbox.mercadopago.com.br/checkout/v1/redirect?pref_id=mock_123";
+    throw new Error(err.message || 'Erro ao gerar checkout.');
   }
 }
 
@@ -69,14 +73,13 @@ export async function createCheckoutPreference(product, couponCode, buyer) {
  */
 export async function checkPaymentStatus(paymentId) {
   try {
-    const response = await fetch(`${API_URL}/payment/${paymentId}`);
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/payment/${paymentId}`, { headers });
     const data = await response.json();
-    if (!data.success) throw new Error(data.error);
+    if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao verificar pagamento.');
     return data.payment;
   } catch (err) {
-    console.warn("Payment check failed, simulating success:", err);
-    // Simulate auto-approval after a few checks
-    return { status: 'paid' };
+    throw new Error(err.message || 'Erro ao verificar pagamento.');
   }
 }
 
@@ -85,13 +88,13 @@ export async function checkPaymentStatus(paymentId) {
  */
 export async function getSellerPayments(sellerId) {
   try {
-    const response = await fetch(`${API_URL}/seller/${sellerId}/payments`);
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/seller/${sellerId}/payments`, { headers });
     const data = await response.json();
-    if (!data.success) return [];
+    if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao carregar vendas.');
     return data.payments;
   } catch (err) {
-    console.error("Get seller payments failed:", err);
-    return [];
+    throw new Error(err.message || 'Erro ao carregar vendas.');
   }
 }
 
@@ -103,11 +106,11 @@ export async function getPaymentStats(sellerId) {
   const paid = allPayments.filter(p => p.status === 'paid');
   const pending = allPayments.filter(p => p.status === 'pending');
 
-  const PLATFORM_COMMISSION_RATE = 0.01;
+  const PLATFORM_COMMISSION_RATE = 0;
 
   const totalGross = paid.reduce((sum, p) => sum + p.amount, 0);
-  const totalFees = paid.reduce((sum, p) => sum + (p.platformFee || p.amount * PLATFORM_COMMISSION_RATE), 0);
-  const totalNet = paid.reduce((sum, p) => sum + (p.sellerAmount || p.amount * (1 - PLATFORM_COMMISSION_RATE)), 0);
+  const totalFees = paid.reduce((sum, p) => sum + (p.platformFee || 0), 0);
+  const totalNet = paid.reduce((sum, p) => sum + (p.sellerAmount || p.amount), 0);
 
   return {
     totalReceived: Math.round(totalNet * 100) / 100,
@@ -121,6 +124,25 @@ export async function getPaymentStats(sellerId) {
       ? Math.round((paid.length / allPayments.length) * 100)
       : 0,
   };
+}
+
+export async function getMercadoPagoStatus() {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/mercadopago/status`, { headers });
+  const data = await response.json();
+  if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao consultar Mercado Pago.');
+  return data;
+}
+
+export async function startMercadoPagoOAuth() {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_URL}/mercadopago/oauth/start`, {
+    method: 'POST',
+    headers,
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao conectar Mercado Pago.');
+  return data.url;
 }
 
 export const PAYMENT_STATUS = {

@@ -18,6 +18,7 @@ import './styles/payment.css';
 import './styles/auth.css';
 import './styles/admin.css';
 import './styles/app-dark.css';
+import './styles/polish.css';
 
 const app = document.getElementById('app');
 
@@ -62,12 +63,32 @@ export const icons = {
   refresh: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 3.43-11.02L21.5 8"/></svg>'
 };
 
+export function escapeHTML(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function sanitizeUrl(value) {
+  if (!value) return '';
+  try {
+    const url = new URL(String(value), window.location.origin);
+    if (['http:', 'https:', 'blob:', 'data:'].includes(url.protocol)) return url.href;
+  } catch {
+    if (String(value).startsWith('blob:') || String(value).startsWith('data:')) return String(value);
+  }
+  return '';
+}
+
 // Toast notification system
 export function showToast(message, type = 'info') {
   const container = document.getElementById('toast-root');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `${type === 'success' ? icons.check : type === 'error' ? icons.x : ''} ${message}`;
+  toast.innerHTML = `${type === 'success' ? icons.check : type === 'error' ? icons.x : ''} ${escapeHTML(message)}`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
@@ -102,20 +123,27 @@ const mockImages = {
   pulseira: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400&q=80'
 };
 
-// Product image placeholder generator
+// Product image placeholder generator — handles mock keys, real URLs, and blob URLs
 export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
-  if (mockImages[imageKey]) {
-    return `<img src="${mockImages[imageKey]}" alt="${imageKey}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
+  // Real URL (Supabase Storage, Unsplash, or blob preview)
+  if (imageKey && (imageKey.startsWith('http') || imageKey.startsWith('blob:'))) {
+    const src = sanitizeUrl(imageKey);
+    return `<img src="${src}" alt="Produto" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
   }
+  // Mock image key lookup
+  if (mockImages[imageKey]) {
+    return `<img src="${sanitizeUrl(mockImages[imageKey])}" alt="${escapeHTML(imageKey)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
+  }
+  // Placeholder with category icon
   const iconSvg = placeholderIcons[categoryId] || placeholderIcons.others;
   const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A1A24'/%3E%3C/svg%3E")`;
-  
   return `<div style="width:100%;height:100%;background-color:#161620;background-image:${dotGrid};background-size:18px 18px;display:flex;align-items:center;justify-content:center;opacity:0.8;">${iconSvg}</div>`;
 }
 
 // Format currency
 export function formatCurrency(value) {
-  return `R$ ${value.toFixed(2).replace('.', ',')}`;
+  const num = Number(value) || 0;
+  return `R$ ${num.toFixed(2).replace('.', ',')}`;
 }
 
 // Global auth state
@@ -124,12 +152,17 @@ export let globalProfile = null;
 
 // Simple client-side routing (supports both hash and path)
 async function handleRoute() {
-  const path = window.location.hash.slice(1) || window.location.pathname;
+  const rawRoute = window.location.hash.slice(1) || window.location.pathname;
+  const [path] = rawRoute.split('?');
 
   // Ignore hash changes for intra-page anchors (e.g. #problema, #contato)
   if (window.location.hash && !window.location.hash.startsWith('#/')) {
     return;
   }
+
+  // Clear any open modals when navigating between pages
+  const modalRoot = document.getElementById('modal-root');
+  if (modalRoot) modalRoot.innerHTML = '';
 
   // Check auth for protected routes
   const isProtectedRoute = path.startsWith('/seller') || path.startsWith('/admin') || path === 'seller' || path === 'admin';
@@ -140,40 +173,54 @@ async function handleRoute() {
       window.location.hash = '#/auth';
       return;
     }
-    // Load profile if missing
-    if (!globalProfile) {
+    // Load profile if missing and validate role
+    if (!globalProfile || globalProfile.id !== session.user.id) {
       globalProfile = await getCurrentProfile(session.user.id);
+    }
+    const role = globalProfile?.role || session.user.user_metadata?.role || 'buyer';
+    const wantsAdmin = path.startsWith('/admin') || path === 'admin';
+    const wantsSeller = path.startsWith('/seller') || path === 'seller';
+    if ((wantsAdmin && role !== 'admin') || (wantsSeller && !['seller', 'admin'].includes(role))) {
+      window.location.hash = '#/buyer';
+      showToast('Acesso restrito ao seu perfil.', 'error');
+      return;
     }
   }
 
   if (path.startsWith('/auth') || path === 'auth') {
-    const session = await getCurrentSession();
-    if (session) {
-      window.location.hash = '#/buyer'; // Redirect if already logged in
-      return;
-    }
     renderAuth(app);
+    getCurrentSession().then((session) => {
+      if (session && (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth'))) {
+        window.location.hash = '#/buyer';
+      }
+    }).catch(() => {});
   } else if (path.startsWith('/buyer') || path === 'buyer') {
     const parts = path.split('/').filter(Boolean);
-    renderBuyer(app, parts[1]);
+    renderBuyer(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/seller') || path === 'seller') {
     const parts = path.split('/').filter(Boolean);
-    renderSeller(app, parts[1]);
+    renderSeller(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/admin') || path === 'admin') {
     const parts = path.split('/').filter(Boolean);
-    renderAdmin(app, parts[1]);
-  } else {
+    renderAdmin(app, parts[1]?.split('?')[0]);
+  } else if (path.startsWith('/landing') || path === 'landing') {
     renderLanding(app);
+  } else {
+    renderBuyer(app);
   }
 }
 
 // Listen to auth changes
-onAuthStateChange((event, session) => {
+onAuthStateChange(async (event, session) => {
   globalSession = session;
-  if (event === 'SIGNED_IN') {
+  if (event === 'SIGNED_IN' && session) {
+    try {
+      globalProfile = await getCurrentProfile(session.user.id);
+    } catch { globalProfile = null; }
     handleRoute();
   } else if (event === 'SIGNED_OUT') {
     globalProfile = null;
+    globalSession = null;
     window.location.hash = '#/';
   }
 });

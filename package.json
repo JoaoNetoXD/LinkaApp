@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"node server.js\"",
+    "check:config": "node scripts/check-config.mjs",
+    "check:config:prod": "node scripts/check-config.mjs --production",
+    "verify": "npm run check:config && npm run build && npm audit --omit=dev --cache .npm-cache",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -17,6 +20,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mercadopago": "^2.12.0"
+    "mercadopago": "^2.12.0",
+    "serverless-http": "^4.0.0"
   }
 }

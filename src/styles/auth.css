@@ -88,6 +88,26 @@ body:has(.auth-wrapper) {
   border-color: #00E5A0;
 }
 
+.auth-role-btn {
+  flex: 1;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid #2A2A40;
+  background: #161620;
+  color: #A0A0B0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.auth-role-btn.active {
+  background: rgba(0, 229, 160, 0.12);
+  color: #00E5A0;
+  border-color: #00E5A0;
+}
+
 .auth-btn {
   background-color: #00E5A0;
   color: #0A0A0F;

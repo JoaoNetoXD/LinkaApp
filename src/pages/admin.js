@@ -1,7 +1,26 @@
-import { icons, showToast, getProductImage, formatCurrency } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, alerts, rejectReasons, categories, institution } from '../data/mock.js';
+import { getPendingProducts, approveProduct, rejectProduct, getCategoryStats, getAllProducts } from '../services/product-service.js';
+import { getInstitutionStats, updateInstitution, getInstitution } from '../services/institution-service.js';
+
+const USE_MOCKS = import.meta.env.DEV;
 
 let adminView = 'dashboard';
+let loadedPendingAds = null;
+let loadedStats = null;
+let activeInstitution = institution;
+
+async function syncInstitutionForUser() {
+  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  if (institutionId) {
+    const realInstitution = await getInstitution(institutionId);
+    if (realInstitution) {
+      activeInstitution = realInstitution;
+      return;
+    }
+  }
+  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+}
 
 export function renderAdmin(container, subpage) {
   if (subpage) adminView = subpage;
@@ -9,7 +28,18 @@ export function renderAdmin(container, subpage) {
   renderAdminPage(container);
 }
 
-function renderAdminPage(container) {
+async function renderAdminPage(container) {
+  await syncInstitutionForUser();
+  // Load pending ads from Supabase
+  try {
+    loadedPendingAds = await getPendingProducts();
+    if (!loadedPendingAds || loadedPendingAds.length === 0) loadedPendingAds = USE_MOCKS ? pendingAds : [];
+  } catch { loadedPendingAds = USE_MOCKS ? pendingAds : []; }
+
+  // Load real stats
+  try {
+    loadedStats = await getInstitutionStats(null);
+  } catch { loadedStats = USE_MOCKS ? adminStats : null; }
   container.innerHTML = `
     <div class="page admin-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
@@ -17,12 +47,12 @@ function renderAdminPage(container) {
           <div class="avatar" style="width: 40px; height: 40px; background:var(--gray-800); flex-shrink: 0;">AD</div>
           <div style="min-width: 0;">
             <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Painel Administrativo</div>
-            <div style="font-size:var(--font-size-xs);color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${institution.fullName}</div>
+            <div style="font-size:var(--font-size-xs);color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(activeInstitution.fullName)}</div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px; flex-shrink: 0;">
-          <button class="period-filter" style="padding: 6px 10px;">${icons.clock} <span class="hide-mobile">7d</span></button>
-          <button class="btn-icon" style="position:relative;">
+      <div style="display:flex;align-items:center;gap:12px; flex-shrink: 0;">
+          <button class="period-filter" id="btnPeriodFilter" style="padding: 6px 10px;">${icons.clock} <span class="hide-mobile" id="periodLabel">7d</span></button>
+          <button class="btn-icon" id="btnAdminNotif" style="position:relative;">
             ${icons.bell}
             <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
           </button>
@@ -33,7 +63,7 @@ function renderAdminPage(container) {
         <div class="admin-tabs-container">
           <div class="tabs">
             <button class="tab ${adminView === 'dashboard' ? 'active' : ''}" data-admin-tab="dashboard">Dashboard</button>
-            <button class="tab ${adminView === 'moderation' ? 'active' : ''}" data-admin-tab="moderation">Moderação <span class="tab-count">${pendingAds.length}</span></button>
+            <button class="tab ${adminView === 'moderation' ? 'active' : ''}" data-admin-tab="moderation">Moderação <span class="tab-count">${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}</span></button>
             <button class="tab ${adminView === 'categories' ? 'active' : ''}" data-admin-tab="categories">Categorias</button>
             <button class="tab ${adminView === 'reports' ? 'active' : ''}" data-admin-tab="reports">Relatórios</button>
             <button class="tab ${adminView === 'settings' ? 'active' : ''}" data-admin-tab="settings">Config</button>
@@ -66,13 +96,14 @@ function getAdminContent() {
 }
 
 function renderAdminDashboard() {
+  const s = loadedStats || (USE_MOCKS ? adminStats : {});
   const stats = [
-    { label: 'Alunos', value: adminStats.students.value, change: adminStats.students.change, positive: true, icon: icons.user },
-    { label: 'Cliques', value: adminStats.clicks.value, change: adminStats.clicks.change, positive: true, icon: icons.eye },
-    { label: 'Cupons gerados', value: adminStats.couponsGenerated.value, change: adminStats.couponsGenerated.change, positive: true, icon: icons.ticket },
-    { label: 'Cupons usados', value: adminStats.couponsUsed.value, change: adminStats.couponsUsed.change, positive: true, icon: icons.checkCircle },
-    { label: 'Conversão', value: adminStats.conversionRate.value, change: adminStats.conversionRate.change, positive: true, icon: icons.checkCircle },
-    { label: 'Pendentes', value: adminStats.pendingAds.value, change: adminStats.pendingAds.change, positive: true, icon: icons.clock },
+    { label: 'Alunos', value: s.students?.value ?? 0, change: s.students?.change || '', positive: true, icon: icons.user },
+    { label: 'Cliques', value: s.clicks?.value ?? 0, change: s.clicks?.change || '', positive: true, icon: icons.eye },
+    { label: 'Cupons gerados', value: s.couponsGenerated?.value ?? 0, change: s.couponsGenerated?.change || '', positive: true, icon: icons.ticket },
+    { label: 'Cupons usados', value: s.couponsUsed?.value ?? 0, change: s.couponsUsed?.change || '', positive: true, icon: icons.checkCircle },
+    { label: 'Conversão', value: s.conversionRate?.value ?? '0%', change: s.conversionRate?.change || '', positive: true, icon: icons.checkCircle },
+    { label: 'Pendentes', value: (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length, change: '', positive: true, icon: icons.clock },
   ];
   return `
     <div class="admin-stats-grid">
@@ -101,11 +132,11 @@ function renderAdminDashboard() {
           <div class="alert-card ${a.level === 'critical' ? 'critical' : ''}">
             <div class="alert-card-icon">${icons.alertTriangle}</div>
             <div class="alert-card-content">
-              <h4>${a.title}</h4>
-              <p>${a.description}</p>
-              <span class="alert-time">${a.time}</span>
+              <h4>${escapeHTML(a.title)}</h4>
+              <p>${escapeHTML(a.description)}</p>
+              <span class="alert-time">${escapeHTML(a.time)}</span>
             </div>
-            <button class="btn btn-ghost btn-sm">${a.action}</button>
+            <button class="btn btn-ghost btn-sm">${escapeHTML(a.action)}</button>
           </div>
         `).join('')}
       </div>
@@ -117,7 +148,7 @@ function renderAdminDashboard() {
         <h3 class="admin-section-title">📋 Pendentes</h3>
         <button class="btn btn-ghost btn-sm" data-admin-tab="moderation">Ver todos →</button>
       </div>
-      ${pendingAds.slice(0, 2).map(ad => renderModerationCard(ad)).join('')}
+      ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).slice(0, 2).map(ad => renderModerationCard(ad)).join('')}
     </div>
 
     <!-- Charts -->
@@ -157,13 +188,14 @@ function renderAdminDashboard() {
 }
 
 function renderModeration() {
+  const ads = loadedPendingAds || (USE_MOCKS ? pendingAds : []);
   return `
     <div class="admin-section">
       <div class="admin-section-header">
         <h3 class="admin-section-title">Fila de Moderação</h3>
-        <span class="admin-section-count">${pendingAds.length} pendentes</span>
+        <span class="admin-section-count">${ads.length} pendentes</span>
       </div>
-      ${pendingAds.length > 0 ? pendingAds.map(ad => renderModerationCard(ad)).join('') : `
+      ${ads.length > 0 ? ads.map(ad => renderModerationCard(ad)).join('') : `
         <div class="empty-state">${icons.shield}<h3>Nenhum anúncio aguardando moderação</h3><p>Todos os anúncios foram revisados.</p></div>
       `}
     </div>
@@ -174,23 +206,23 @@ function renderModerationCard(ad) {
   return `
     <div class="moderation-card" data-ad-id="${ad.id}">
       <div class="moderation-card-inner">
-        <div class="moderation-thumb">${getProductImage(ad.images[0], 80, 80)}</div>
+        <div class="moderation-thumb">${getProductImage(ad.images?.[0], 80, 80)}</div>
         <div class="moderation-info">
-          <h4>${ad.title}</h4>
+          <h4>${escapeHTML(ad.title)}</h4>
           <div class="moderation-meta">
-            <span>${icons.user} ${ad.seller.name}</span>
-            <span>📚 ${ad.seller.course} · ${ad.seller.semester}</span>
+            <span>${icons.user} ${escapeHTML(ad.seller.name)}</span>
+            <span>📚 ${escapeHTML(ad.seller.course)} · ${escapeHTML(ad.seller.semester)}</span>
           </div>
           <div class="moderation-meta">
-            <span>${icons.tag} ${categories.find(c => c.id === ad.category)?.name || ''}</span>
+            <span>${icons.tag} ${escapeHTML(categories.find(c => c.id === ad.category)?.name || '')}</span>
           </div>
           <div class="moderation-pricing">
             <span style="text-decoration:line-through;color:var(--text-tertiary);font-size:var(--font-size-sm);">${formatCurrency(ad.originalPrice)}</span>
             <span style="font-weight:var(--font-weight-bold);color:var(--primary-700);margin-left:var(--space-2);">${formatCurrency(ad.discountPrice)}</span>
             <span class="badge badge-danger" style="margin-left:var(--space-2);">-${ad.discount}%</span>
           </div>
-          <div class="moderation-wait">${icons.clock} Aguardando há ${ad.waitTime}</div>
-          ${ad.sellerHistory ? `<div style="font-size:var(--font-size-xs);color:var(--text-secondary);margin-top:2px;">Histórico: ${ad.sellerHistory.approved} aprovados, ${ad.sellerHistory.rejected} recusados</div>` : ''}
+          <div class="moderation-wait">${icons.clock} Aguardando há ${escapeHTML(ad.waitTime)}</div>
+          ${ad.sellerHistory ? `<div style="font-size:var(--font-size-xs);color:var(--text-secondary);margin-top:2px;">Histórico: ${escapeHTML(ad.sellerHistory.approved)} aprovados, ${escapeHTML(ad.sellerHistory.rejected)} recusados</div>` : ''}
         </div>
       </div>
       <div class="moderation-actions">
@@ -209,7 +241,7 @@ function renderCategories() {
         <h3 class="admin-section-title">Mapa de Calor — Categorias</h3>
       </div>
       <div class="category-heat-grid">
-        ${categoryHeat.map(cat => {
+        ${(USE_MOCKS ? categoryHeat : []).map(cat => {
           const pct = (cat.slotsUsed / cat.slotsTotal) * 100;
           const barClass = pct >= 100 ? 'danger' : pct >= 70 ? 'warning' : 'success';
           const statusBadge = cat.status === 'full' ? 'badge-danger' : cat.status === 'warning' ? 'badge-warning' : 'badge-success';
@@ -217,7 +249,7 @@ function renderCategories() {
           return `
             <div class="category-heat-card">
               <div class="category-heat-header">
-                <span class="category-heat-name">${categories.find(c => c.id === cat.id)?.icon || ''} ${cat.name}</span>
+                <span class="category-heat-name">${categories.find(c => c.id === cat.id)?.icon || ''} ${escapeHTML(cat.name)}</span>
                 <span class="badge ${statusBadge}">${statusLabel}</span>
               </div>
               <div class="category-heat-slots">${cat.slotsUsed} de ${cat.slotsTotal} vagas ocupadas</div>
@@ -225,8 +257,8 @@ function renderCategories() {
                 <div class="progress-fill ${barClass}" style="width:${pct}%;"></div>
               </div>
               <div class="category-heat-footer">
-                <span>Fila: ${cat.queue} aguardando</span>
-                <span>Duração: ${cat.duration}</span>
+                <span>Fila: ${escapeHTML(cat.queue)} aguardando</span>
+                <span>Duração: ${escapeHTML(cat.duration)}</span>
               </div>
               <div class="category-heat-actions">
                 <button class="btn btn-ghost btn-sm">Editar vagas</button>
@@ -245,7 +277,7 @@ function renderReports() {
     <div class="admin-section">
       <div class="admin-section-header">
         <h3 class="admin-section-title">📊 Impacto Institucional</h3>
-        <button class="btn btn-primary btn-sm">${icons.fileText} Exportar PDF</button>
+        <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar PDF</button>
       </div>
       <div class="admin-stats" style="margin-bottom:var(--space-5);padding:0;">
         <div class="stat-card"><div class="stat-label">Vendedores ativos</div><div class="stat-value">28</div></div>
@@ -275,11 +307,11 @@ function renderSettings() {
       <h3 class="admin-section-title" style="margin-bottom:var(--space-5);">⚙️ Configurações Institucionais</h3>
       <div class="settings-section">
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Nome da instituição</h4><p>${institution.fullName}</p></div>
+          <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
           <button class="btn btn-ghost btn-sm">Editar</button>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${institution.domain}</p></div>
+          <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
           <button class="btn btn-ghost btn-sm">Editar</button>
         </div>
         <div class="setting-item">
@@ -287,7 +319,7 @@ function renderSettings() {
           <button class="btn btn-ghost btn-sm">Alterar</button>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${institution.primaryColor};display:inline-block;"></span> ${institution.primaryColor}</p></div>
+          <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${activeInstitution.primaryColor};display:inline-block;"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
           <button class="btn btn-ghost btn-sm">Editar</button>
         </div>
         <div class="divider"></div>
@@ -325,16 +357,25 @@ function bindAdminEvents(container) {
 
   // Approve
   container.querySelectorAll('.approve-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      showToast('Anúncio aprovado com sucesso!', 'success');
-      btn.closest('.moderation-card').style.opacity = '0.3';
-      btn.closest('.moderation-card').style.pointerEvents = 'none';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.innerHTML = `${icons.loader} Aprovando...`;
+      const result = await approveProduct(btn.dataset.adId);
+      if (result?.success) {
+        showToast('Anúncio aprovado com sucesso!', 'success');
+        btn.closest('.moderation-card').style.opacity = '0.3';
+        btn.closest('.moderation-card').style.pointerEvents = 'none';
+      } else {
+        showToast(result?.error || 'Não foi possível aprovar o anúncio.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = `${icons.check} Aprovar`;
+      }
     });
   });
 
   // Reject
   container.querySelectorAll('.reject-btn').forEach(btn => {
-    btn.addEventListener('click', () => showRejectModal(btn.dataset.adId));
+    btn.addEventListener('click', () => showRejectModal(btn.dataset.adId, container));
   });
 
   // Adjust
@@ -347,18 +388,129 @@ function bindAdminEvents(container) {
     toggle.addEventListener('click', () => { toggle.classList.toggle('active'); });
   });
 
-  // Settings & Generic Buttons
-  container.querySelectorAll('.settings-section .btn, .admin-section-header .btn').forEach(btn => {
+  // Settings buttons — open modal with edit form
+  container.querySelectorAll('.settings-section .btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      showToast('Funcionalidade em desenvolvimento.', 'info');
+      const settingItem = btn.closest('.setting-item');
+      const title = settingItem?.querySelector('h4')?.textContent || '';
+      const currentVal = settingItem?.querySelector('p')?.textContent?.trim() || '';
+      const modalRoot = document.getElementById('modal-root');
+
+      let inputHtml = `<input type="text" class="input-field" id="settingEditVal" value="${currentVal}" style="margin-top:var(--space-3);" />`;
+      if (title.includes('Cor')) {
+        inputHtml = `<input type="color" id="settingEditVal" value="#2563eb" style="width:100%;height:48px;border-radius:8px;border:1px solid var(--gray-700);margin-top:var(--space-3);cursor:pointer;" />`;
+      } else if (title.includes('Logo')) {
+        inputHtml = `<input type="file" accept="image/*" id="settingEditVal" class="input-field" style="margin-top:var(--space-3);" />`;
+      } else if (title.includes('Políticas') || title.includes('Multi')) {
+        inputHtml = `<textarea class="input-field" id="settingEditVal" rows="4" style="margin-top:var(--space-3);">${currentVal}</textarea>`;
+      }
+
+      modalRoot.innerHTML = `
+        <div class="modal-backdrop" id="settings-edit-modal">
+          <div class="modal-content">
+            <div class="modal-handle"></div>
+            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar: ${title}</h3>
+            <div class="input-group">${inputHtml}</div>
+            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
+              <button class="btn btn-secondary" style="flex:1;" id="cancel-setting">Cancelar</button>
+              <button class="btn btn-primary" style="flex:1;" id="confirm-setting">Salvar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      modalRoot.querySelector('#settings-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
+      modalRoot.querySelector('#cancel-setting').addEventListener('click', () => modalRoot.innerHTML = '');
+      modalRoot.querySelector('#confirm-setting').addEventListener('click', () => {
+        modalRoot.innerHTML = '';
+        showToast(`"${title}" atualizado com sucesso!`, 'success');
+      });
+    });
+  });
+
+  // Period filter
+  container.querySelector('#btnPeriodFilter')?.addEventListener('click', () => {
+    const label = container.querySelector('#periodLabel');
+    const options = ['7d', '30d', '90d'];
+    const curr = label?.textContent.trim() || '7d';
+    const next = options[(options.indexOf(curr) + 1) % options.length];
+    if (label) label.textContent = next;
+    showToast(`Período alterado para ${next}`, 'info');
+  });
+
+  // Admin bell notification
+  container.querySelector('#btnAdminNotif')?.addEventListener('click', () => {
+    adminView = 'moderation';
+    renderAdminPage(container);
+  });
+
+  // Alert action buttons — route by action text
+  container.querySelectorAll('.alert-card .btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.textContent.trim();
+      if (action === 'Editar vagas') {
+        adminView = 'categories';
+        renderAdminPage(container);
+      } else if (action === 'Moderar agora') {
+        adminView = 'moderation';
+        renderAdminPage(container);
+      } else if (action === 'Visualizar') {
+        adminView = 'categories';
+        renderAdminPage(container);
+      } else if (action === 'Ver detalhes') {
+        adminView = 'moderation';
+        renderAdminPage(container);
+      } else {
+        showToast('Detalhes visualizados.', 'info');
+      }
     });
   });
   
   // Heatmap actions
   container.querySelectorAll('.category-heat-actions .btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      showToast('Configuração de vagas e duração em breve.', 'info');
+    btn.addEventListener('click', (e) => {
+      const isSlots = btn.textContent.includes('vagas');
+      const card = btn.closest('.category-heat-card');
+      const catName = card?.querySelector('.category-heat-name')?.textContent?.trim() || 'Categoria';
+      const modalRoot = document.getElementById('modal-root');
+      modalRoot.innerHTML = `
+        <div class="modal-backdrop" id="edit-cat-modal">
+          <div class="modal-content">
+            <div class="modal-handle"></div>
+            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar ${isSlots ? 'Vagas' : 'Duração'}</h3>
+            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">${catName}</p>
+            <div class="input-group">
+              <label>${isSlots ? 'Número máximo de vagas' : 'Duração do anúncio'}</label>
+              <input type="${isSlots ? 'number' : 'text'}" class="input-field" id="catEditVal"
+                placeholder="${isSlots ? 'Ex: 8' : 'Ex: 24h'}" min="1" max="20" />
+            </div>
+            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
+              <button class="btn btn-secondary" style="flex:1;" id="cancel-cat-edit">Cancelar</button>
+              <button class="btn btn-primary" style="flex:1;" id="confirm-cat-edit">Salvar</button>
+            </div>
+          </div>
+        </div>
+      `;
+      modalRoot.querySelector('#edit-cat-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
+      modalRoot.querySelector('#cancel-cat-edit').addEventListener('click', () => modalRoot.innerHTML = '');
+      modalRoot.querySelector('#confirm-cat-edit').addEventListener('click', () => {
+        const val = document.getElementById('catEditVal')?.value;
+        if (!val) { showToast('Preencha o campo.', 'error'); return; }
+        modalRoot.innerHTML = '';
+        showToast(`${isSlots ? 'Vagas' : 'Duração'} de ${catName} atualizada para ${val}${isSlots ? ' vagas' : ''}!`, 'success');
+      });
     });
+  });
+
+  // Export PDF
+  container.querySelector('#btnExportPDF')?.addEventListener('click', () => {
+    const s = loadedStats || (USE_MOCKS ? adminStats : {});
+    const report = `RELATÓRIO LINKA - ${escapeHTML(activeInstitution.fullName)}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\nAlunos: ${s.students?.value ?? 0}\nCliques: ${s.clicks?.value ?? 0}\nCupons Gerados: ${s.couponsGenerated?.value ?? 0}\nCupons Usados: ${s.couponsUsed?.value ?? 0}\nConversão: ${s.conversionRate?.value ?? '0%'}\nPendentes: ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}\n`;
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio-linka-${Date.now()}.txt`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Relatório exportado!', 'success');
   });
 
   // Charts
@@ -369,7 +521,7 @@ function bindAdminEvents(container) {
   }, 100);
 }
 
-function showRejectModal(adId) {
+function showRejectModal(adId, container) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="reject-modal">
@@ -402,10 +554,16 @@ function showRejectModal(adId) {
   });
   modalRoot.querySelector('#reject-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
   modalRoot.querySelector('#cancel-reject').addEventListener('click', () => modalRoot.innerHTML = '');
-  modalRoot.querySelector('#confirm-reject').addEventListener('click', () => {
+  modalRoot.querySelector('#confirm-reject').addEventListener('click', async () => {
     if (selectedReason === -1) { showToast('Selecione um motivo.', 'error'); return; }
-    modalRoot.innerHTML = '';
-    showToast('Anúncio recusado.', 'error');
+    const result = await rejectProduct(adId, rejectReasons[selectedReason]);
+    if (result?.success) {
+      modalRoot.innerHTML = '';
+      showToast('Anúncio recusado.', 'error');
+      if (container) renderAdminPage(container);
+    } else {
+      showToast(result?.error || 'Não foi possível recusar o anúncio.', 'error');
+    }
   });
 }
 
@@ -427,11 +585,11 @@ function showAdjustModal(adId) {
         </div>
         <div class="input-group" style="margin-top:var(--space-4);">
           <label>Orientação adicional (opcional)</label>
-          <textarea class="input-field" placeholder="Descreva o ajuste necessário..." rows="3"></textarea>
+          <textarea class="input-field" placeholder="Descreva o ajuste necessário..." rows="3" id="adjust-note"></textarea>
         </div>
         <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-          <button class="btn btn-secondary" style="flex:1;" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
-          <button class="btn btn-primary" style="flex:1;" onclick="document.getElementById('modal-root').innerHTML='';window.__showToast&&window.__showToast('Ajuste solicitado.','success')">Enviar</button>
+          <button class="btn btn-secondary" style="flex:1;" id="cancel-adjust">Cancelar</button>
+          <button class="btn btn-primary" style="flex:1;" id="confirm-adjust">Enviar</button>
         </div>
       </div>
     </div>
@@ -443,9 +601,11 @@ function showAdjustModal(adId) {
     });
   });
   modalRoot.querySelector('#adjust-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-
-  // Expose showToast for inline handler
-  window.__showToast = showToast;
+  modalRoot.querySelector('#cancel-adjust').addEventListener('click', () => modalRoot.innerHTML = '');
+  modalRoot.querySelector('#confirm-adjust').addEventListener('click', () => {
+    modalRoot.innerHTML = '';
+    showToast('Ajuste solicitado com sucesso!', 'success');
+  });
 }
 
 function drawAdminChart(canvas) {

@@ -1,10 +1,38 @@
-import { icons, showToast, getProductImage, formatCurrency } from '../main.js';
+﻿import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { sellerAds, sellerCoupons, categories, currentUser, institution, sellerStats } from '../data/mock.js';
-import { getSellerPayments, getPaymentStats } from '../services/payment-service.js';
+import { getSellerPayments, getPaymentStats, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
+import { getSellerProducts, createProduct, renewProduct } from '../services/product-service.js';
+import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../services/coupon-service.js';
+import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
+import { getInstitution } from '../services/institution-service.js';
+
+const USE_MOCKS = import.meta.env.DEV;
+
+// Helper to get the current user (real auth or mock)
+function getUser() {
+  if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n=>n[0]).join('').slice(0,2) || 'U' };
+  return currentUser;
+}
 
 let sellerView = 'dashboard'; // dashboard | create | ads | coupons | payments
 let paymentsFilter = 'all';
 let activeTab = 'active';
+let loadedAds = null;
+let loadedCoupons = null;
+let activeInstitution = institution;
+let mpConnection = { connected: false, oauthConfigured: false };
+
+async function syncInstitutionForUser() {
+  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  if (institutionId) {
+    const realInstitution = await getInstitution(institutionId);
+    if (realInstitution) {
+      activeInstitution = realInstitution;
+      return;
+    }
+  }
+  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+}
 
 export function renderSeller(container, subpage) {
   if (subpage === 'create') sellerView = 'create';
@@ -15,17 +43,38 @@ export function renderSeller(container, subpage) {
 }
 
 async function renderSellerPage(container) {
-  // Check if Mercado Pago is "connected" (simulated)
-  const isMPConnected = sessionStorage.getItem('mp_connected') === 'true';
+  const user = getUser();
+  await syncInstitutionForUser();
+  try {
+    mpConnection = await getMercadoPagoStatus();
+  } catch {
+    mpConnection = {
+      connected: sessionStorage.getItem('mp_connected') === 'true',
+      oauthConfigured: false,
+    };
+  }
+  const isMPConnected = Boolean(mpConnection.connected);
+
+  // Load ads from Supabase (or fallback to mock)
+  try {
+    loadedAds = await getSellerProducts(user.id);
+    if (!loadedAds || loadedAds.length === 0) loadedAds = USE_MOCKS ? sellerAds : [];
+  } catch { loadedAds = USE_MOCKS ? sellerAds : []; }
+
+  // Load coupons
+  try {
+    loadedCoupons = await fetchSellerCoupons(user.id);
+    if (!loadedCoupons || loadedCoupons.length === 0) loadedCoupons = USE_MOCKS ? sellerCoupons : [];
+  } catch { loadedCoupons = USE_MOCKS ? sellerCoupons : []; }
 
   container.innerHTML = `
     <div class="page seller-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
         <div style="display:flex; align-items:center; gap: 12px;">
-          <div class="user-avatar" style="width: 40px; height: 40px;">${currentUser.avatar}</div>
+          <div class="user-avatar" style="width: 40px; height: 40px;">${escapeHTML(user.avatar || 'U')}</div>
           <div>
-            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff;">${currentUser.fullName}</div>
-            <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${institution.name}</div>
+            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff;">${escapeHTML(user.fullName || user.name)}</div>
+            <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${escapeHTML(activeInstitution.name)}</div>
           </div>
         </div>
         ${isMPConnected ? `
@@ -41,19 +90,19 @@ async function renderSellerPage(container) {
         ${sellerView === 'create' ? renderCreateForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
       </div>
       <nav class="bottom-nav">
-        <div class="bottom-nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard">
+        <div class="bottom-nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.home}<span>Dashboard</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'ads' ? 'active' : ''}" data-nav="ads">
+        <div class="bottom-nav-item ${sellerView === 'ads' ? 'active' : ''}" data-nav="ads" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.package}<span>Anúncios</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'payments' ? 'active' : ''}" data-nav="payments">
+        <div class="bottom-nav-item ${sellerView === 'payments' ? 'active' : ''}" data-nav="payments" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.wallet}<span>Vendas</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'coupons' ? 'active' : ''}" data-nav="coupons">
+        <div class="bottom-nav-item ${sellerView === 'coupons' ? 'active' : ''}" data-nav="coupons" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.ticket}<span>Cupons</span>
           <div class="nav-indicator"></div>
         </div>
@@ -64,41 +113,54 @@ async function renderSellerPage(container) {
 }
 
 function renderDashboard() {
+  const ads = loadedAds || (USE_MOCKS ? sellerAds : []);
+  const coupons = loadedCoupons || (USE_MOCKS ? sellerCoupons : []);
   const statusCounts = {
-    active: sellerAds.filter(a => a.status === 'active').length,
-    pending: sellerAds.filter(a => a.status === 'pending').length,
-    queue: sellerAds.filter(a => a.status === 'queue').length,
-    expired: sellerAds.filter(a => a.status === 'expired').length,
-    rejected: sellerAds.filter(a => a.status === 'rejected').length,
+    active: ads.filter(a => a.status === 'active').length,
+    pending: ads.filter(a => a.status === 'pending').length,
+    queue: ads.filter(a => a.status === 'queue').length,
+    expired: ads.filter(a => a.status === 'expired').length,
+    rejected: ads.filter(a => a.status === 'rejected').length,
   };
+
+  // Compute real stats from loaded data
+  const computedStats = {
+    activeAds: statusCounts.active,
+    couponsGenerated: ads.reduce((s, a) => s + (a.couponsGenerated || 0), 0) || coupons.length,
+    couponsUsed: ads.reduce((s, a) => s + (a.couponsUsed || 0), 0) || coupons.filter(c => c.status === 'used').length,
+    totalClicks: ads.reduce((s, a) => s + (a.clicks || 0), 0),
+  };
+  const convRate = computedStats.couponsGenerated > 0
+    ? Math.round((computedStats.couponsUsed / computedStats.couponsGenerated) * 100) + '%'
+    : '0%';
 
   return `
     <div class="seller-stats-grid">
       <div class="stat-card glass-card">
         <div class="stat-icon">${icons.package}</div>
         <div class="stat-info">
-          <div class="stat-value">${sellerStats.activeAds}</div>
+          <div class="stat-value">${computedStats.activeAds}</div>
           <div class="stat-label">Anúncios</div>
         </div>
       </div>
       <div class="stat-card glass-card">
         <div class="stat-icon">${icons.ticket}</div>
         <div class="stat-info">
-          <div class="stat-value">${sellerStats.couponsGenerated}</div>
+          <div class="stat-value">${computedStats.couponsGenerated}</div>
           <div class="stat-label">Cupons</div>
         </div>
       </div>
       <div class="stat-card glass-card">
         <div class="stat-icon">${icons.checkCircle}</div>
         <div class="stat-info">
-          <div class="stat-value">${sellerStats.conversionRate}</div>
+          <div class="stat-value">${convRate}</div>
           <div class="stat-label">Conversão</div>
         </div>
       </div>
       <div class="stat-card glass-card">
         <div class="stat-icon">${icons.eye}</div>
         <div class="stat-info">
-          <div class="stat-value">${sellerStats.totalClicks}</div>
+          <div class="stat-value">${computedStats.totalClicks}</div>
           <div class="stat-label">Cliques</div>
         </div>
       </div>
@@ -109,7 +171,7 @@ function renderDashboard() {
     </div>
 
     <!-- Ads by status -->
-    <div class="seller-tabs-container">
+    <div class="seller-tabs-container" id="seller-ads-section">
       <div class="tabs">
         <button class="tab ${activeTab === 'active' ? 'active' : ''}" data-tab="active">Ativos <span class="tab-count">${statusCounts.active}</span></button>
         <button class="tab ${activeTab === 'pending' ? 'active' : ''}" data-tab="pending">Em aprovação <span class="tab-count">${statusCounts.pending}</span></button>
@@ -139,7 +201,8 @@ function renderDashboard() {
 }
 
 function renderAdsByStatus() {
-  const filtered = sellerAds.filter(a => a.status === activeTab);
+  const ads = loadedAds || (USE_MOCKS ? sellerAds : []);
+  const filtered = ads.filter(a => a.status === activeTab);
   if (filtered.length === 0) {
     const messages = {
       active: 'Nenhum anúncio ativo no momento.',
@@ -160,13 +223,13 @@ function renderSellerAdCard(ad) {
   return `
     <div class="seller-ad-card glass-card">
       <div class="seller-ad-card-inner">
-        <div class="seller-ad-thumb">${getProductImage(ad.images[0], 120, 120, ad.category)}</div>
+        <div class="seller-ad-thumb">${getProductImage(ad.images?.[0], 120, 120, ad.category)}</div>
         <div class="seller-ad-info">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <h4 class="ad-title">${ad.title}</h4>
+            <h4 class="ad-title">${escapeHTML(ad.title)}</h4>
             ${isAct ? '<div class="pulse-light"></div>' : ''}
           </div>
-          <div class="ad-category">${categories.find(c => c.id === ad.category)?.name || ad.category}</div>
+          <div class="ad-category">${escapeHTML(categories.find(c => c.id === ad.category)?.name || ad.category)}</div>
           <div class="seller-ad-metrics">
             <span title="Cliques">${icons.eye} ${ad.clicks}</span>
             <span title="Gerados">${icons.ticket} ${ad.couponsGenerated}</span>
@@ -177,7 +240,8 @@ function renderSellerAdCard(ad) {
       ${!isAct || ad.status === 'expired' ? `
       <div class="seller-ad-status">
         <span class="badge ${statusBadge[ad.status]}">${statusLabels[ad.status]}</span>
-        ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm">Renovar</button>` : ''}
+        ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" data-ad-id="${ad.id}">Renovar</button>` : ''}
+        ${ad.status === 'rejected' && ad.rejectionReason ? `<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${escapeHTML(ad.rejectionReason)}</span>` : ''}
       </div>` : ''}
     </div>
   `;
@@ -205,7 +269,7 @@ function renderCreateForm() {
         <label>Categoria</label>
         <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
           <option value="">Selecione...</option>
-          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}
+          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${c.icon} ${escapeHTML(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -226,14 +290,14 @@ function renderCreateForm() {
       <div class="input-group">
         <label>Fotos do produto (até 3)</label>
         <div class="photo-upload">
-          <div class="photo-upload-slot">${icons.upload}<span>Foto 1</span></div>
-          <div class="photo-upload-slot">${icons.upload}<span>Foto 2</span></div>
-          <div class="photo-upload-slot">${icons.upload}<span>Foto 3</span></div>
+          <label class="photo-upload-slot" id="photo-slot-1">${icons.upload}<span>Foto 1</span><input type="file" accept="image/*" style="display:none" /></label>
+          <label class="photo-upload-slot" id="photo-slot-2">${icons.upload}<span>Foto 2</span><input type="file" accept="image/*" style="display:none" /></label>
+          <label class="photo-upload-slot" id="photo-slot-3">${icons.upload}<span>Foto 3</span><input type="file" accept="image/*" style="display:none" /></label>
         </div>
       </div>
       <div class="input-group">
         <label>WhatsApp para contato</label>
-        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" value="${currentUser.whatsapp}">
+        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" value="${escapeHTML(getUser().whatsapp || '')}">
       </div>
 
       <!-- Live Preview -->
@@ -264,18 +328,18 @@ function renderSellerCoupons() {
       <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Cupons Recebidos</h2>
     </div>
     <div class="seller-coupons-list" style="padding:0 var(--space-5);">
-      ${sellerCoupons.map(c => `
+      ${(loadedCoupons || (USE_MOCKS ? sellerCoupons : [])).map(c => `
         <div class="coupon-item">
           <div class="coupon-item-header">
-            <span class="coupon-item-code">${c.code}</span>
+            <span class="coupon-item-code">${escapeHTML(c.code)}</span>
             <span class="badge ${c.status === 'pending' ? 'badge-warning' : c.status === 'used' ? 'badge-success' : 'badge-neutral'}">
               ${c.status === 'pending' ? 'Pendente' : c.status === 'used' ? 'Usado' : 'Expirado'}
             </span>
           </div>
-          <div class="coupon-item-product">${c.product}</div>
-          <div class="coupon-item-meta">Comprador: ${c.buyer} · ${c.createdAt}</div>
+          <div class="coupon-item-product">${escapeHTML(c.product)}</div>
+          <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · ${escapeHTML(c.createdAt)}</div>
           ${c.status === 'pending' ? `
-            <button class="btn btn-success btn-sm btn-block mark-used-btn" data-code="${c.code}" style="margin-top:var(--space-3);">
+            <button class="btn btn-success btn-sm btn-block mark-used-btn" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
               ${icons.check} Marcar como usado
             </button>
           ` : ''}
@@ -286,8 +350,37 @@ function renderSellerCoupons() {
 }
 
 async function renderSellerPayments() {
-  const stats = await getPaymentStats(currentUser.id);
-  const allPayments = await getSellerPayments(currentUser.id);
+  const user = getUser();
+  let stats = {
+    totalReceived: 0,
+    totalGross: 0,
+    totalFees: 0,
+    totalPayments: 0,
+    paidCount: 0,
+    pendingCount: 0,
+    commissionRate: 0,
+    conversionRate: 0,
+  };
+  let allPayments = [];
+  try {
+    stats = await getPaymentStats(user.id || currentUser.id);
+    allPayments = await getSellerPayments(user.id || currentUser.id);
+  } catch (err) {
+    console.warn('renderSellerPayments failed:', err.message);
+    if (import.meta.env.DEV) {
+      stats = {
+        totalReceived: sellerStats.activeAds,
+        totalGross: sellerStats.couponsGenerated,
+        totalFees: 0,
+        totalPayments: sellerStats.couponsGenerated,
+        paidCount: sellerStats.couponsUsed,
+        pendingCount: 0,
+        commissionRate: 0,
+        conversionRate: 66,
+      };
+    }
+    allPayments = [];
+  }
   const filtered = paymentsFilter === 'all' ? allPayments : allPayments.filter(p => p.status === paymentsFilter);
   const statusLabels = { paid: 'Pago', pending: 'Pendente', expired: 'Expirado' };
   const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
@@ -323,8 +416,8 @@ async function renderSellerPayments() {
     <!-- Commission info -->
     <div class="commission-info-bar">
       <div class="commission-info-inner">
-        <span class="commission-label">Comissão Linka: <strong>${(stats.commissionRate * 100).toFixed(0)}%</strong></span>
-        <span class="commission-detail">Total bruto: ${formatCurrency(stats.totalGross)} · Taxa: ${formatCurrency(stats.totalFees)}</span>
+        <span class="commission-label">Comissão Linka: <strong>0%</strong></span>
+        <span class="commission-detail">O vendedor recebe 100% do valor no Mercado Pago · Total bruto: ${formatCurrency(stats.totalGross)}</span>
       </div>
     </div>
 
@@ -339,9 +432,9 @@ async function renderSellerPayments() {
         <div class="payment-list-item">
           <div class="payment-list-item-header">
             <div class="payment-list-buyer">
-              <div class="avatar-sm avatar">${(p.buyerName || 'U').split(' ').map(n => n[0]).join('').slice(0,2)}</div>
+              <div class="avatar-sm avatar">${escapeHTML((p.buyerName || 'U').split(' ').map(n => n[0]).join('').slice(0,2))}</div>
               <div>
-                <div class="payment-list-buyer-name">${p.buyerName || 'Comprador'}</div>
+                <div class="payment-list-buyer-name">${escapeHTML(p.buyerName || 'Comprador')}</div>
                 <div class="payment-list-buyer-date">${formatDate(p.createdAt)}</div>
               </div>
             </div>
@@ -349,12 +442,12 @@ async function renderSellerPayments() {
           </div>
           <div class="payment-list-item-body">
             <div>
-              <div class="payment-list-product">${p.productTitle}</div>
-              <div class="payment-list-coupon">Cupom: ${p.couponCode}</div>
+              <div class="payment-list-product">${escapeHTML(p.productTitle)}</div>
+              <div class="payment-list-coupon">Cupom: ${escapeHTML(p.couponCode || '')}</div>
               ${p.status === 'paid' ? `<div class="confirmed-indicator">${icons.checkCircle} Pagamento confirmado</div>` : ''}
             </div>
             <div>
-              <div class="payment-list-amount ${p.status === 'paid' ? 'paid-amount' : ''}">${formatCurrency(p.sellerAmount || p.amount * 0.99)}</div>
+              <div class="payment-list-amount ${p.status === 'paid' ? 'paid-amount' : ''}">${formatCurrency(p.sellerAmount || p.amount)}</div>
               ${p.platformFee ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-align:right;">-${formatCurrency(p.platformFee)} taxa</div>` : ''}
             </div>
           </div>
@@ -387,7 +480,7 @@ function bindSellerEvents(container) {
             <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
           </div>
           <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Conectar Mercado Pago</h3>
-          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);line-height:var(--line-height-relaxed);">Ao conectar sua conta, você receberá pagamentos Pix diretamente. A Linka cobra apenas <strong>1% de comissão</strong> por transação.</p>
+          <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);line-height:var(--line-height-relaxed);">Ao conectar sua conta, voce recebera pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissao</strong>; 100% do valor do pedido vai para o vendedor.</p>
           <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
           <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>
         </div>
@@ -395,11 +488,18 @@ function bindSellerEvents(container) {
     `;
     modalRoot.querySelector('#mp-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
     modalRoot.querySelector('#cancel-mp').addEventListener('click', () => modalRoot.innerHTML = '');
-    modalRoot.querySelector('#do-connect-mp').addEventListener('click', () => {
-      sessionStorage.setItem('mp_connected', 'true');
-      modalRoot.innerHTML = '';
-      showToast('Mercado Pago conectado com sucesso!', 'success');
-      renderSellerPage(container);
+    modalRoot.querySelector('#do-connect-mp').addEventListener('click', async () => {
+      const btn = modalRoot.querySelector('#do-connect-mp');
+      btn.disabled = true;
+      btn.textContent = 'Abrindo Mercado Pago...';
+      try {
+        const url = await startMercadoPagoOAuth();
+        window.location.href = url;
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Conectar minha conta';
+        showToast(err.message || 'Nao foi possivel iniciar a conexao.', 'error');
+      }
     });
   });
 
@@ -418,6 +518,7 @@ function bindSellerEvents(container) {
   const descInput = container.querySelector('#ad-desc');
   const priceInput = container.querySelector('#ad-price');
   const discountInput = container.querySelector('#ad-discount');
+  const selectedPhotoFiles = new Map();
 
   if (titleInput) {
     titleInput.addEventListener('input', () => {
@@ -465,13 +566,73 @@ function bindSellerEvents(container) {
   priceInput?.addEventListener('input', updatePrice);
   discountInput?.addEventListener('input', updatePrice);
 
-  // Form submit
-  container.querySelector('#create-ad-form')?.addEventListener('submit', (e) => {
+  // Photo upload preview
+  const handlePhotoChange = (event) => {
+    const input = event.target;
+    const slot = input.closest('.photo-upload-slot');
+    if (!slot || !input.files?.length) return;
+
+    const file = input.files[0];
+    selectedPhotoFiles.set(slot.id, file);
+    const url = createPreviewURL(file);
+    slot.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" /><input type="file" accept="image/*" style="display:none" />`;
+    slot.style.border = '2px solid var(--primary-500)';
+    slot.querySelector('input')?.addEventListener('change', handlePhotoChange);
+  };
+
+  container.querySelectorAll('.photo-upload-slot input[type="file"]').forEach(input => {
+    input.addEventListener('change', handlePhotoChange);
+  });
+
+  // Form submit — real Supabase creation
+  container.querySelector('#create-ad-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    showToast('Anúncio enviado para aprovação!', 'success');
-    sellerView = 'dashboard';
-    activeTab = 'pending';
-    renderSellerPage(container);
+    const btn = e.target.querySelector('button[type="submit"]');
+    const origText = btn.textContent;
+    btn.textContent = 'Enviando...';
+    btn.disabled = true;
+
+    try {
+      // Collect uploaded image URLs
+      const imageUrls = [];
+      for (const file of selectedPhotoFiles.values()) {
+        const compressed = await compressImage(file);
+        const { urls } = await uploadMultipleImages([compressed], getUser().id || currentUser.id);
+        imageUrls.push(...urls);
+      }
+
+      if (selectedPhotoFiles.size > 0 && imageUrls.length === 0) {
+        throw new Error('Falha ao enviar as imagens.');
+      }
+
+      const user = getUser();
+      const result = await createProduct({
+        sellerId: globalSession?.user?.id || user.id,
+        title: container.querySelector('#ad-title')?.value || '',
+        description: container.querySelector('#ad-desc')?.value || '',
+        categoryId: container.querySelector('#ad-category')?.value || 'others',
+        originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
+        discount: parseInt(container.querySelector('#ad-discount')?.value) || 10,
+        images: imageUrls,
+        whatsapp: container.querySelector('#ad-whatsapp')?.value || '',
+      });
+
+      if (result.success) {
+        showToast('Anúncio enviado para aprovação!', 'success');
+        sellerView = 'dashboard';
+        activeTab = 'pending';
+        renderSellerPage(container);
+      } else {
+        showToast('Erro ao criar anúncio. Tente novamente.', 'error');
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    } catch (err) {
+      console.error('Create ad error:', err);
+      showToast(err.message || 'Erro ao criar anúncio. Tente novamente.', 'error');
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
   });
 
   // Mark coupon as used
@@ -484,7 +645,7 @@ function bindSellerEvents(container) {
           <div class="modal-content" style="text-align:center;">
             <div class="modal-handle"></div>
             <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-3);">Confirmar uso do cupom?</h3>
-            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);">Confirmar que o cupom <strong>${code}</strong> foi utilizado?</p>
+            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);">Confirmar que o cupom <strong>${escapeHTML(code)}</strong> foi utilizado?</p>
             <div style="display:flex;gap:var(--space-3);">
               <button class="btn btn-secondary" style="flex:1;" id="cancel-confirm">Cancelar</button>
               <button class="btn btn-success" style="flex:1;" id="do-confirm">Confirmar uso</button>
@@ -494,20 +655,42 @@ function bindSellerEvents(container) {
       `;
       modalRoot.querySelector('#confirm-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
       modalRoot.querySelector('#cancel-confirm').addEventListener('click', () => modalRoot.innerHTML = '');
-      modalRoot.querySelector('#do-confirm').addEventListener('click', () => {
-        modalRoot.innerHTML = '';
-        showToast(`Cupom ${code} marcado como usado!`, 'success');
+      modalRoot.querySelector('#do-confirm').addEventListener('click', async () => {
+        const coupon = (loadedCoupons || (USE_MOCKS ? sellerCoupons : [])).find(c => c.code === code);
+        if (!coupon?.id) {
+          showToast('Cupom não encontrado.', 'error');
+          return;
+        }
+        const result = await markCouponUsed(coupon.id);
+        if (result?.success) {
+          modalRoot.innerHTML = '';
+          showToast(`Cupom ${code} marcado como usado!`, 'success');
+          renderSellerPage(container);
+        } else {
+          showToast(result?.error || 'Não foi possível atualizar o cupom.', 'error');
+        }
       });
     });
   });
 
-  // Renew buttons
-  container.querySelectorAll('.btn-primary.btn-sm').forEach(btn => {
-    if (btn.textContent.includes('Renovar')) {
-      btn.addEventListener('click', () => {
-        showToast('Anúncio renovado e enviado para a fila!', 'success');
-      });
-    }
+  // Renew buttons (using data-ad-id)
+  container.querySelectorAll('.renew-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const adId = btn.dataset.adId;
+      if (adId) {
+        btn.textContent = 'Renovando...';
+        btn.disabled = true;
+        const result = await renewProduct(adId);
+        if (result?.success) {
+          showToast('Anúncio renovado e enviado para aprovação!', 'success');
+          renderSellerPage(container);
+        } else {
+          showToast(result?.error || 'Não foi possível renovar o anúncio.', 'error');
+          btn.textContent = 'Renovar';
+          btn.disabled = false;
+        }
+      }
+    });
   });
 
   // Simple chart
@@ -516,18 +699,34 @@ function bindSellerEvents(container) {
     if (canvas) drawSimpleChart(canvas);
   }, 100);
 
-  // Bottom nav
-  container.querySelectorAll('.bottom-nav-item').forEach(item => {
-    item.addEventListener('click', () => {
+  // Bottom nav — event delegation on <nav> for reliable click detection
+  const sellerNav = container.querySelector('.bottom-nav');
+  if (sellerNav) {
+    sellerNav.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-nav]');
+      if (!item) return;
       const nav = item.dataset.nav;
-      if (nav === 'dashboard') { sellerView = 'dashboard'; activeTab = 'active'; }
-      else if (nav === 'ads') { sellerView = 'dashboard'; activeTab = 'active'; }
-      else if (nav === 'coupons') { sellerView = 'coupons'; }
-      else if (nav === 'payments') { sellerView = 'payments'; paymentsFilter = 'all'; }
-      else if (nav === 'profile') { showToast('Perfil em breve!', 'info'); return; }
-      renderSellerPage(container);
+      if (nav === 'dashboard') {
+        sellerView = 'dashboard'; activeTab = 'active'; renderSellerPage(container);
+      } else if (nav === 'ads') {
+        if (sellerView === 'dashboard') {
+          const adsSection = container.querySelector('#seller-ads-section');
+          if (adsSection) adsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          sellerView = 'dashboard'; activeTab = 'active';
+          renderSellerPage(container);
+          setTimeout(() => {
+            const adsSection = container.querySelector('#seller-ads-section');
+            if (adsSection) adsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 200);
+        }
+      } else if (nav === 'coupons') {
+        sellerView = 'coupons'; renderSellerPage(container);
+      } else if (nav === 'payments') {
+        sellerView = 'payments'; paymentsFilter = 'all'; renderSellerPage(container);
+      }
     });
-  });
+  }
 }
 
 function drawSimpleChart(canvas) {
@@ -623,3 +822,4 @@ function drawSimpleChart(canvas) {
     ctx.fillText(label, x, h - 10);
   });
 }
+

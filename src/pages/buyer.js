@@ -1,15 +1,81 @@
-import { icons, showToast, getProductImage, formatCurrency, globalSession } from '../main.js';
-import { products, categories, coupons, currentUser, institution } from '../data/mock.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
+import { products as mockProducts, categories, coupons, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference } from '../services/payment-service.js';
+import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
+import { getBuyerCoupons } from '../services/coupon-service.js';
+import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
+import { getInstitution } from '../services/institution-service.js';
+import { supabase } from '../lib/supabase.js';
+
+const USE_MOCKS = import.meta.env.DEV;
+
+// Helper: get current user from real auth or mock
+function getUser() {
+  if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'U' };
+  if (globalSession?.user) return { ...currentUser, id: globalSession.user.id, email: globalSession.user.email, name: globalSession.user.user_metadata?.full_name || currentUser.name, role: globalSession.user.user_metadata?.role || 'buyer' };
+  return currentUser;
+}
 
 let activeCategory = 'all';
-let currentView = 'home'; // home | detail | coupons | payment
+let searchQuery = '';
+let currentView = 'home'; // home | detail | coupons | payment | notifications
 let currentPayment = null;
+let selectedProduct = null;
 let paymentTimerInterval = null;
 let paymentPollInterval = null;
+let cachedProducts = null;
+let activeInstitution = institution;
 
 // Intersection Observer for card entrance animation
 let observer = null;
+let lastSyncedCheckoutRef = null;
+
+function getCheckoutRefFromHash() {
+  const rawHash = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : '';
+  const [, queryString = ''] = rawHash.split('?');
+  if (!queryString) return null;
+
+  const params = new URLSearchParams(queryString);
+  return params.get('payment_id')
+    || params.get('collection_id')
+    || params.get('external_reference')
+    || params.get('merchant_order_id');
+}
+
+async function syncCheckoutReturnIfNeeded() {
+  const paymentRef = getCheckoutRefFromHash();
+  if (!paymentRef || paymentRef === lastSyncedCheckoutRef) return null;
+
+  lastSyncedCheckoutRef = paymentRef;
+  try {
+    const payment = await checkPaymentStatus(paymentRef);
+    if (payment?.status === 'paid') {
+      showToast('Pagamento confirmado com sucesso!', 'success');
+      currentPayment = null;
+      currentView = 'coupons';
+    }
+    return payment;
+  } catch (err) {
+    if (err?.message === 'AUTH_REQUIRED') {
+      window.location.hash = '#/auth';
+      return null;
+    }
+    console.warn('syncCheckoutReturnIfNeeded failed:', err.message);
+    return null;
+  }
+}
+
+async function syncInstitutionForUser() {
+  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  if (institutionId) {
+    const realInstitution = await getInstitution(institutionId);
+    if (realInstitution) {
+      activeInstitution = realInstitution;
+      return;
+    }
+  }
+  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+}
 
 export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
@@ -18,6 +84,35 @@ export function renderBuyer(container, subpage) {
     currentView = 'home';
   }
   renderBuyerPage(container);
+}
+
+function bindBottomNav(container) {
+  const navItems = container.querySelectorAll('.bottom-nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const nav = item.dataset.nav;
+      if (nav === 'home') {
+        currentView = 'home';
+        searchQuery = '';
+        renderBuyerPage(container);
+      } else if (nav === 'cats') {
+        if (currentView !== 'home') {
+          currentView = 'home';
+          renderBuyerPage(container);
+        }
+        setTimeout(() => {
+          const chips = container.querySelector('.category-scroll');
+          if (chips) chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      } else if (nav === 'coupons') {
+        currentView = 'coupons';
+        renderBuyerPage(container);
+      } else if (nav === 'profile') {
+        currentView = 'profile';
+        renderBuyerPage(container);
+      }
+    });
+  });
 }
 
 function initObserver() {
@@ -44,41 +139,37 @@ function initObserver() {
   });
 }
 
-function renderBuyerPage(container) {
+async function renderBuyerPage(container) {
+  if (currentView === 'home' && !container.querySelector('.buyer-wrapper')) {
+    renderHome(container, { skipFetch: true, loading: true });
+    bindBottomNav(container);
+  }
+
+  await Promise.allSettled([
+    syncCheckoutReturnIfNeeded(),
+    syncInstitutionForUser(),
+  ]);
+
+  if (currentView !== 'home' && container.querySelector('.buyer-home-loading')) {
+    return renderBuyerPage(container);
+  }
+
   if (currentView === 'home') {
-    renderHome(container);
+    await renderHome(container);
     initObserver();
   } else if (currentView === 'detail') {
-    // We'll keep the detail simple or implement it if needed. 
-    // For now, let's just render a placeholder or re-render home.
-    renderHome(container);
-    initObserver();
+    renderProductDetail(container);
+  } else if (currentView === 'coupons') {
+    await renderCoupons(container);
   } else if (currentView === 'profile') {
     renderProfile(container);
   } else if (currentView === 'payment') {
     renderPayment(container);
+  } else if (currentView === 'notifications') {
+    await renderNotifications(container);
   }
 
-  // Bind Bottom Nav
-  const navItems = container.querySelectorAll('.bottom-nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      if (nav === 'home') {
-        currentView = 'home';
-        window.history.pushState({}, '', '/buyer');
-        renderBuyerPage(container);
-      } else if (nav === 'coupons') {
-        currentView = 'coupons';
-        window.history.pushState({}, '', '/buyer/coupons');
-        renderBuyerPage(container);
-      } else if (nav === 'profile') {
-        currentView = 'profile';
-        window.history.pushState({}, '', '/buyer/profile');
-        renderBuyerPage(container);
-      }
-    });
-  });
+  bindBottomNav(container);
 }
 
 function getTimerInfo(expiresIn) {
@@ -110,31 +201,46 @@ function getSlotsInfo(used, total) {
   return { percent, colorClass, text: `${available} de ${total} vagas`, almostEmpty: available === 1 };
 }
 
-function renderHome(container) {
-  const filteredProducts = activeCategory === 'all' 
-    ? products 
-    : products.filter(p => p.category === activeCategory);
+async function renderHome(container, { skipFetch = false, loading = false } = {}) {
+  // Load products from Supabase (or mock fallback)
+  let products;
+  if (skipFetch) {
+    products = cachedProducts || (USE_MOCKS ? mockProducts : []);
+  } else {
+    try {
+      products = await getActiveProducts({ categoryId: activeCategory, search: searchQuery });
+      cachedProducts = products;
+    } catch {
+      products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
+    }
+  }
+
+  if (!products || products.length === 0) {
+    products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
+  }
+
+  const filteredProducts = products;
 
   container.innerHTML = `
-    <div class="buyer-wrapper">
+    <div class="page buyer-page buyer-wrapper">
       <!-- HEADER -->
       <header class="buyer-header">
         <div class="buyer-header-top">
           <div class="buyer-greeting">
-            <h1>Olá, ${currentUser.name.split(' ')[0]}</h1>
-            <div class="inst-badge">${institution.name}</div>
+            <h1>Olá, ${escapeHTML((getUser().name || 'Visitante').split(' ')[0])}</h1>
+            <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
           </div>
           <div class="buyer-actions">
-            <button class="icon-btn notification-btn">
+            <button class="icon-btn notification-btn" id="btnNotifications">
               ${icons.bell}
-              <span class="badge">2</span>
+              <span class="badge" id="notifBadge">0</span>
             </button>
-            <div class="user-avatar">${currentUser.avatar}</div>
+            <div class="user-avatar">${escapeHTML(getUser().avatar || 'U')}</div>
           </div>
         </div>
         <div class="search-bar">
           ${icons.search}
-          <input type="text" placeholder="Buscar ofertas, categorias..." />
+          <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" />
         </div>
         
         <!-- CATEGORY CHIPS (Now in header for stickiness) -->
@@ -143,7 +249,7 @@ function renderHome(container) {
             ${categories.map(c => `
               <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
                 ${icons[c.id] || icons.others}
-                <span>${c.name}</span>
+                <span>${escapeHTML(c.name)}</span>
               </button>
             `).join('')}
           </div>
@@ -165,8 +271,14 @@ function renderHome(container) {
       </div>
 
       <!-- PRODUCTS LIST -->
-      <div class="products-list">
-        ${filteredProducts.map(p => {
+      <div class="products-list ${loading ? 'buyer-home-loading' : ''}">
+        ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? `
+          <div style="padding:40px 20px;text-align:center;color:#9CA3AF;border:1px dashed #1E1E2A;border-radius:16px;background:#111118;">
+            ${icons.package}
+            <h3 style="margin:12px 0 6px;color:#FFF;">Nenhuma oferta disponível</h3>
+            <p style="font-size:13px;line-height:1.6;">Quando anúncios aprovados estiverem ativos, eles aparecerão aqui automaticamente.</p>
+          </div>
+        ` : filteredProducts.map(p => {
           const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
           const catIcon = icons[p.category] || icons.others;
           const timer = getTimerInfo(p.expiresIn);
@@ -176,8 +288,8 @@ function renderHome(container) {
           return `
           <div class="product-card ${isSoldOut ? 'sold-out' : ''}">
             <div class="card-image-area">
-              ${getProductImage(p.images[0], 400, 160, p.category)}
-              <div class="cat-badge">${catIcon} ${catName}</div>
+              ${getProductImage(p.images?.[0], 400, 160, p.category)}
+              <div class="cat-badge">${catIcon} ${escapeHTML(catName)}</div>
               ${isSoldOut 
                 ? `<div class="discount-badge soldout-badge">ESGOTADO</div>`
                 : `<div class="discount-badge">-${p.discount}%</div>`
@@ -185,13 +297,8 @@ function renderHome(container) {
             </div>
             
             <div class="card-body">
-              <h3 class="card-title">${p.title}</h3>
-              <p class="card-desc">${p.description || 'Aproveite esta oferta imperdível e garanta o seu produto com desconto exclusivo.'}</p>
-              
-              <div class="card-reviews">
-                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                <span>${(Math.random() * (5.0 - 4.2) + 4.2).toFixed(1)} (${Math.floor(Math.random() * 200 + 10)} avaliações)</span>
-              </div>
+              <h3 class="card-title">${escapeHTML(p.title)}</h3>
+              <p class="card-desc">${escapeHTML(p.description || 'Aproveite esta oferta imperdível e garanta o seu produto com desconto exclusivo.')}</p>
 
               <div class="card-price-row">
                 <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
@@ -200,19 +307,9 @@ function renderHome(container) {
               
               <div class="card-timer ${timer.colorClass}">
                 <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-                <span>${timer.text}</span>
+                <span>${escapeHTML(timer.text)}</span>
               </div>
-              
-              <div class="card-slots">
-                <div class="slots-label">
-                  <span>${slots.text}</span>
-                  ${slots.almostEmpty && !isSoldOut ? '<span class="slots-warning pulse">Última vaga!</span>' : ''}
-                </div>
-                <div class="slots-bar-bg">
-                  <div class="slots-bar-fill ${slots.colorClass}" style="width: 0%" data-target="${slots.percent}%"></div>
-                </div>
-              </div>
-              
+
               <div class="card-actions">
                 <button class="btn-primary get-coupon-btn" ${isSoldOut ? 'disabled' : ''} data-id="${p.id}">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -260,10 +357,35 @@ function renderHome(container) {
     });
   }, 100);
 
+  // Search input with debounce
+  let searchTimer = null;
+  const searchInput = container.querySelector('#searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchQuery = searchInput.value;
+        renderBuyerPage(container);
+      }, 400);
+    });
+  }
+
+  // Notification button
+  container.querySelector('#btnNotifications')?.addEventListener('click', () => {
+    currentView = 'notifications';
+    renderBuyerPage(container);
+  });
+
+  // Load notification badge count
+  const userId = globalSession?.user?.id || getUser().id;
+  getUnreadCount(userId).then(count => {
+    const badge = container.querySelector('#notifBadge');
+    if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+  }).catch(() => {});
+
   // Category clicks
   container.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', (e) => {
-      // Exit animation
       const list = container.querySelector('.products-list');
       list.style.opacity = '0';
       list.style.transform = 'scale(0.98)';
@@ -280,24 +402,44 @@ function renderHome(container) {
   container.querySelectorAll('.get-coupon-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!btn.disabled) {
-        // if (!globalSession) {
-        //   showToast('Crie uma conta ou faça login para comprar.', 'info');
-        //   window.location.hash = '#/auth';
-        //   return;
-        // }
         const productId = btn.dataset.id;
-        const product = products.find(p => p.id == productId);
-        showPaymentSelectionModal(product, container);
+        const product = filteredProducts.find(p => p.id == productId);
+        if (product) showPaymentSelectionModal(product, container);
       }
     });
   });
 
-  // View details
+  // View details - now opens product detail page
   container.querySelectorAll('.view-details-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      showToast('Detalhes do produto em breve!', 'info');
+      const productId = btn.dataset.id;
+      const product = filteredProducts.find(p => p.id == productId);
+      if (product) {
+        selectedProduct = product;
+        currentView = 'detail';
+        incrementProductClicks(productId);
+        renderBuyerPage(container);
+      }
     });
   });
+}
+
+function renderProductSkeletons() {
+  return Array.from({ length: 6 }, () => `
+    <div class="product-card product-card-skeleton" aria-hidden="true">
+      <div class="card-image-area skeleton-block"></div>
+      <div class="card-body">
+        <div class="skeleton-line skeleton-title-line"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line short"></div>
+        <div class="skeleton-price"></div>
+        <div class="skeleton-actions">
+          <div></div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
 }
 
 function showPaymentSelectionModal(product, container) {
@@ -309,7 +451,7 @@ function showPaymentSelectionModal(product, container) {
           <button class="icon-btn close-modal-btn">${icons.plus}</button> <!-- reused plus, will rotate in css -->
         </div>
         <div class="payment-modal-body">
-          <p class="payment-modal-desc">Você está comprando <strong>${product.title}</strong> por ${formatCurrency(product.discountPrice)}</p>
+          <p class="payment-modal-desc">Você está comprando <strong>${escapeHTML(product.title)}</strong> por ${formatCurrency(product.discountPrice)}</p>
           <button class="btn-payment-option pix-option" id="btnPayPix">
             ${icons.pix}
             <span>Pagar com Pix</span>
@@ -335,6 +477,11 @@ function showPaymentSelectionModal(product, container) {
   });
 
   document.getElementById('btnPayPix').addEventListener('click', async () => {
+    if (!globalSession?.user?.id) {
+      showToast('Faça login para comprar.', 'info');
+      window.location.hash = '#/auth';
+      return;
+    }
     modal.classList.remove('visible');
     setTimeout(() => modal.remove(), 300);
     currentPayment = { product, method: 'pix' };
@@ -343,20 +490,37 @@ function showPaymentSelectionModal(product, container) {
   });
 
   document.getElementById('btnPayCard').addEventListener('click', async () => {
+    if (!globalSession?.user?.id) {
+      showToast('Faça login para comprar.', 'info');
+      window.location.hash = '#/auth';
+      return;
+    }
     const btn = document.getElementById('btnPayCard');
-    btn.innerHTML = `${icons.refresh} <span>Aguarde...</span>`; // Mock spinner
+    btn.innerHTML = `${icons.refresh} <span>Aguarde...</span>`;
     try {
-      const url = await createCheckoutPreference(product, 'MOCK123', currentUser);
+      const url = await createCheckoutPreference(product, null, getUser());
       window.location.href = url; // Redirects to mercado pago
     } catch (err) {
+      if (err?.message === 'AUTH_REQUIRED') {
+        window.location.hash = '#/auth';
+        return;
+      }
       showToast('Erro ao redirecionar', 'error');
       btn.innerHTML = `<span>Tentar novamente</span>`;
     }
   });
 }
 
-function renderCoupons(container) {
-  // Simple coupons view matching dark aesthetic
+async function renderCoupons(container) {
+  // Load coupons from Supabase (or use local mock only in DEV)
+  let userCoupons;
+  try {
+    userCoupons = await getBuyerCoupons(globalSession?.user?.id || getUser().id);
+    if (!userCoupons || userCoupons.length === 0) userCoupons = USE_MOCKS ? coupons : [];
+  } catch {
+    userCoupons = USE_MOCKS ? coupons : [];
+  }
+
   container.innerHTML = `
     <div class="buyer-wrapper">
       <header class="buyer-header minimal-header">
@@ -364,24 +528,30 @@ function renderCoupons(container) {
       </header>
       
       <div class="coupons-list">
-        ${coupons.map(c => `
+        ${userCoupons.length === 0 ? `
+          <div style="text-align:center;padding:60px 20px;color:#6B7280;">
+            ${icons.ticket}<p style="margin-top:12px;">Você ainda não tem cupons.</p>
+            <p style="font-size:12px;">Compre um produto para gerar um cupom.</p>
+          </div>
+        ` : userCoupons.map(c => `
           <div class="coupon-card ${c.status}">
             <div class="coupon-status-bar"></div>
             <div class="coupon-body">
               <div class="coupon-header">
-                <h3>${c.product}</h3>
+                <h3>${escapeHTML(c.product)}</h3>
                 <span class="status-badge ${c.status}">${c.status === 'active' ? 'Ativo' : c.status === 'used' ? 'Usado' : 'Expirado'}</span>
               </div>
               <div class="coupon-code-area">
-                <div class="coupon-code">${c.code}</div>
-                <button class="icon-btn copy-btn">${icons.copy}</button>
+                <div class="coupon-code">${escapeHTML(c.code)}</div>
+                <button class="icon-btn copy-btn" data-code="${c.code}">${icons.copy}</button>
               </div>
               <div class="coupon-footer">
                 <div class="seller-info">
-                  ${icons.user} <span>${c.seller}</span>
+                  ${icons.user} <span>${escapeHTML(c.seller)}</span>
                 </div>
-                ${c.status === 'active' ? `<button class="btn-whatsapp">${icons.whatsapp} WhatsApp</button>` : ''}
+                ${c.status === 'active' && c.sellerWhatsapp ? `<a href="https://wa.me/${encodeURIComponent(c.sellerWhatsapp)}?text=Oi! Tenho o cupom ${encodeURIComponent(c.code)} para ${encodeURIComponent(c.product)}" target="_blank" class="btn-whatsapp">${icons.whatsapp} WhatsApp</a>` : c.status === 'active' ? `<button class="btn-whatsapp">${icons.whatsapp} WhatsApp</button>` : ''}
               </div>
+              ${c.validUntil ? `<div style="font-size:11px;color:#4B5563;margin-top:8px;">Válido até: ${escapeHTML(c.validUntil)}</div>` : ''}
             </div>
           </div>
         `).join('')}
@@ -413,25 +583,26 @@ function renderCoupons(container) {
     </nav>
   `;
 
-  // Bind Bottom Nav
-  const navItems = container.querySelectorAll('.bottom-nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      if (nav === 'home') {
-        currentView = 'home';
-        window.history.pushState({}, '', '/buyer');
-        renderBuyerPage(container);
-      } else if (nav === 'profile') {
-        currentView = 'profile';
-        window.history.pushState({}, '', '/buyer/profile');
-        renderBuyerPage(container);
+  // Bind Bottom Nav (reuse same handler)
+  bindBuyerBottomNav(container);
+
+  // Copy coupon code to clipboard
+  container.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.dataset.code;
+      if (code) {
+        navigator.clipboard.writeText(code).then(() => {
+          showToast(`Código ${code} copiado!`, 'success');
+        });
       }
     });
   });
 }
 
 function renderProfile(container) {
+  const user = getUser();
+  const isLoggedIn = !!globalSession;
+
   container.innerHTML = `
     <div class="buyer-wrapper">
       <header class="buyer-header minimal-header">
@@ -440,22 +611,33 @@ function renderProfile(container) {
       
       <div class="profile-container" style="padding: 24px 16px;">
         <div style="text-align:center; margin-bottom: 24px;">
-          <div class="user-avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px;">${currentUser.avatar}</div>
-          <h2 style="font-size:18px;margin:0 0 4px;">${currentUser.name}</h2>
-          <span style="color:#6B7280;font-size:13px;">${currentUser.email}</span>
+           <div class="user-avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px;">${escapeHTML(user.avatar || 'U')}</div>
+           <h2 style="font-size:18px;margin:0 0 4px;">${escapeHTML(user.fullName || user.name)}</h2>
+           <span style="color:#6B7280;font-size:13px;">${escapeHTML(user.email || '')}</span>
         </div>
+
+        ${!isLoggedIn ? `
+          <div style="text-align:center;padding:16px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:12px;margin-bottom:20px;">
+            <p style="color:#9CA3AF;font-size:13px;margin-bottom:12px;">Faça login para salvar seu perfil</p>
+            <button class="btn-primary" id="btnGoLogin" style="padding:10px 24px;">Fazer Login</button>
+          </div>
+        ` : ''}
 
         <div class="form-group" style="margin-bottom: 16px;">
           <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">Nome Completo</label>
-          <input type="text" value="${currentUser.name}" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
+          <input type="text" value="${escapeHTML(user.fullName || user.name)}" id="profileName" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
         </div>
         
         <div class="form-group" style="margin-bottom: 16px;">
           <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">WhatsApp (Para receber cupons)</label>
-          <input type="text" value="${currentUser.whatsapp}" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
+          <input type="text" value="${escapeHTML(user.whatsapp || '')}" id="profileWhatsapp" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
         </div>
 
         <button class="btn-primary" style="width:100%;margin-top:16px;" id="btnSaveProfile">Salvar Dados</button>
+
+        ${isLoggedIn ? `
+          <button class="btn-outline" style="width:100%;margin-top:12px;border-color:#E24B4A;color:#E24B4A;padding:12px;border-radius:10px;cursor:pointer;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:600;" id="btnLogout">Sair da Conta</button>
+        ` : ''}
       </div>
     </div>
     
@@ -484,25 +666,47 @@ function renderProfile(container) {
     </nav>
   `;
 
-  document.getElementById('btnSaveProfile').addEventListener('click', () => {
-    showToast('Perfil atualizado com sucesso!', 'success');
+  // Save profile to Supabase
+  document.getElementById('btnSaveProfile').addEventListener('click', async () => {
+    const name = document.getElementById('profileName').value.trim();
+    const whatsapp = document.getElementById('profileWhatsapp').value.trim();
+    if (!name) { showToast('Preencha seu nome.', 'error'); return; }
+
+    const btn = document.getElementById('btnSaveProfile');
+    btn.textContent = 'Salvando...';
+    btn.disabled = true;
+
+    try {
+      if (globalSession?.user?.id) {
+        const { error } = await supabase.from('profiles').update({ name, whatsapp }).eq('id', globalSession.user.id);
+        if (error) throw error;
+      }
+      showToast('Perfil atualizado com sucesso!', 'success');
+    } catch (err) {
+      showToast(err.message || 'Não foi possível atualizar o perfil.', 'error');
+    }
+    btn.textContent = 'Salvar Dados';
+    btn.disabled = false;
   });
 
-  const navItems = container.querySelectorAll('.bottom-nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      if (nav === 'home') {
-        currentView = 'home';
-        window.history.pushState({}, '', '/buyer');
-        renderBuyerPage(container);
-      } else if (nav === 'coupons') {
-        currentView = 'coupons';
-        window.history.pushState({}, '', '/buyer/coupons');
-        renderBuyerPage(container);
-      }
-    });
+  // Login button
+  document.getElementById('btnGoLogin')?.addEventListener('click', () => {
+    window.location.hash = '#/auth';
   });
+
+  // Logout button
+  document.getElementById('btnLogout')?.addEventListener('click', async () => {
+    try {
+      const { signOutUser } = await import('../services/auth-service.js');
+      await signOutUser();
+      showToast('Logout realizado!', 'success');
+      window.location.hash = '#/';
+    } catch {
+      window.location.hash = '#/';
+    }
+  });
+
+  bindBuyerBottomNav(container);
 }
 
 function renderPayment(container) {
@@ -549,10 +753,11 @@ function renderPayment(container) {
 
 async function initPixFlow(product, container) {
   try {
-    const pixData = await createPixPayment(product, 'LNK' + Math.floor(Math.random() * 9999), currentUser);
+    const pixData = await createPixPayment(product, null, getUser());
     
-    const pixContainer = container.querySelector('#pixContainer');
-    if (!pixContainer) return; // user navigated away
+    // #pixContainer lives inside #modal-root, NOT inside `container`
+    const pixContainer = document.getElementById('pixContainer');
+    if (!pixContainer) return;
 
     pixContainer.innerHTML = `
       <div style="background:#FFF; padding:12px; border-radius:12px; display:inline-block; margin-bottom:16px;">
@@ -562,9 +767,10 @@ async function initPixFlow(product, container) {
       <button class="btn-outline" style="width:100%; border-color:#00E5A0; color:#00E5A0;" id="btnCopyPix">
         Copiar código Pix
       </button>
+      <div id="pixStatusMsg" style="margin-top:16px;font-size:13px;color:#9CA3AF;text-align:center;">Aguardando pagamento...</div>
     `;
 
-    document.getElementById('btnCopyPix').addEventListener('click', () => {
+    document.getElementById('btnCopyPix')?.addEventListener('click', () => {
       navigator.clipboard.writeText(pixData.qrCodeString).catch(() => {});
       showToast('Código Pix copiado!', 'success');
     });
@@ -573,37 +779,242 @@ async function initPixFlow(product, container) {
     let attempts = 0;
     paymentPollInterval = setInterval(async () => {
       attempts++;
-      const statusData = await checkPaymentStatus(pixData.id);
-      
-      // Since it's a mock simulation, checkPaymentStatus will return {status: 'paid'}
-      if (statusData && statusData.status === 'paid' && attempts > 1) { // wait a bit to simulate real polling
-        clearInterval(paymentPollInterval);
-        
-        showToast('Pagamento Aprovado! Cupom gerado.', 'success');
-        
-        // Add to local mock coupons to show in UI
-        coupons.unshift({
-          code: pixData.couponCode,
-          productId: product.id,
-          product: product.title,
-          seller: product.seller.name,
-          status: 'active',
-          createdAt: new Date().toLocaleString(),
-          validUntil: 'Hoje'
-        });
+      const statusMsg = document.getElementById('pixStatusMsg');
 
-        setTimeout(() => {
-          currentView = 'coupons';
-          window.history.pushState({}, '', '/buyer/coupons');
-          renderBuyerPage(container);
-        }, 1500);
+      try {
+        const statusData = await checkPaymentStatus(pixData.id);
+        if (statusData && statusData.status === 'paid') {
+          clearInterval(paymentPollInterval);
+          await handlePaymentApproved(statusData, product, container);
+          return;
+        }
+      } catch {
+        // Keep polling
+      }
+
+      // Update UI every poll
+      if (statusMsg && attempts % 2 === 0) {
+        const dots = '.'.repeat((attempts / 2) % 4);
+        statusMsg.textContent = `Aguardando pagamento${dots}`;
+      }
+
+      // Timeout after 60 attempts (2 min)
+      if (attempts >= 60) {
+        clearInterval(paymentPollInterval);
+        showToast('Tempo esgotado. Verifique seus cupons.', 'error');
       }
     }, 2000);
 
   } catch (err) {
-    const pixContainer = container.querySelector('#pixContainer');
+    console.error('initPixFlow error:', err);
+    if (err?.message === 'AUTH_REQUIRED') {
+      window.location.hash = '#/auth';
+      return;
+    }
+    const pixContainer = document.getElementById('pixContainer');
     if (pixContainer) {
       pixContainer.innerHTML = `<p style="color:#E24B4A;">Erro ao gerar Pix. Tente novamente.</p>`;
     }
   }
+}
+
+// ─── PRODUCT DETAIL PAGE ────────────────────────────────
+
+function renderProductDetail(container) {
+  const p = selectedProduct;
+  if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
+
+  const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
+  const timer = getTimerInfo(p.expiresIn || '24h 00min');
+  const slots = getSlotsInfo(p.slots?.used || 0, p.slots?.total || 5);
+  const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
+  const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
+
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header" style="display:flex;align-items:center;gap:12px;">
+        <button class="icon-btn" id="btnBackHome" style="color:#FFF;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        </button>
+        <h1>Detalhes</h1>
+      </header>
+
+      <div class="detail-container" style="padding:0 16px 120px;">
+        <!-- Product Image -->
+        <div class="detail-image" style="border-radius:16px;overflow:hidden;height:220px;margin-bottom:20px;position:relative;">
+          ${getProductImage(p.images?.[0], 400, 220, p.category)}
+          <div class="cat-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
+          ${isSoldOut
+            ? '<div class="discount-badge soldout-badge">ESGOTADO</div>'
+            : `<div class="discount-badge">-${p.discount}%</div>`
+          }
+        </div>
+
+        <!-- Title & Description -->
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;">${escapeHTML(p.title)}</h2>
+        <p style="font-size:14px;color:#9CA3AF;line-height:1.6;margin-bottom:20px;">${escapeHTML(p.description || 'Aproveite esta oferta imperdível.')}</p>
+
+        <!-- Price -->
+        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px;">
+          <span style="font-size:28px;font-weight:800;color:#00E5A0;">${formatCurrency(p.discountPrice)}</span>
+          <span style="font-size:16px;color:#6B7280;text-decoration:line-through;">${formatCurrency(p.originalPrice)}</span>
+          <span style="background:rgba(0,229,160,0.15);color:#00E5A0;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700;">-${p.discount}%</span>
+        </div>
+
+        <!-- Timer & Slots -->
+        <div style="display:flex;gap:12px;margin-bottom:20px;">
+          <div class="card-timer ${timer.colorClass}" style="flex:1;padding:12px;border-radius:12px;background:#111118;border:1px solid #1E1E2A;">
+            <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
+            <span>${timer.text}</span>
+          </div>
+          <div style="flex:1;padding:12px;border-radius:12px;background:#111118;border:1px solid #1E1E2A;display:flex;align-items:center;gap:8px;font-size:13px;color:#9CA3AF;">
+            ${icons.ticket} ${slots.text}
+          </div>
+        </div>
+
+        <!-- Seller Card -->
+        <div style="background:#111118;border:1px solid #1E1E2A;border-radius:16px;padding:16px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div class="user-avatar" style="width:44px;height:44px;font-size:16px;">${escapeHTML(sellerInitials)}</div>
+            <div>
+              <div style="font-weight:600;font-size:15px;">${escapeHTML(p.seller?.name || 'Vendedor')} ${p.seller?.verified ? '<span style="color:#00E5A0;">✓</span>' : ''}</div>
+              <div style="font-size:12px;color:#6B7280;">${escapeHTML(p.seller?.course || '')} ${p.seller?.semester ? '· ' + escapeHTML(p.seller.semester) : ''}</div>
+            </div>
+          </div>
+          ${p.seller?.whatsapp ? `
+            <a href="https://wa.me/${encodeURIComponent(p.seller.whatsapp)}?text=Oi! Vi seu anúncio '${encodeURIComponent(p.title)}' no Linka!" target="_blank" class="btn-whatsapp" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px;border-radius:10px;background:#25D366;color:#FFF;font-weight:600;font-size:14px;text-decoration:none;border:none;cursor:pointer;">
+              ${icons.whatsapp} Conversar no WhatsApp
+            </a>
+          ` : ''}
+        </div>
+
+        <!-- Stats -->
+        <div style="display:flex;gap:12px;margin-bottom:24px;">
+          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
+            <div style="font-size:20px;font-weight:700;">${p.clicks || 0}</div>
+            <div style="font-size:11px;color:#6B7280;">Cliques</div>
+          </div>
+          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
+            <div style="font-size:20px;font-weight:700;">${p.couponsGenerated || 0}</div>
+            <div style="font-size:11px;color:#6B7280;">Cupons</div>
+          </div>
+          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
+            <div style="font-size:20px;font-weight:700;">${p.couponsUsed || 0}</div>
+            <div style="font-size:11px;color:#6B7280;">Usados</div>
+          </div>
+        </div>
+
+        <!-- Buy Button -->
+        <button class="btn-primary" style="width:100%;padding:16px;font-size:16px;font-weight:700;border-radius:14px;" id="btnBuyDetail" ${isSoldOut ? 'disabled' : ''}>
+          ${isSoldOut ? 'Esgotado' : `${icons.ticket} Comprar por ${formatCurrency(p.discountPrice)}`}
+        </button>
+      </div>
+    </div>
+  `;
+
+  container.querySelector('#btnBackHome').addEventListener('click', () => {
+    currentView = 'home'; selectedProduct = null; renderBuyerPage(container);
+  });
+
+  container.querySelector('#btnBuyDetail')?.addEventListener('click', () => {
+    if (!isSoldOut) showPaymentSelectionModal(p, container);
+  });
+}
+
+// ─── HELPER: Shared bottom nav binding ──────────────────
+
+function bindBuyerBottomNav(container) {
+  container.querySelectorAll('.bottom-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const nav = item.dataset.nav;
+      if (nav === 'home') {
+        currentView = 'home'; searchQuery = '';
+        renderBuyerPage(container);
+      } else if (nav === 'cats') {
+        if (currentView !== 'home') { currentView = 'home'; renderBuyerPage(container); }
+        setTimeout(() => {
+          const chips = container.querySelector('.category-scroll');
+          if (chips) chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      } else if (nav === 'coupons') {
+        currentView = 'coupons'; renderBuyerPage(container);
+      } else if (nav === 'profile') {
+        currentView = 'profile'; renderBuyerPage(container);
+      }
+    });
+  });
+}
+
+// ─── HELPER: Payment approved handler ───────────────────
+
+async function handlePaymentApproved(pixData, product, container) {
+  showToast('Pagamento Aprovado! Cupom gerado.', 'success');
+  setTimeout(() => {
+    currentView = 'coupons';
+    currentPayment = null;
+    renderBuyerPage(container);
+  }, 1200);
+}
+
+// ─── NOTIFICATIONS PAGE ─────────────────────────────────
+
+async function renderNotifications(container) {
+  const userId = globalSession?.user?.id || getUser().id;
+  const notifs = await getNotifications(userId);
+  const typeIcons = { success: icons.checkCircle, warning: icons.alertTriangle, error: icons.x, info: icons.bell };
+  const typeColors = { success: '#00E5A0', warning: '#F59E0B', error: '#E24B4A', info: '#6B7280' };
+
+  container.innerHTML = `
+    <div class="buyer-wrapper">
+      <header class="buyer-header minimal-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="icon-btn" id="btnBackFromNotif" style="color:#FFF;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </button>
+          <h1>Notificações</h1>
+        </div>
+        <button class="btn-ghost" id="btnMarkAllRead" style="font-size:12px;color:#00E5A0;">Marcar tudo lido</button>
+      </header>
+      <div style="padding:8px 16px 100px;">
+        ${notifs.length === 0 ? `
+          <div style="text-align:center;padding:60px 20px;color:#6B7280;">
+            ${icons.bell}<p style="margin-top:12px;">Nenhuma notificação.</p>
+          </div>
+        ` : notifs.map(n => `
+            <div class="notif-item" style="display:flex;gap:12px;padding:14px;background:${n.read ? 'transparent' : 'rgba(0,229,160,0.04)'};border:1px solid ${n.read ? '#1E1E2A' : 'rgba(0,229,160,0.15)'};border-radius:12px;margin-bottom:8px;cursor:pointer;" data-url="${escapeHTML(n.action_url || '')}">
+            <div style="color:${typeColors[n.type] || typeColors.info};flex-shrink:0;margin-top:2px;">${typeIcons[n.type] || typeIcons.info}</div>
+            <div>
+              <div style="font-weight:${n.read ? '400' : '600'};font-size:14px;margin-bottom:4px;">${escapeHTML(n.title)}</div>
+              <div style="font-size:12px;color:#6B7280;">${escapeHTML(n.body || '')}</div>
+              <div style="font-size:11px;color:#4B5563;margin-top:4px;">${new Date(n.created_at).toLocaleString('pt-BR')}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  container.querySelector('#btnBackFromNotif').addEventListener('click', () => {
+    currentView = 'home'; renderBuyerPage(container);
+  });
+
+  container.querySelector('#btnMarkAllRead')?.addEventListener('click', async () => {
+    const uid = globalSession?.user?.id || getUser().id;
+    await markAllAsRead(uid);
+    showToast('Todas as notificações marcadas como lidas.', 'success');
+    renderNotifications(container);
+  });
+
+  // Click on notification item — navigate to action_url if set
+  container.querySelectorAll('.notif-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const url = item.dataset.url;
+      if (url && url.startsWith('#/')) {
+        window.location.hash = url;
+      }
+    });
+  });
+
+  // Bind bottom nav
+  bindBuyerBottomNav(container);
 }
