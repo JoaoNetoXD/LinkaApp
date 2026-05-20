@@ -82,9 +82,15 @@ O ideal e retornar:
 ```json
 {
   "readyForProduction": true,
+  "schemaReady": true,
+  "missingDatabaseObjects": [],
   "missingProductionConfig": []
 }
 ```
+
+Se `schemaReady` vier `false`, o app ainda nao esta pronto para Pix/cartao. Abra o SQL Editor do Supabase e rode novamente todo o conteudo de `scripts/seller-mp-migration.sql`.
+
+Um produto so deve ser aprovado quando o vendedor ja conectou o Mercado Pago. O painel admin agora bloqueia a aprovacao se o banco de pagamentos estiver incompleto ou se o vendedor ainda nao tiver conectado a propria conta.
 
 Depois teste o fluxo real:
 
