@@ -148,6 +148,15 @@ function requireSupabaseAdmin() {
   return supabaseAdmin;
 }
 
+const PRODUCT_CATEGORY_IDS = new Set(['food', 'fashion', 'services', 'digital', 'others']);
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertUuid(value, label = 'ID') {
+  if (!uuidPattern.test(String(value || ''))) {
+    throw makeHttpError(`${label} invalido.`, 400, 'INVALID_ID');
+  }
+}
+
 function requireMercadoPagoOAuthConfig() {
   if (!MP_CLIENT_ID || !MP_CLIENT_SECRET || !MP_REDIRECT_URI) {
     throw new Error('Configure MP_CLIENT_ID, MP_CLIENT_SECRET e MP_REDIRECT_URI no .env.');
@@ -619,6 +628,94 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
   }
 
   return { ready: true, code: 'READY', message: 'Produto pronto para pagamento.' };
+}
+
+async function loadProductForSellerMutation(admin, productId) {
+  assertUuid(productId, 'Produto');
+  const { data, error } = await admin
+    .from('products')
+    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,institution_id')
+    .eq('id', productId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw makeHttpError('Produto nao encontrado.', 404, 'PRODUCT_NOT_FOUND');
+  }
+  return data;
+}
+
+function assertCanManageSellerProduct(auth, product) {
+  if (auth.profile?.role === 'admin') return;
+  if (product.seller_id === auth.user.id) return;
+  throw makeHttpError('Voce nao tem permissao para alterar este produto.', 403, 'PRODUCT_FORBIDDEN');
+}
+
+function normalizeSellerProductUpdate(body, product) {
+  const updates = {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+
+  if (has('title')) {
+    const title = String(body.title || '').trim();
+    if (title.length < 3 || title.length > 60) {
+      throw makeHttpError('O titulo precisa ter entre 3 e 60 caracteres.', 400, 'INVALID_PRODUCT_TITLE');
+    }
+    updates.title = title;
+  }
+
+  if (has('description')) {
+    const description = String(body.description || '').trim();
+    if (description.length < 10 || description.length > 200) {
+      throw makeHttpError('A descricao precisa ter entre 10 e 200 caracteres.', 400, 'INVALID_PRODUCT_DESCRIPTION');
+    }
+    updates.description = description;
+  }
+
+  if (has('categoryId')) {
+    const categoryId = String(body.categoryId || '').trim();
+    if (!PRODUCT_CATEGORY_IDS.has(categoryId)) {
+      throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+    }
+    updates.category_id = categoryId;
+  }
+
+  const nextOriginalPrice = has('originalPrice') ? Number(body.originalPrice) : Number(product.original_price);
+  const nextDiscount = has('discount') ? Number.parseInt(body.discount, 10) : Number.parseInt(product.discount, 10);
+
+  if (has('originalPrice')) {
+    if (!Number.isFinite(nextOriginalPrice) || nextOriginalPrice < 1 || nextOriginalPrice > 999999) {
+      throw makeHttpError('Informe um preco original valido.', 400, 'INVALID_PRODUCT_PRICE');
+    }
+    updates.original_price = Math.round(nextOriginalPrice * 100) / 100;
+  }
+
+  if (has('discount')) {
+    if (!Number.isInteger(nextDiscount) || nextDiscount < 10 || nextDiscount > 50) {
+      throw makeHttpError('O desconto precisa ficar entre 10% e 50%.', 400, 'INVALID_PRODUCT_DISCOUNT');
+    }
+    updates.discount = nextDiscount;
+  }
+
+  if (has('originalPrice') || has('discount')) {
+    updates.discount_price = Math.round(nextOriginalPrice * (1 - nextDiscount / 100) * 100) / 100;
+  }
+
+  if (has('images')) {
+    if (!Array.isArray(body.images) || body.images.length > 3) {
+      throw makeHttpError('Envie no maximo 3 imagens.', 400, 'INVALID_PRODUCT_IMAGES');
+    }
+    const images = body.images.map((url) => String(url || '').trim()).filter(Boolean);
+    if (images.some((url) => url.length > 1000 || !/^https?:\/\//i.test(url))) {
+      throw makeHttpError('Imagem invalida.', 400, 'INVALID_PRODUCT_IMAGES');
+    }
+    updates.images = images;
+  }
+
+  updates.status = 'pending';
+  updates.rejection_reason = null;
+  updates.expires_at = null;
+
+  return updates;
 }
 
 async function registerPaymentIntent(client, payload) {
@@ -1094,6 +1191,93 @@ app.get('/api/seller/:sellerId/payments', async (req, res) => {
   } catch (error) {
     console.error('Erro ao carregar vendas:', error);
     res.status(500).json({ success: false, error: error.message || 'Erro ao carregar vendas' });
+  }
+});
+
+app.patch('/api/seller/products/:productId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+
+    const admin = requireSupabaseAdmin();
+    const product = await loadProductForSellerMutation(admin, req.params.productId);
+    assertCanManageSellerProduct(auth, product);
+
+    const updates = normalizeSellerProductUpdate(req.body || {}, product);
+    const whatsapp = String(req.body?.whatsapp || '').trim();
+    if (whatsapp) {
+      await admin.from('profiles').update({ whatsapp }).eq('id', product.seller_id);
+    }
+
+    const { data, error } = await admin
+      .from('products')
+      .update(updates)
+      .eq('id', product.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, product: data });
+  } catch (error) {
+    console.error('Erro ao atualizar produto do vendedor:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_UPDATE_ERROR', error: error.message || 'Erro ao atualizar produto' });
+  }
+});
+
+app.delete('/api/seller/products/:productId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+
+    const admin = requireSupabaseAdmin();
+    const product = await loadProductForSellerMutation(admin, req.params.productId);
+    assertCanManageSellerProduct(auth, product);
+
+    const { data, error } = await admin
+      .from('products')
+      .update({
+        status: 'expired',
+        expires_at: new Date().toISOString(),
+        rejection_reason: null,
+      })
+      .eq('id', product.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, product: data });
+  } catch (error) {
+    console.error('Erro ao remover produto do vendedor:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_DELETE_ERROR', error: error.message || 'Erro ao remover produto' });
+  }
+});
+
+app.post('/api/seller/products/:productId/renew', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+
+    const admin = requireSupabaseAdmin();
+    const product = await loadProductForSellerMutation(admin, req.params.productId);
+    assertCanManageSellerProduct(auth, product);
+
+    const { data, error } = await admin
+      .from('products')
+      .update({
+        status: 'pending',
+        slots_used: 0,
+        expires_at: null,
+        rejection_reason: null,
+      })
+      .eq('id', product.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, product: data });
+  } catch (error) {
+    console.error('Erro ao renovar produto do vendedor:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_RENEW_ERROR', error: error.message || 'Erro ao renovar produto' });
   }
 });
 

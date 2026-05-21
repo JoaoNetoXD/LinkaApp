@@ -1,7 +1,7 @@
 ﻿import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { sellerAds, sellerCoupons, categories, currentUser, institution, sellerStats } from '../data/mock.js';
 import { getSellerPayments, getPaymentStats, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
-import { getSellerProducts, createProduct, renewProduct } from '../services/product-service.js';
+import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../services/coupon-service.js';
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
 import { getInstitution } from '../services/institution-service.js';
@@ -11,10 +11,22 @@ const USE_MOCKS = import.meta.env.DEV;
 // Helper to get the current user (real auth or mock)
 function getUser() {
   if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n=>n[0]).join('').slice(0,2) || 'U' };
+  if (globalSession?.user) {
+    const name = globalSession.user.user_metadata?.full_name || globalSession.user.email?.split('@')[0] || 'Usuário';
+    return {
+      ...currentUser,
+      id: globalSession.user.id,
+      email: globalSession.user.email,
+      name,
+      fullName: name,
+      whatsapp: globalSession.user.user_metadata?.whatsapp || currentUser.whatsapp,
+      avatar: name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
+    };
+  }
   return currentUser;
 }
 
-let sellerView = 'dashboard'; // dashboard | create | ads | coupons | payments
+let sellerView = 'dashboard'; // dashboard | create | edit | ads | coupons | payments
 let paymentsFilter = 'all';
 let activeTab = 'active';
 let loadedAds = null;
@@ -22,6 +34,11 @@ let loadedCoupons = null;
 let activeInstitution = institution;
 let mpConnection = { connected: false, oauthConfigured: false };
 let lastMpNotice = '';
+let selectedAdId = null;
+
+function shouldUseSellerMocks() {
+  return USE_MOCKS && !globalSession?.user?.id;
+}
 
 function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
   if (mpResult === 'connected') {
@@ -115,17 +132,19 @@ async function renderSellerPage(container) {
     showToast(notice.message, notice.type);
   }
 
-  // Load ads from Supabase (or fallback to mock)
+  const useMocks = shouldUseSellerMocks();
+
+  // Load ads from Supabase. Mock data is only allowed without a real session.
   try {
     loadedAds = await getSellerProducts(user.id);
-    if (!loadedAds || loadedAds.length === 0) loadedAds = USE_MOCKS ? sellerAds : [];
-  } catch { loadedAds = USE_MOCKS ? sellerAds : []; }
+    if (!loadedAds || loadedAds.length === 0) loadedAds = useMocks ? sellerAds : [];
+  } catch { loadedAds = useMocks ? sellerAds : []; }
 
   // Load coupons
   try {
     loadedCoupons = await fetchSellerCoupons(user.id);
-    if (!loadedCoupons || loadedCoupons.length === 0) loadedCoupons = USE_MOCKS ? sellerCoupons : [];
-  } catch { loadedCoupons = USE_MOCKS ? sellerCoupons : []; }
+    if (!loadedCoupons || loadedCoupons.length === 0) loadedCoupons = useMocks ? sellerCoupons : [];
+  } catch { loadedCoupons = useMocks ? sellerCoupons : []; }
 
   enrichAdsWithCouponStats();
 
@@ -152,7 +171,7 @@ async function renderSellerPage(container) {
       </header>
 
       <div class="app-body" id="seller-content">
-        ${sellerView === 'create' ? renderCreateForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
+        ${sellerView === 'create' ? renderCreateForm() : sellerView === 'edit' ? renderEditProductForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
       </div>
       <nav class="bottom-nav">
         <div class="bottom-nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
@@ -178,8 +197,8 @@ async function renderSellerPage(container) {
 }
 
 function renderDashboard() {
-  const ads = loadedAds || (USE_MOCKS ? sellerAds : []);
-  const coupons = loadedCoupons || (USE_MOCKS ? sellerCoupons : []);
+  const ads = loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
+  const coupons = loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
   const statusCounts = {
     active: ads.filter(a => a.status === 'active').length,
     pending: ads.filter(a => a.status === 'pending').length,
@@ -263,7 +282,7 @@ function renderDashboard() {
     </div>
 
     <div class="motivational-msg">
-      💡 "Cada cupom gerado mostra interesse real no seu produto."
+      "Cada cupom gerado mostra interesse real no seu produto."
     </div>
   `;
 }
@@ -286,10 +305,11 @@ function enrichAdsWithCouponStats() {
 
 function renderSellerOnboarding(ads, isMPConnected) {
   const hasAds = ads.length > 0;
+  const hasCurrentAds = ads.some((ad) => ad.status !== 'expired');
   const hasActive = ads.some((ad) => ad.status === 'active');
   const hasPending = ads.some((ad) => ad.status === 'pending' || ad.status === 'queue');
 
-  if (isMPConnected && hasAds) {
+  if (isMPConnected && hasCurrentAds) {
     if (hasActive) return '';
     return `
       <section class="seller-setup-card">
@@ -305,27 +325,29 @@ function renderSellerOnboarding(ads, isMPConnected) {
   return `
     <section class="seller-setup-card">
       <div>
-        <span class="seller-setup-kicker">${hasAds ? 'Configuracao de venda' : 'Primeiro acesso de vendedor'}</span>
-        <h3>${hasAds ? 'Conecte o Mercado Pago para receber' : 'Configure sua loja em dois passos'}</h3>
+        <span class="seller-setup-kicker">${hasCurrentAds ? 'Configuracao de venda' : 'Primeiro acesso de vendedor'}</span>
+        <h3>${hasCurrentAds ? 'Conecte o Mercado Pago para receber' : 'Configure sua loja em dois passos'}</h3>
         <p>${hasPending
           ? 'Voce ja tem anuncio em analise. Conecte sua conta Mercado Pago para estar pronto quando ele for aprovado.'
-          : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovacao por aqui.'}</p>
+          : hasAds
+            ? 'Voce nao tem produto em venda agora. Cadastre uma nova oferta ou renove um produto expirado quando fizer sentido.'
+            : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovacao por aqui.'}</p>
       </div>
       <div class="seller-setup-steps">
         <div class="${isMPConnected ? 'done' : ''}"><span>1</span> Mercado Pago ${isMPConnected ? 'conectado' : 'pendente'}</div>
-        <div class="${hasAds ? 'done' : ''}"><span>2</span> Produto ${hasAds ? 'cadastrado' : 'nao cadastrado'}</div>
+        <div class="${hasCurrentAds ? 'done' : ''}"><span>2</span> Produto ${hasCurrentAds ? 'cadastrado' : 'nao cadastrado'}</div>
         <div class="${hasActive ? 'done' : ''}"><span>3</span> Vitrine ${hasActive ? 'ativa' : 'aguardando aprovacao'}</div>
       </div>
       <div class="seller-setup-actions">
         ${!isMPConnected ? `<button class="btn btn-mp connect-mp-trigger">${icons.wallet} Conectar Mercado Pago</button>` : ''}
-        <button class="btn btn-primary new-ad-trigger">${icons.plus} ${hasAds ? 'Criar outro produto' : 'Cadastrar primeiro produto'}</button>
+        <button class="btn btn-primary new-ad-trigger">${icons.plus} ${hasCurrentAds ? 'Criar outro produto' : 'Cadastrar produto'}</button>
       </div>
     </section>
   `;
 }
 
 function renderAdsByStatus() {
-  const ads = loadedAds || (USE_MOCKS ? sellerAds : []);
+  const ads = loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
   const filtered = ads.filter(a => a.status === activeTab);
   if (ads.length === 0) {
     return `
@@ -357,7 +379,7 @@ function renderSellerAdCard(ad) {
   const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
   return `
     <div class="seller-ad-card glass-card">
-      <div class="seller-ad-card-inner">
+      <div class="seller-ad-card-inner" data-open-ad-id="${ad.id}" role="button" tabindex="0" aria-label="Gerenciar anuncio ${escapeHTML(ad.title)}">
         <div class="seller-ad-thumb">${getProductImage(ad.images?.[0], 120, 120, ad.category)}</div>
         <div class="seller-ad-info">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -372,12 +394,15 @@ function renderSellerAdCard(ad) {
           </div>
         </div>
       </div>
-      ${!isAct || ad.status === 'expired' ? `
       <div class="seller-ad-status">
         <span class="badge ${statusBadge[ad.status]}">${statusLabels[ad.status]}</span>
-        ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" data-ad-id="${ad.id}">Renovar</button>` : ''}
-        ${ad.status === 'rejected' && ad.rejectionReason ? `<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${escapeHTML(ad.rejectionReason)}</span>` : ''}
-      </div>` : ''}
+        <div class="seller-ad-actions">
+          <button class="btn btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${ad.id}">${icons.fileText}<span>Editar</span></button>
+          ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" type="button" data-ad-id="${ad.id}">${icons.refresh}<span>Renovar</span></button>` : ''}
+          ${ad.status !== 'expired' ? `<button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>` : ''}
+        </div>
+      </div>
+      ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${escapeHTML(ad.rejectionReason)}</div>` : ''}
     </div>
   `;
 }
@@ -404,7 +429,7 @@ function renderCreateForm() {
         <label>Categoria</label>
         <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
           <option value="">Selecione...</option>
-          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${c.icon} ${escapeHTML(c.name)}</option>`).join('')}
+          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -425,9 +450,9 @@ function renderCreateForm() {
       <div class="input-group">
         <label>Fotos do produto (até 3)</label>
         <div class="photo-upload">
-          <label class="photo-upload-slot" id="photo-slot-1">${icons.upload}<span>Foto 1</span><input type="file" accept="image/*" style="display:none" /></label>
-          <label class="photo-upload-slot" id="photo-slot-2">${icons.upload}<span>Foto 2</span><input type="file" accept="image/*" style="display:none" /></label>
-          <label class="photo-upload-slot" id="photo-slot-3">${icons.upload}<span>Foto 3</span><input type="file" accept="image/*" style="display:none" /></label>
+          ${renderPhotoSlot(1)}
+          ${renderPhotoSlot(2)}
+          ${renderPhotoSlot(3)}
         </div>
       </div>
       <div class="input-group">
@@ -457,13 +482,155 @@ function renderCreateForm() {
   `;
 }
 
+function getSelectedAd() {
+  return (loadedAds || (shouldUseSellerMocks() ? sellerAds : [])).find(ad => String(ad.id) === String(selectedAdId)) || null;
+}
+
+function renderPhotoSlot(index, imageUrl = '') {
+  const label = `Foto ${index}`;
+  return `
+    <label class="photo-upload-slot" id="photo-slot-${index}" data-label="${label}" data-existing-url="${escapeHTML(imageUrl || '')}">
+      ${imageUrl ? `
+        <img src="${escapeHTML(imageUrl)}" alt="${label}" />
+        <button class="photo-remove-btn" type="button" data-slot-id="photo-slot-${index}" aria-label="Remover ${label}">×</button>
+      ` : `${icons.upload}<span>${label}</span>`}
+      <input type="file" accept="image/*" style="display:none" />
+    </label>
+  `;
+}
+
+function renderEditProductForm() {
+  const ad = getSelectedAd();
+  if (!ad) {
+    return `
+      <div class="empty-state" style="padding:var(--space-6);">
+        ${icons.package}
+        <h3>Anuncio nao encontrado</h3>
+        <p>Volte para a lista e tente novamente.</p>
+        <button class="btn btn-primary" id="back-to-dashboard">Voltar</button>
+      </div>
+    `;
+  }
+
+  const needsReview = ad.status === 'active';
+  const needsAdjustment = ad.status === 'rejected' && ad.rejectionReason?.startsWith('Ajuste solicitado:');
+  const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: needsAdjustment ? 'Ajuste solicitado' : 'Recusado' };
+  const statusBadges = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
+  return `
+    <div style="padding:var(--space-4) var(--space-5) 0;">
+      <button class="btn btn-ghost btn-sm" id="back-to-dashboard" style="margin-bottom:var(--space-3);">← Voltar</button>
+      <div class="seller-edit-header">
+        <div>
+          <h2>Gerenciar anúncio</h2>
+          <p>Edite dados reais do produto. Alterações voltam para aprovação antes de aparecerem na vitrine.</p>
+        </div>
+        <span class="badge ${statusBadges[ad.status] || 'badge-neutral'}">${escapeHTML(statusLabels[ad.status] || 'Indefinido')}</span>
+      </div>
+      ${needsReview ? `<div class="seller-edit-warning">${icons.alertTriangle} Ao salvar, este produto sai temporariamente da vitrine e volta para moderação.</div>` : ''}
+    </div>
+    <form class="create-ad-form" id="edit-ad-form" data-ad-id="${ad.id}">
+      <div class="input-group">
+        <label>Título do anúncio</label>
+        <input type="text" class="input-field" maxlength="60" id="ad-title" value="${escapeHTML(ad.title || '')}">
+        <div class="char-count"><span id="title-count">${String(ad.title || '').length}</span>/60</div>
+      </div>
+      <div class="input-group">
+        <label>Descrição</label>
+        <textarea class="input-field" maxlength="200" id="ad-desc">${escapeHTML(ad.description || '')}</textarea>
+        <div class="char-count"><span id="desc-count">${String(ad.description || '').length}</span>/200</div>
+      </div>
+      <div class="input-group">
+        <label>Categoria</label>
+        <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
+          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}" ${c.id === ad.category ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="input-group">
+          <label>Preço original (R$)</label>
+          <input type="number" class="input-field" id="ad-price" min="1" step="0.01" value="${Number(ad.originalPrice || 0).toFixed(2)}">
+        </div>
+        <div class="input-group">
+          <label>Desconto (%)</label>
+          <input type="number" class="input-field" id="ad-discount" min="10" max="50" value="${Number(ad.discount || 10)}">
+          <div class="input-hint">Mínimo 10%, máximo 50%</div>
+        </div>
+      </div>
+      <div class="discount-preview" id="discount-preview">
+        <span style="font-size:var(--font-size-sm);color:var(--text-secondary);">Preço final:</span>
+        <span class="final-price" id="final-price">${formatCurrency(ad.discountPrice || 0)}</span>
+      </div>
+      <div class="input-group">
+        <label>Fotos do produto (até 3)</label>
+        <div class="photo-upload">
+          ${renderPhotoSlot(1, ad.images?.[0] || '')}
+          ${renderPhotoSlot(2, ad.images?.[1] || '')}
+          ${renderPhotoSlot(3, ad.images?.[2] || '')}
+        </div>
+      </div>
+      <div class="input-group">
+        <label>WhatsApp para contato</label>
+        <input type="tel" class="input-field" id="ad-whatsapp" value="${escapeHTML(getUser().whatsapp || '')}">
+      </div>
+
+      <div class="seller-edit-metrics">
+        <div><strong>${ad.clicks || 0}</strong><span>Cliques</span></div>
+        <div><strong>${ad.couponsGenerated || 0}</strong><span>Cupons</span></div>
+        <div><strong>${ad.couponsUsed || 0}</strong><span>Usados</span></div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block btn-lg">Salvar e enviar para aprovação</button>
+      ${ad.status !== 'expired' ? `<button type="button" class="btn btn-danger btn-block delete-ad-btn" data-ad-id="${ad.id}">${icons.x} Excluir da vitrine</button>` : ''}
+    </form>
+  `;
+}
+
+function readProductFormValues(container) {
+  return {
+    title: container.querySelector('#ad-title')?.value.trim() || '',
+    description: container.querySelector('#ad-desc')?.value.trim() || '',
+    categoryId: container.querySelector('#ad-category')?.value || '',
+    originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
+    discount: parseInt(container.querySelector('#ad-discount')?.value, 10) || 0,
+    whatsapp: container.querySelector('#ad-whatsapp')?.value.trim() || '',
+  };
+}
+
+function validateProductForm(values) {
+  if (!values.title || values.title.length < 3) return 'Informe um titulo claro para o produto.';
+  if (!values.description || values.description.length < 10) return 'Descreva o produto com pelo menos 10 caracteres.';
+  if (!values.categoryId) return 'Selecione uma categoria.';
+  if (values.originalPrice <= 0) return 'Informe o preco original.';
+  if (values.discount < 10 || values.discount > 50) return 'O desconto precisa ficar entre 10% e 50%.';
+  if (!values.whatsapp) return 'Informe o WhatsApp para contato.';
+  return null;
+}
+
+async function collectProductImageUrls(container, selectedPhotoFiles) {
+  const imageUrls = [];
+  const slots = Array.from(container.querySelectorAll('.photo-upload-slot'));
+  for (const slot of slots) {
+    const file = selectedPhotoFiles.get(slot.id);
+    if (file) {
+      const compressed = await compressImage(file);
+      const { urls, errors } = await uploadMultipleImages([compressed], getUser().id || currentUser.id);
+      if (errors?.length) throw new Error(errors[0]);
+      imageUrls.push(...urls);
+      continue;
+    }
+    const existingUrl = slot.dataset.existingUrl?.trim();
+    if (existingUrl) imageUrls.push(existingUrl);
+  }
+  return imageUrls.slice(0, 3);
+}
+
 function renderSellerCoupons() {
   return `
     <div style="padding:var(--space-4) var(--space-5);">
       <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Cupons Recebidos</h2>
     </div>
     <div class="seller-coupons-list" style="padding:0 var(--space-5);">
-      ${(loadedCoupons || (USE_MOCKS ? sellerCoupons : [])).map(c => `
+      ${(loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).map(c => `
         <div class="coupon-item">
           <div class="coupon-item-header">
             <span class="coupon-item-code">${escapeHTML(c.code)}</span>
@@ -502,7 +669,7 @@ async function renderSellerPayments() {
     allPayments = await getSellerPayments(user.id || currentUser.id);
   } catch (err) {
     console.warn('renderSellerPayments failed:', err.message);
-    if (import.meta.env.DEV) {
+    if (shouldUseSellerMocks()) {
       stats = {
         totalReceived: sellerStats.activeAds,
         totalGross: sellerStats.couponsGenerated,
@@ -558,9 +725,9 @@ async function renderSellerPayments() {
 
     <div class="payments-filter">
       <button class="chip ${paymentsFilter === 'all' ? 'active' : ''}" data-pfilter="all">Todos</button>
-      <button class="chip ${paymentsFilter === 'paid' ? 'active' : ''}" data-pfilter="paid">✅ Pagos</button>
-      <button class="chip ${paymentsFilter === 'pending' ? 'active' : ''}" data-pfilter="pending">⏳ Pendentes</button>
-      <button class="chip ${paymentsFilter === 'expired' ? 'active' : ''}" data-pfilter="expired">⏰ Expirados</button>
+      <button class="chip ${paymentsFilter === 'paid' ? 'active' : ''}" data-pfilter="paid">Pagos</button>
+      <button class="chip ${paymentsFilter === 'pending' ? 'active' : ''}" data-pfilter="pending">Pendentes</button>
+      <button class="chip ${paymentsFilter === 'expired' ? 'active' : ''}" data-pfilter="expired">Expirados</button>
     </div>
     <div class="payment-list-container">
       ${filtered.length > 0 ? filtered.map(p => `
@@ -589,9 +756,9 @@ async function renderSellerPayments() {
         </div>
       `).join('') : `
         <div class="empty-payments">
-          <div class="empty-payments-icon">💰</div>
+          <div class="empty-payments-icon">${icons.wallet}</div>
           <h3>Nenhum pagamento encontrado</h3>
-          <p>Seus pagamentos via Pix aparecerão aqui.</p>
+          <p>Seus pagamentos via Pix e cartão aparecerão aqui.</p>
         </div>
       `}
     </div>
@@ -600,14 +767,47 @@ async function renderSellerPayments() {
 
 function bindSellerEvents(container) {
   // New ad button
-  container.querySelector('#new-ad-btn')?.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
-  container.querySelector('.create-ad-cta')?.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
+  container.querySelector('#new-ad-btn')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
+  container.querySelector('.create-ad-cta')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
   container.querySelectorAll('.new-ad-trigger').forEach((btn) => {
-    btn.addEventListener('click', () => { sellerView = 'create'; renderSellerPage(container); });
+    btn.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
   });
-  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { sellerView = 'dashboard'; renderSellerPage(container); });
+  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'dashboard'; renderSellerPage(container); });
   container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
     window.location.hash = '#/buyer';
+  });
+
+  const openProductManager = (adId) => {
+    selectedAdId = adId;
+    sellerView = 'edit';
+    renderSellerPage(container);
+  };
+
+  container.querySelectorAll('[data-open-ad-id]').forEach(card => {
+    card.addEventListener('click', (event) => {
+      openProductManager(card.dataset.openAdId);
+    });
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openProductManager(card.dataset.openAdId);
+      }
+    });
+  });
+
+  container.querySelectorAll('.edit-ad-btn').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openProductManager(btn.dataset.adId);
+    });
+  });
+
+  container.querySelectorAll('.delete-ad-btn').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showDeleteProductModal(btn.dataset.adId, container);
+    });
   });
 
   // Mercado Pago connect button
@@ -718,6 +918,19 @@ function bindSellerEvents(container) {
   discountInput?.addEventListener('input', updatePrice);
 
   // Photo upload preview
+  const bindPhotoInput = (slot) => {
+    slot.querySelector('input[type="file"]')?.addEventListener('change', handlePhotoChange);
+  };
+
+  const resetPhotoSlot = (slot) => {
+    const label = slot.dataset.label || 'Foto';
+    selectedPhotoFiles.delete(slot.id);
+    slot.dataset.existingUrl = '';
+    slot.style.border = '';
+    slot.innerHTML = `${icons.upload}<span>${escapeHTML(label)}</span><input type="file" accept="image/*" style="display:none" />`;
+    bindPhotoInput(slot);
+  };
+
   const handlePhotoChange = (event) => {
     const input = event.target;
     const slot = input.closest('.photo-upload-slot');
@@ -726,47 +939,37 @@ function bindSellerEvents(container) {
     const file = input.files[0];
     selectedPhotoFiles.set(slot.id, file);
     const url = createPreviewURL(file);
-    slot.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" /><input type="file" accept="image/*" style="display:none" />`;
+    slot.dataset.existingUrl = '';
+    slot.innerHTML = `<img src="${url}" alt="${escapeHTML(slot.dataset.label || 'Foto')}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" /><button class="photo-remove-btn" type="button" data-slot-id="${slot.id}" aria-label="Remover foto">×</button><input type="file" accept="image/*" style="display:none" />`;
     slot.style.border = '2px solid var(--primary-500)';
-    slot.querySelector('input')?.addEventListener('change', handlePhotoChange);
+    bindPhotoInput(slot);
+    slot.querySelector('.photo-remove-btn')?.addEventListener('click', (removeEvent) => {
+      removeEvent.preventDefault();
+      removeEvent.stopPropagation();
+      resetPhotoSlot(slot);
+    });
   };
 
   container.querySelectorAll('.photo-upload-slot input[type="file"]').forEach(input => {
     input.addEventListener('change', handlePhotoChange);
   });
 
+  container.querySelectorAll('.photo-remove-btn').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const slot = container.querySelector(`#${btn.dataset.slotId}`);
+      if (slot) resetPhotoSlot(slot);
+    });
+  });
+
   // Form submit — real Supabase creation
   container.querySelector('#create-ad-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const title = container.querySelector('#ad-title')?.value.trim() || '';
-    const description = container.querySelector('#ad-desc')?.value.trim() || '';
-    const categoryId = container.querySelector('#ad-category')?.value || '';
-    const originalPrice = parseFloat(container.querySelector('#ad-price')?.value) || 0;
-    const discount = parseInt(container.querySelector('#ad-discount')?.value) || 0;
-    const whatsapp = container.querySelector('#ad-whatsapp')?.value.trim() || '';
-
-    if (!title || title.length < 3) {
-      showToast('Informe um titulo claro para o produto.', 'error');
-      return;
-    }
-    if (!description || description.length < 10) {
-      showToast('Descreva o produto com pelo menos 10 caracteres.', 'error');
-      return;
-    }
-    if (!categoryId) {
-      showToast('Selecione uma categoria.', 'error');
-      return;
-    }
-    if (originalPrice <= 0) {
-      showToast('Informe o preco original.', 'error');
-      return;
-    }
-    if (discount < 10 || discount > 50) {
-      showToast('O desconto precisa ficar entre 10% e 50%.', 'error');
-      return;
-    }
-    if (!whatsapp) {
-      showToast('Informe o WhatsApp para contato.', 'error');
+    const values = readProductFormValues(container);
+    const validationError = validateProductForm(values);
+    if (validationError) {
+      showToast(validationError, 'error');
       return;
     }
 
@@ -776,13 +979,7 @@ function bindSellerEvents(container) {
     btn.disabled = true;
 
     try {
-      // Collect uploaded image URLs
-      const imageUrls = [];
-      for (const file of selectedPhotoFiles.values()) {
-        const compressed = await compressImage(file);
-        const { urls } = await uploadMultipleImages([compressed], getUser().id || currentUser.id);
-        imageUrls.push(...urls);
-      }
+      const imageUrls = await collectProductImageUrls(container, selectedPhotoFiles);
 
       if (selectedPhotoFiles.size > 0 && imageUrls.length === 0) {
         throw new Error('Falha ao enviar as imagens.');
@@ -791,13 +988,13 @@ function bindSellerEvents(container) {
       const user = getUser();
       const result = await createProduct({
         sellerId: globalSession?.user?.id || user.id,
-        title,
-        description,
-        categoryId,
-        originalPrice,
-        discount,
+        title: values.title,
+        description: values.description,
+        categoryId: values.categoryId,
+        originalPrice: values.originalPrice,
+        discount: values.discount,
         images: imageUrls,
-        whatsapp,
+        whatsapp: values.whatsapp,
       });
 
       if (result.success) {
@@ -813,6 +1010,46 @@ function bindSellerEvents(container) {
     } catch (err) {
       console.error('Create ad error:', err);
       showToast(err.message || 'Erro ao criar anúncio. Tente novamente.', 'error');
+      btn.textContent = origText;
+      btn.disabled = false;
+    }
+  });
+
+  container.querySelector('#edit-ad-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const adId = e.currentTarget.dataset.adId;
+    const values = readProductFormValues(container);
+    const validationError = validateProductForm(values);
+    if (validationError) {
+      showToast(validationError, 'error');
+      return;
+    }
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    const origText = btn.textContent;
+    btn.textContent = 'Salvando...';
+    btn.disabled = true;
+
+    try {
+      const imageUrls = await collectProductImageUrls(container, selectedPhotoFiles);
+      const result = await updateSellerProduct(adId, {
+        ...values,
+        images: imageUrls,
+      });
+
+      if (result.success) {
+        showToast('Anuncio atualizado e enviado para aprovacao.', 'success');
+        selectedAdId = null;
+        sellerView = 'dashboard';
+        activeTab = 'pending';
+        renderSellerPage(container);
+      } else {
+        showToast(result.error || 'Nao foi possivel salvar o produto.', 'error');
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    } catch (err) {
+      showToast(err.message || 'Nao foi possivel salvar o produto.', 'error');
       btn.textContent = origText;
       btn.disabled = false;
     }
@@ -839,7 +1076,7 @@ function bindSellerEvents(container) {
       modalRoot.querySelector('#confirm-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
       modalRoot.querySelector('#cancel-confirm').addEventListener('click', () => modalRoot.innerHTML = '');
       modalRoot.querySelector('#do-confirm').addEventListener('click', async () => {
-        const coupon = (loadedCoupons || (USE_MOCKS ? sellerCoupons : [])).find(c => c.code === code);
+        const coupon = (loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).find(c => c.code === code);
         if (!coupon?.id) {
           showToast('Cupom não encontrado.', 'error');
           return;
@@ -910,6 +1147,56 @@ function bindSellerEvents(container) {
       }
     });
   }
+}
+
+function showDeleteProductModal(adId, container) {
+  const ad = (loadedAds || (shouldUseSellerMocks() ? sellerAds : [])).find(item => String(item.id) === String(adId));
+  if (!ad) {
+    showToast('Produto nao encontrado.', 'error');
+    return;
+  }
+
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="delete-product-modal">
+      <div class="modal-content">
+        <div class="modal-handle"></div>
+        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Excluir da vitrine?</h3>
+        <p style="font-size:var(--font-size-sm);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--space-4);">
+          O produto <strong>${escapeHTML(ad.title)}</strong> deixara de aparecer para compradores. Pagamentos, cupons e historico financeiro serao preservados.
+        </p>
+        <div style="display:flex;gap:var(--space-3);">
+          <button class="btn btn-secondary" style="flex:1;" id="cancel-delete-product">Cancelar</button>
+          <button class="btn btn-danger" style="flex:1;" id="confirm-delete-product">Excluir</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  modalRoot.querySelector('#delete-product-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) modalRoot.innerHTML = '';
+  });
+  modalRoot.querySelector('#cancel-delete-product')?.addEventListener('click', () => {
+    modalRoot.innerHTML = '';
+  });
+  modalRoot.querySelector('#confirm-delete-product')?.addEventListener('click', async () => {
+    const confirmBtn = modalRoot.querySelector('#confirm-delete-product');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Excluindo...';
+    const result = await deleteSellerProduct(adId);
+    if (result?.success) {
+      modalRoot.innerHTML = '';
+      showToast('Produto removido da vitrine.', 'success');
+      selectedAdId = null;
+      sellerView = 'dashboard';
+      activeTab = 'expired';
+      renderSellerPage(container);
+    } else {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Excluir';
+      showToast(result?.error || 'Nao foi possivel remover o produto.', 'error');
+    }
+  });
 }
 
 function drawSimpleChart(canvas, coupons = []) {

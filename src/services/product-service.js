@@ -215,6 +215,28 @@ export async function updateProduct(productId, updates) {
   }
 }
 
+export async function updateSellerProduct(productId, updates) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/seller/products/${productId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Nao foi possivel atualizar o produto.');
+    }
+    return { success: true, product: transformProduct(data.product) };
+  } catch (err) {
+    if (USE_MOCKS) {
+      console.warn('updateSellerProduct: API unavailable.', err.message);
+      return { success: true, product: { id: productId, ...updates, status: 'pending' } };
+    }
+    return { success: false, error: err.message };
+  }
+}
+
 /**
  * Delete a product
  */
@@ -231,6 +253,27 @@ export async function deleteProduct(productId) {
     if (USE_MOCKS) {
       console.warn('deleteProduct: Supabase unavailable.', err.message);
       return { success: true };
+    }
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteSellerProduct(productId) {
+  try {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/seller/products/${productId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Nao foi possivel remover o produto.');
+    }
+    return { success: true, product: transformProduct(data.product) };
+  } catch (err) {
+    if (USE_MOCKS) {
+      console.warn('deleteSellerProduct: API unavailable.', err.message);
+      return { success: true, product: { id: productId, status: 'expired' } };
     }
     return { success: false, error: err.message };
   }
@@ -338,19 +381,16 @@ export async function requestProductAdjustment(productId, reason, note = '') {
  */
 export async function renewProduct(productId) {
   try {
-    const { data, error } = await supabase
-      .from('products')
-      .update({
-        status: 'pending',
-        slots_used: 0,
-        expires_at: null,
-      })
-      .eq('id', productId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return { success: true, product: transformProduct(data) };
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/seller/products/${productId}/renew`, {
+      method: 'POST',
+      headers,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Nao foi possivel renovar o produto.');
+    }
+    return { success: true, product: transformProduct(data.product) };
   } catch (err) {
     if (USE_MOCKS) {
       console.warn('renewProduct: Supabase unavailable.', err.message);
