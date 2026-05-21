@@ -293,8 +293,8 @@ export async function incrementProductClicks(productId) {
       throw new Error(data.error || 'Nao foi possivel registrar clique.');
     }
   } catch (err) {
-    // Silently fail — clicks are non-critical
-    console.warn('incrementProductClicks: failed.', err.message);
+    // Click tracking is non-critical; keep production console clean.
+    if (USE_MOCKS) console.warn('incrementProductClicks: failed.', err.message);
   }
 }
 

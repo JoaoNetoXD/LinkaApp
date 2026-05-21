@@ -115,17 +115,44 @@ let activeInstitution = institution;
 // Intersection Observer for card entrance animation
 let observer = null;
 let lastSyncedCheckoutRef = null;
+const PENDING_CHECKOUT_REF_KEY = 'linka_pending_checkout_ref';
+
+function getPaymentRefFromParams(params) {
+  return params.get('payment_id')
+    || params.get('collection_id')
+    || params.get('external_reference')
+    || params.get('merchant_order_id')
+    || params.get('preference_id');
+}
 
 function getCheckoutRefFromHash() {
   const rawHash = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : '';
   const [, queryString = ''] = rawHash.split('?');
-  if (!queryString) return null;
+  const hashParams = new URLSearchParams(queryString);
+  const searchParams = new URLSearchParams(window.location.search || '');
+  const urlRef = getPaymentRefFromParams(hashParams) || getPaymentRefFromParams(searchParams);
+  if (urlRef) return urlRef;
+  return isAuthenticated() ? sessionStorage.getItem(PENDING_CHECKOUT_REF_KEY) : null;
+}
 
-  const params = new URLSearchParams(queryString);
-  return params.get('payment_id')
-    || params.get('collection_id')
-    || params.get('external_reference')
-    || params.get('merchant_order_id');
+function cleanupCheckoutReturnParams({ clearPending = true } = {}) {
+  const searchableParams = new URLSearchParams(window.location.search || '');
+  ['payment_id', 'collection_id', 'external_reference', 'merchant_order_id', 'preference_id', 'status'].forEach((key) => {
+    searchableParams.delete(key);
+  });
+
+  const rawHash = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : '';
+  const [hashPath, hashQuery = ''] = rawHash.split('?');
+  const hashParams = new URLSearchParams(hashQuery);
+  ['payment_id', 'collection_id', 'external_reference', 'merchant_order_id', 'preference_id', 'status'].forEach((key) => {
+    hashParams.delete(key);
+  });
+
+  const nextSearch = searchableParams.toString();
+  const nextHashQuery = hashParams.toString();
+  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}#/${hashPath || ''}${nextHashQuery ? `?${nextHashQuery}` : ''}`;
+  if (clearPending) sessionStorage.removeItem(PENDING_CHECKOUT_REF_KEY);
+  window.history.replaceState(null, '', nextUrl);
 }
 
 async function syncCheckoutReturnIfNeeded() {
@@ -139,10 +166,14 @@ async function syncCheckoutReturnIfNeeded() {
       showToast('Pagamento confirmado com sucesso!', 'success');
       currentPayment = null;
       currentView = 'coupons';
+      cleanupCheckoutReturnParams();
     }
     return payment;
   } catch (err) {
     if (err?.message === 'AUTH_REQUIRED') {
+      sessionStorage.setItem(PENDING_CHECKOUT_REF_KEY, paymentRef);
+      lastSyncedCheckoutRef = null;
+      cleanupCheckoutReturnParams({ clearPending: false });
       window.location.hash = '#/auth';
       return null;
     }
@@ -1306,10 +1337,10 @@ function renderPayment(container) {
 
       <div class="payment-container" style="padding: 24px 16px; text-align:center;">
         <h2 style="font-size:18px;margin-bottom:8px;">Finalizar via Pix</h2>
-        <p style="font-size:14px;color:#6B7280;margin-bottom:24px;">Valor: <strong style="color:#FFF;">${formatCurrency(product.discountPrice)}</strong></p>
+        <p class="payment-pix-summary">Valor: <strong>${formatCurrency(product.discountPrice)}</strong></p>
         
-        <div id="pixContainer" style="background:#111118; border:1px solid #1E1E2A; border-radius:16px; padding:24px; margin-bottom:24px;">
-          <div style="margin-bottom:16px;color:#00E5A0;">
+        <div id="pixContainer" class="payment-pix-card">
+          <div class="payment-pix-loading">
             ${icons.loader}
             <span style="font-size:14px;font-weight:600;display:block;margin-top:8px;">Gerando código Pix...</span>
           </div>
@@ -1337,14 +1368,14 @@ async function initPixFlow(product, container) {
     if (!pixContainer) return;
 
     pixContainer.innerHTML = `
-      <div style="background:#FFF; padding:12px; border-radius:12px; display:inline-block; margin-bottom:16px;">
+      <div class="pix-qr-shell">
         ${pixData.qrCodeSVG}
       </div>
-      <p style="font-size:12px; color:#6B7280; margin-bottom:16px;">Código expira em 10 minutos</p>
-      <button class="btn-outline" style="width:100%; border-color:#00E5A0; color:#00E5A0;" id="btnCopyPix">
+      <p class="pix-expiry-note">Código expira em 10 minutos</p>
+      <button class="btn-outline pix-copy-action" id="btnCopyPix">
         Copiar código Pix
       </button>
-      <div id="pixStatusMsg" style="margin-top:16px;font-size:13px;color:#9CA3AF;text-align:center;">Aguardando pagamento...</div>
+      <div id="pixStatusMsg" class="pix-status-message">Aguardando pagamento...</div>
     `;
 
     document.getElementById('btnCopyPix')?.addEventListener('click', () => {
@@ -1383,7 +1414,6 @@ async function initPixFlow(product, container) {
     }, 2000);
 
   } catch (err) {
-    console.error('initPixFlow error:', err);
     if (err?.message === 'AUTH_REQUIRED') {
       window.location.hash = '#/auth';
       return;
@@ -1391,9 +1421,9 @@ async function initPixFlow(product, container) {
     const pixContainer = document.getElementById('pixContainer');
     if (pixContainer) {
       pixContainer.innerHTML = `
-        <div style="text-align:center;">
-          <p style="color:#E24B4A;font-weight:700;margin-bottom:8px;">Nao foi possivel gerar o Pix</p>
-          <p style="color:#9CA3AF;font-size:13px;line-height:1.5;margin:0 auto 16px;max-width:520px;">${escapeHTML(getPaymentUnavailableMessage(err.message))}</p>
+        <div class="pix-error-state">
+          <p class="pix-error-title">Nao foi possivel gerar o Pix</p>
+          <p class="pix-error-message">${escapeHTML(getPaymentUnavailableMessage(err.message))}</p>
           <button class="btn-primary" id="btnBackAfterPixError" style="padding:10px 18px;">Voltar para ofertas</button>
         </div>
       `;
@@ -1406,6 +1436,33 @@ async function initPixFlow(product, container) {
 }
 
 // ─── PRODUCT DETAIL PAGE ────────────────────────────────
+
+function bindSwipeNavigation(element, onSwipeLeft, onSwipeRight) {
+  if (!element) return;
+  let startX = 0;
+  let startY = 0;
+  let isTracking = false;
+
+  element.addEventListener('touchstart', (event) => {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    isTracking = true;
+  }, { passive: true });
+
+  element.addEventListener('touchend', (event) => {
+    if (!isTracking) return;
+    isTracking = false;
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - startX;
+    const deltaY = touch.clientY - startY;
+    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
+    if (deltaX < 0) onSwipeLeft?.();
+    else onSwipeRight?.();
+  }, { passive: true });
+}
 
 function renderProductDetail(container) {
   const p = selectedProduct;
@@ -1541,7 +1598,9 @@ function renderProductDetail(container) {
   container.querySelectorAll('[data-photo-index]').forEach(btn => {
     btn.addEventListener('click', () => setPhoto(Number(btn.dataset.photoIndex)));
   });
-  container.querySelector('#detailImageViewer')?.addEventListener('click', () => {
+  const imageViewer = container.querySelector('#detailImageViewer');
+  bindSwipeNavigation(imageViewer, () => setPhoto(selectedProductImageIndex + 1), () => setPhoto(selectedProductImageIndex - 1));
+  imageViewer?.addEventListener('click', () => {
     if (!images.length) return;
     showProductImageLightbox(container, p, images, selectedProductImageIndex);
   });
@@ -1558,7 +1617,7 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
             <strong>${escapeHTML(product.title)}</strong>
             <button class="icon-btn" id="closeLightbox" type="button" style="color:#fff;">${icons.plus}</button>
           </div>
-          <div style="position:relative;border-radius:16px;overflow:hidden;background:#050508;min-height:280px;max-height:78vh;">
+          <div id="lightboxImageFrame" style="position:relative;border-radius:16px;overflow:hidden;background:#050508;min-height:280px;max-height:78vh;">
             ${getProductImage(images[index], 900, 720, product.category)}
             ${images.length > 1 ? `
               <button class="icon-btn" id="lightboxPrev" type="button" aria-label="Foto anterior" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">‹</button>
@@ -1587,6 +1646,19 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
       selectedProductImageIndex = index;
       render();
     });
+    bindSwipeNavigation(
+      modalRoot.querySelector('#lightboxImageFrame'),
+      () => {
+        index = (index + 1) % images.length;
+        selectedProductImageIndex = index;
+        render();
+      },
+      () => {
+        index = (index - 1 + images.length) % images.length;
+        selectedProductImageIndex = index;
+        render();
+      }
+    );
   };
   render();
 }
