@@ -19,6 +19,7 @@ import './styles/auth.css';
 import './styles/admin.css';
 import './styles/app-dark.css';
 import './styles/polish.css';
+import './styles/mobile-redesign.css';
 
 const app = document.getElementById('app');
 
