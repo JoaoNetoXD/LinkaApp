@@ -110,6 +110,21 @@ async function syncInstitutionForUser() {
   activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
 }
 
+async function saveCurrentProfileFields({ name, whatsapp }) {
+  if (!globalSession?.user?.id) return;
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ name, whatsapp })
+    .eq('id', globalSession.user.id)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    throw new Error('Perfil nao encontrado ou sem permissao para salvar. Entre novamente e tente de novo.');
+  }
+  await refreshCurrentProfile();
+}
+
 export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
     currentView = 'coupons';
@@ -823,8 +838,7 @@ function renderProfileLegacy(container) {
 
     try {
       if (globalSession?.user?.id) {
-        const { error } = await supabase.from('profiles').update({ name, whatsapp }).eq('id', globalSession.user.id);
-        if (error) throw error;
+        await saveCurrentProfileFields({ name, whatsapp });
       }
       showToast('Perfil atualizado com sucesso!', 'success');
     } catch (err) {
@@ -1098,9 +1112,7 @@ function renderProfile(container) {
 
     try {
       if (globalSession?.user?.id) {
-        const { error } = await supabase.from('profiles').update({ name, whatsapp }).eq('id', globalSession.user.id);
-        if (error) throw error;
-        await refreshCurrentProfile();
+        await saveCurrentProfileFields({ name, whatsapp });
       }
       showToast('Perfil atualizado com sucesso!', 'success');
     } catch (err) {

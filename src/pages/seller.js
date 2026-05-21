@@ -1003,7 +1003,7 @@ function bindSellerEvents(container) {
         activeTab = 'pending';
         renderSellerPage(container);
       } else {
-        showToast('Erro ao criar anúncio. Tente novamente.', 'error');
+        showToast(result.error || 'Erro ao criar anúncio. Tente novamente.', 'error');
         btn.textContent = origText;
         btn.disabled = false;
       }

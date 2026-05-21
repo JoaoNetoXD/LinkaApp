@@ -1,7 +1,7 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, rejectReasons, categories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts } from '../services/product-service.js';
-import { getInstitutionStats, updateInstitution, getInstitution } from '../services/institution-service.js';
+import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
 import { signOutUser } from '../services/auth-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
@@ -42,6 +42,13 @@ async function syncInstitutionForUser() {
     const realInstitution = await getInstitution(institutionId);
     if (realInstitution) {
       activeInstitution = realInstitution;
+      return;
+    }
+  }
+  if ((globalProfile?.role || globalSession?.user?.user_metadata?.role) === 'admin') {
+    const institutions = await getAllInstitutions();
+    if (institutions.length === 1) {
+      activeInstitution = institutions[0];
       return;
     }
   }
@@ -396,18 +403,24 @@ function renderSettings() {
   return `
     <div class="admin-section">
       <h3 class="admin-section-title" style="margin-bottom:var(--space-5);">Configuracoes institucionais</h3>
+      ${!activeInstitution?.id ? `
+        <div class="admin-inline-alert">
+          ${icons.alertTriangle}
+          <span>Nao encontrei uma instituicao real vinculada a este admin. Vincule o usuario admin a uma instituicao no Supabase ou mantenha apenas uma instituicao cadastrada para edicao automatica.</span>
+        </div>
+      ` : ''}
       <div class="settings-section">
         <div class="setting-item">
           <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="fullName">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="fullName" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="domain">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="domain" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${activeInstitution.primaryColor};display:inline-block;"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="primaryColor">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="primaryColor" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
         <div class="divider"></div>
         <div class="setting-item">
@@ -492,12 +505,14 @@ function bindAdminEvents(container) {
   // Toggles
   container.querySelectorAll('.toggle').forEach(toggle => {
     toggle.addEventListener('click', async () => {
+      if (toggle.classList.contains('is-saving')) return;
       if (!activeInstitution?.id) {
         showToast('Instituicao real nao encontrada para salvar.', 'error');
         return;
       }
       const key = toggle.dataset.settingToggle;
       const nextValue = !toggle.classList.contains('active');
+      toggle.classList.add('is-saving');
       toggle.classList.toggle('active', nextValue);
       const settings = { ...(activeInstitution.settings || {}), [key]: nextValue };
       const result = await updateInstitution(activeInstitution.id, { settings });
@@ -508,6 +523,7 @@ function bindAdminEvents(container) {
         toggle.classList.toggle('active', !nextValue);
         showToast(result?.error || 'Nao foi possivel salvar.', 'error');
       }
+      toggle.classList.remove('is-saving');
     });
   });
 
@@ -529,30 +545,43 @@ function bindAdminEvents(container) {
         <div class="modal-backdrop" id="settings-edit-modal">
           <div class="modal-content">
             <div class="modal-handle"></div>
-            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar: ${title}</h3>
-            <div class="input-group">${inputHtml}</div>
-            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-              <button class="btn btn-secondary" style="flex:1;" id="cancel-setting">Cancelar</button>
-              <button class="btn btn-primary" style="flex:1;" id="confirm-setting">Salvar</button>
-            </div>
+            <form id="settings-edit-form">
+              <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar: ${escapeHTML(title)}</h3>
+              <div class="input-group">${inputHtml}</div>
+              <div class="modal-inline-status" id="setting-modal-status" role="status" aria-live="polite"></div>
+              <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
+                <button type="button" class="btn btn-secondary" style="flex:1;" id="cancel-setting">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;" id="confirm-setting">Salvar</button>
+              </div>
+            </form>
           </div>
         </div>
       `;
       modalRoot.querySelector('#settings-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
       modalRoot.querySelector('#cancel-setting').addEventListener('click', () => modalRoot.innerHTML = '');
-      modalRoot.querySelector('#confirm-setting').addEventListener('click', async () => {
+      modalRoot.querySelector('#settings-edit-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
         if (!activeInstitution?.id) {
           showToast('Instituicao real nao encontrada para salvar.', 'error');
           return;
         }
         const confirmBtn = modalRoot.querySelector('#confirm-setting');
+        const statusEl = modalRoot.querySelector('#setting-modal-status');
         const value = modalRoot.querySelector('#settingEditVal')?.value?.trim();
         if (!value) {
           showToast('Preencha o campo.', 'error');
+          if (statusEl) {
+            statusEl.className = 'modal-inline-status error';
+            statusEl.textContent = 'Preencha o campo antes de salvar.';
+          }
           return;
         }
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Salvando...';
+        if (statusEl) {
+          statusEl.className = 'modal-inline-status info';
+          statusEl.textContent = 'Salvando no banco de dados...';
+        }
         const result = await updateInstitution(activeInstitution.id, { [settingKey]: value });
         if (result?.success) {
           activeInstitution = result.institution;
@@ -562,7 +591,12 @@ function bindAdminEvents(container) {
         } else {
           confirmBtn.disabled = false;
           confirmBtn.textContent = 'Salvar';
-          showToast(result?.error || 'Nao foi possivel salvar.', 'error');
+          const errorMessage = result?.error || 'Nao foi possivel salvar.';
+          if (statusEl) {
+            statusEl.className = 'modal-inline-status error';
+            statusEl.textContent = errorMessage;
+          }
+          showToast(errorMessage, 'error');
         }
       });
     });

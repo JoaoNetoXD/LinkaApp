@@ -8,6 +8,20 @@ import { institution as mockInstitution } from '../data/mock.js';
 const STORAGE_KEY = 'linka_institution_id';
 const USE_MOCKS = import.meta.env.DEV;
 const QUERY_TIMEOUT_MS = 2500;
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('AUTH_REQUIRED');
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
 
 function withTimeout(promise, ms = QUERY_TIMEOUT_MS) {
   let timer;
@@ -91,21 +105,47 @@ export async function createInstitution({ name, fullName, domain, logoUrl, prima
 /** Update institution settings */
 export async function updateInstitution(institutionId, updates) {
   try {
+    if (!institutionId) throw new Error('Instituicao real nao encontrada para salvar.');
     const dbUpdates = {};
-    if (updates.name) dbUpdates.name = updates.name;
-    if (updates.fullName) dbUpdates.full_name = updates.fullName;
-    if (updates.domain) dbUpdates.domain = updates.domain;
-    if (updates.logoUrl) dbUpdates.logo_url = updates.logoUrl;
-    if (updates.primaryColor) dbUpdates.primary_color = updates.primaryColor;
-    if (updates.plan) dbUpdates.plan = updates.plan;
-    if (updates.settings) dbUpdates.settings = updates.settings;
+    if (hasOwn(updates, 'name')) dbUpdates.name = String(updates.name || '').trim();
+    if (hasOwn(updates, 'fullName')) dbUpdates.full_name = String(updates.fullName || '').trim();
+    if (hasOwn(updates, 'domain')) dbUpdates.domain = String(updates.domain || '').trim().toLowerCase();
+    if (hasOwn(updates, 'logoUrl')) dbUpdates.logo_url = updates.logoUrl ? String(updates.logoUrl).trim() : null;
+    if (hasOwn(updates, 'primaryColor')) dbUpdates.primary_color = String(updates.primaryColor || '').trim();
+    if (hasOwn(updates, 'plan')) dbUpdates.plan = String(updates.plan || '').trim();
+    if (hasOwn(updates, 'settings')) dbUpdates.settings = updates.settings || {};
+
+    if (Object.keys(dbUpdates).length === 0) {
+      throw new Error('Nenhum campo valido para salvar.');
+    }
+
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}/admin/institutions/${institutionId}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.success) {
+      return { success: true, institution: transformInstitution(payload.institution) };
+    }
+
+    if (response.status !== 404 || payload.code !== 'ROUTE_NOT_FOUND') {
+      throw new Error(payload.error || 'Nao foi possivel salvar a instituicao.');
+    }
 
     const { data, error } = await supabase.from('institutions')
-      .update(dbUpdates).eq('id', institutionId).select().single();
+      .update(dbUpdates).eq('id', institutionId).select().maybeSingle();
     if (error) throw error;
+    if (!data) {
+      throw new Error('Nada foi salvo. Verifique se seu usuario admin tem permissao/RLS para editar esta instituicao.');
+    }
     return { success: true, institution: transformInstitution(data) };
   } catch (err) {
-    return { success: false, error: err.message };
+    const message = err.message === 'AUTH_REQUIRED'
+      ? 'Sua sessao expirou. Entre novamente para salvar.'
+      : err.message;
+    return { success: false, error: message };
   }
 }
 

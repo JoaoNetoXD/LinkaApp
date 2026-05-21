@@ -157,6 +157,58 @@ function assertUuid(value, label = 'ID') {
   }
 }
 
+function assertAdmin(auth) {
+  if (auth.profile?.role !== 'admin') {
+    throw makeHttpError('Acesso restrito a administradores.', 403, 'ADMIN_REQUIRED');
+  }
+}
+
+function normalizeInstitutionUpdates(body = {}) {
+  const updates = {};
+  if (Object.prototype.hasOwnProperty.call(body, 'name')) {
+    const name = String(body.name || '').trim();
+    if (!name) throw makeHttpError('Nome curto da instituicao e obrigatorio.', 400, 'INVALID_INSTITUTION_NAME');
+    updates.name = name;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'fullName')) {
+    const fullName = String(body.fullName || '').trim();
+    if (!fullName) throw makeHttpError('Nome da instituicao e obrigatorio.', 400, 'INVALID_INSTITUTION_FULL_NAME');
+    updates.full_name = fullName;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'domain')) {
+    const domain = String(body.domain || '').trim().toLowerCase();
+    if (!/^@[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+      throw makeHttpError('Informe um dominio no formato @escola.com.', 400, 'INVALID_INSTITUTION_DOMAIN');
+    }
+    updates.domain = domain;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'logoUrl')) {
+    updates.logo_url = body.logoUrl ? String(body.logoUrl).trim() : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'primaryColor')) {
+    const primaryColor = String(body.primaryColor || '').trim();
+    if (!/^#[0-9a-f]{6}$/i.test(primaryColor)) {
+      throw makeHttpError('Cor principal invalida. Use o formato #2563eb.', 400, 'INVALID_PRIMARY_COLOR');
+    }
+    updates.primary_color = primaryColor;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'plan')) {
+    const plan = String(body.plan || '').trim();
+    if (!plan) throw makeHttpError('Plano invalido.', 400, 'INVALID_PLAN');
+    updates.plan = plan;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'settings')) {
+    if (!body.settings || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
+      throw makeHttpError('Configuracoes invalidas.', 400, 'INVALID_SETTINGS');
+    }
+    updates.settings = body.settings;
+  }
+  if (Object.keys(updates).length === 0) {
+    throw makeHttpError('Nenhum campo valido para salvar.', 400, 'EMPTY_UPDATE');
+  }
+  return updates;
+}
+
 function requireMercadoPagoOAuthConfig() {
   if (!MP_CLIENT_ID || !MP_CLIENT_SECRET || !MP_REDIRECT_URI) {
     throw new Error('Configure MP_CLIENT_ID, MP_CLIENT_SECRET e MP_REDIRECT_URI no .env.');
@@ -1285,9 +1337,7 @@ app.get('/api/admin/stats', async (req, res) => {
   try {
     const auth = await getAuthContext(req, res);
     if (!auth) return;
-    if (auth.profile?.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Acesso negado' });
-    }
+    assertAdmin(auth);
 
     const [paymentsRes, paidRes, pendingRes] = await Promise.all([
       auth.client.from('payments').select('id', { count: 'exact', head: true }),
@@ -1312,7 +1362,58 @@ app.get('/api/admin/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao carregar stats:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao carregar stats' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_STATS_ERROR', error: error.message || 'Erro ao carregar stats' });
+  }
+});
+
+app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertAdmin(auth);
+    assertUuid(req.params.institutionId, 'Instituicao');
+
+    const admin = requireSupabaseAdmin();
+    if (auth.profile?.institution_id && auth.profile.institution_id !== req.params.institutionId) {
+      return res.status(403).json({
+        success: false,
+        code: 'INSTITUTION_FORBIDDEN',
+        error: 'Voce so pode editar a instituicao vinculada ao seu perfil admin.',
+      });
+    }
+    if (!auth.profile?.institution_id) {
+      const { count, error: countError } = await admin.from('institutions').select('id', { count: 'exact', head: true });
+      if (countError) throw countError;
+      if ((count || 0) !== 1) {
+        return res.status(403).json({
+          success: false,
+          code: 'ADMIN_WITHOUT_INSTITUTION',
+          error: 'Vincule este admin a uma instituicao no Supabase antes de editar configuracoes.',
+        });
+      }
+    }
+
+    const updates = normalizeInstitutionUpdates(req.body);
+    const { data, error } = await admin
+      .from('institutions')
+      .update(updates)
+      .eq('id', req.params.institutionId)
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) {
+      throw makeHttpError('Instituicao nao encontrada para salvar.', 404, 'INSTITUTION_NOT_FOUND');
+    }
+
+    res.json({ success: true, institution: data });
+  } catch (error) {
+    console.error('Erro ao salvar instituicao:', error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      code: error.code || 'ADMIN_INSTITUTION_UPDATE_ERROR',
+      error: error.message || 'Erro ao salvar instituicao.',
+    });
   }
 });
 
@@ -1320,9 +1421,7 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
   try {
     const auth = await getAuthContext(req, res);
     if (!auth) return;
-    if (auth.profile?.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Acesso restrito a administradores.' });
-    }
+    assertAdmin(auth);
 
     const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: false });
     if (!readiness.ready) {

@@ -1078,12 +1078,63 @@ body:has(.payment-screen) {
   border-radius: 22px !important;
 }
 
+.admin-inline-alert,
+.modal-inline-status {
+  width: 100%;
+  display: none;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.admin-inline-alert {
+  display: flex;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--mobile-yellow) 18%, var(--mobile-surface)) !important;
+  color: color-mix(in srgb, #a16207 76%, var(--mobile-ink)) !important;
+  border: 1px solid color-mix(in srgb, var(--mobile-yellow) 40%, var(--mobile-line)) !important;
+}
+
+.admin-inline-alert svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+}
+
+.modal-inline-status.info,
+.modal-inline-status.error {
+  display: flex;
+  margin-top: 12px;
+}
+
+.modal-inline-status.info {
+  background: color-mix(in srgb, var(--mobile-blue) 12%, var(--mobile-surface)) !important;
+  color: var(--mobile-blue) !important;
+  border: 1px solid color-mix(in srgb, var(--mobile-blue) 30%, var(--mobile-line)) !important;
+}
+
+.modal-inline-status.error {
+  background: color-mix(in srgb, var(--mobile-coral) 13%, var(--mobile-surface)) !important;
+  color: var(--mobile-coral) !important;
+  border: 1px solid color-mix(in srgb, var(--mobile-coral) 34%, var(--mobile-line)) !important;
+}
+
 .period-filter,
 .admin-logout-btn {
   background: #fff !important;
   color: var(--mobile-blue) !important;
   border: 1px solid var(--mobile-line) !important;
   border-radius: 14px !important;
+}
+
+.toggle.is-saving {
+  opacity: 0.64;
+  pointer-events: none;
 }
 
 /* Modals and payment */
