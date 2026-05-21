@@ -127,14 +127,18 @@ export async function getInstitutionStats(institutionId) {
 
     const students = profilesRes.count || 0;
     const products = productsRes.data || [];
+    const coupons = couponsRes.data || [];
     const totalClicks = products.reduce((s, p) => s + (p.clicks || 0), 0);
+    const usedCoupons = coupons.filter(c => c.status === 'used').length;
+    const generatedCoupons = couponsRes.count || coupons.length || 0;
+    const conversion = generatedCoupons > 0 ? Math.round((usedCoupons / generatedCoupons) * 100) : 0;
 
     return {
-      students: { value: students, change: '+12%', positive: true },
-      clicks: { value: totalClicks.toLocaleString(), change: '+23%', positive: true },
-      couponsGenerated: { value: couponsRes.count || 0, change: '+18%', positive: true },
-      couponsUsed: { value: 0, change: '+15%', positive: true },
-      conversionRate: { value: '64%', change: '+3%', positive: true },
+      students: { value: students, change: '', positive: true },
+      clicks: { value: totalClicks.toLocaleString(), change: '', positive: true },
+      couponsGenerated: { value: generatedCoupons, change: '', positive: true },
+      couponsUsed: { value: usedCoupons, change: '', positive: true },
+      conversionRate: { value: `${conversion}%`, change: '', positive: true },
       pendingAds: { value: products.filter(p => p.status === 'pending').length, change: '0', positive: true },
     };
   } catch (err) {

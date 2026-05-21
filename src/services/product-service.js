@@ -244,8 +244,11 @@ export async function incrementProductClicks(productId) {
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!productId || !uuidRe.test(String(productId))) return;
   try {
-    const { error } = await supabase.rpc('increment_clicks', { product_id: productId });
-    if (error) throw error;
+    const response = await fetch(`${API_URL}/products/${productId}/click`, { method: 'POST' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Nao foi possivel registrar clique.');
+    }
   } catch (err) {
     // Silently fail — clicks are non-critical
     console.warn('incrementProductClicks: failed.', err.message);
@@ -394,7 +397,7 @@ export async function getCategoryStats(institutionId = null) {
     let query = supabase
       .from('products')
       .select('category_id, status')
-      .in('status', ['active', 'queue']);
+      .in('status', ['active', 'queue', 'pending']);
 
     if (institutionId) {
       query = query.eq('institution_id', institutionId);
@@ -410,7 +413,7 @@ export async function getCategoryStats(institutionId = null) {
         catStats[p.category_id] = { active: 0, queue: 0 };
       }
       if (p.status === 'active') catStats[p.category_id].active++;
-      else if (p.status === 'queue') catStats[p.category_id].queue++;
+      else if (p.status === 'queue' || p.status === 'pending') catStats[p.category_id].queue++;
     });
 
     return catStats;
@@ -444,6 +447,7 @@ function transformProduct(dbProduct) {
 
   return {
     id: dbProduct.id,
+    sellerId: dbProduct.seller_id,
     title: dbProduct.title,
     description: dbProduct.description,
     category: dbProduct.category_id,
@@ -474,7 +478,22 @@ function transformProduct(dbProduct) {
     rejectionReason: dbProduct.rejection_reason,
     institutionId: dbProduct.institution_id,
     createdAt: dbProduct.created_at,
+    waitTime: formatWaitTime(dbProduct.created_at),
   };
+}
+
+function formatWaitTime(createdAt) {
+  if (!createdAt) return 'pouco tempo';
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return 'pouco tempo';
+  const minutes = Math.max(0, Math.floor((Date.now() - created.getTime()) / 60000));
+  if (minutes < 1) return 'agora';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours < 24) return mins ? `${hours}h ${mins}min` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days} dia${days > 1 ? 's' : ''}`;
 }
 
 function filterMockProducts(products, categoryId, search) {

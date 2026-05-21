@@ -146,6 +146,7 @@ function transformCoupon(c) {
     sellerWhatsapp: c.seller?.whatsapp,
     status: c.status,
     createdAt: formatDate(c.created_at),
+    createdAtRaw: c.created_at,
     validUntil: formatDate(c.valid_until),
   };
 }
@@ -157,6 +158,7 @@ function transformSellerCoupon(c) {
     buyer: c.buyer?.name || 'Comprador',
     status: c.status,
     createdAt: formatDate(c.created_at),
+    createdAtRaw: c.created_at,
     validUntil: formatDate(c.valid_until),
   };
 }

@@ -833,6 +833,24 @@ app.post('/api/pix', async (req, res) => {
   }
 });
 
+app.post('/api/products/:productId/click', async (req, res) => {
+  try {
+    const productId = req.params.productId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(productId))) {
+      return res.status(400).json({ success: false, error: 'Produto invalido' });
+    }
+
+    const admin = requireSupabaseAdmin();
+    const { error } = await admin.rpc('increment_clicks', { product_id: productId });
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao registrar clique:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'CLICK_TRACK_ERROR', error: error.message || 'Erro ao registrar clique' });
+  }
+});
+
 app.get('/api/products/:productId/payment-ready', async (req, res) => {
   try {
     const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: true });
@@ -943,9 +961,19 @@ app.post('/api/preference', async (req, res) => {
       p_external_reference: externalReference,
     });
 
+    const checkoutUrl = response.init_point
+      || response.sandbox_init_point
+      || response.initPoint
+      || response.sandboxInitPoint
+      || null;
+    if (!checkoutUrl) {
+      throw makeHttpError('Mercado Pago nao retornou URL de checkout.', 502, 'MP_CHECKOUT_URL_MISSING');
+    }
+
     res.json({
       success: true,
-      initPoint: response.init_point,
+      initPoint: checkoutUrl,
+      checkoutUrl,
       payment: mapPaymentRow(paymentRow),
     });
   } catch (error) {

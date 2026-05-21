@@ -1,5 +1,5 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
-import { pendingAds, adminStats, categoryHeat, alerts, rejectReasons, categories, institution } from '../data/mock.js';
+import { pendingAds, adminStats, categoryHeat, rejectReasons, categories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution } from '../services/institution-service.js';
 import { signOutUser } from '../services/auth-service.js';
@@ -9,6 +9,8 @@ const USE_MOCKS = import.meta.env.DEV;
 let adminView = 'dashboard';
 let loadedPendingAds = null;
 let loadedStats = null;
+let loadedAllProducts = [];
+let loadedCategoryStats = {};
 let activeInstitution = institution;
 
 function removePendingAd(adId) {
@@ -64,6 +66,14 @@ async function renderAdminPage(container) {
   try {
     loadedStats = await getInstitutionStats(null);
   } catch { loadedStats = USE_MOCKS ? adminStats : null; }
+
+  try {
+    loadedAllProducts = await getAllProducts();
+  } catch { loadedAllProducts = USE_MOCKS ? pendingAds : []; }
+
+  try {
+    loadedCategoryStats = await getCategoryStats();
+  } catch { loadedCategoryStats = USE_MOCKS ? categoryHeat : {}; }
   container.innerHTML = `
     <div class="page admin-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
@@ -75,7 +85,7 @@ async function renderAdminPage(container) {
           </div>
         </div>
       <div style="display:flex;align-items:center;gap:12px; flex-shrink: 0;">
-          <button class="period-filter" id="btnPeriodFilter" style="padding: 6px 10px;">${icons.clock} <span class="hide-mobile" id="periodLabel">7d</span></button>
+          <button class="period-filter" id="btnAdminRefresh" style="padding: 6px 10px;">${icons.refresh} <span class="hide-mobile">Atualizar</span></button>
           <button class="btn-icon" id="btnAdminNotif" style="position:relative;">
             ${icons.bell}
             <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
@@ -122,6 +132,8 @@ function getAdminContent() {
 
 function renderAdminDashboard() {
   const s = loadedStats || (USE_MOCKS ? adminStats : {});
+  const realAlerts = buildAdminAlerts();
+  const topSellers = buildTopSellers();
   const stats = [
     { label: 'Alunos', value: s.students?.value ?? 0, change: s.students?.change || '', positive: true, icon: icons.user },
     { label: 'Cliques', value: s.clicks?.value ?? 0, change: s.clicks?.change || '', positive: true, icon: icons.eye },
@@ -149,11 +161,11 @@ function renderAdminDashboard() {
     <!-- Alerts -->
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">⚠️ Alertas</h3>
-        <span class="admin-section-count">${alerts.length}</span>
+        <h3 class="admin-section-title">Alertas operacionais</h3>
+        <span class="admin-section-count">${realAlerts.length}</span>
       </div>
       <div class="alerts-list">
-        ${alerts.map(a => `
+        ${realAlerts.length ? realAlerts.map(a => `
           <div class="alert-card ${a.level === 'critical' ? 'critical' : ''}">
             <div class="alert-card-icon">${icons.alertTriangle}</div>
             <div class="alert-card-content">
@@ -163,53 +175,97 @@ function renderAdminDashboard() {
             </div>
             <button class="btn btn-ghost btn-sm">${escapeHTML(a.action)}</button>
           </div>
-        `).join('')}
+        `).join('') : `<div class="empty-state">${icons.checkCircle}<h3>Nenhum alerta agora</h3><p>Produtos, pagamentos e moderacao estao sem pendencias criticas.</p></div>`}
       </div>
     </div>
 
     <!-- Quick moderation -->
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">📋 Pendentes</h3>
-        <button class="btn btn-ghost btn-sm" data-admin-tab="moderation">Ver todos →</button>
+        <h3 class="admin-section-title">Pendentes</h3>
+        <button class="btn btn-ghost btn-sm" data-admin-tab="moderation">Ver todos</button>
       </div>
-      ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).slice(0, 2).map(ad => renderModerationCard(ad)).join('')}
+      ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length
+        ? (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).slice(0, 2).map(ad => renderModerationCard(ad)).join('')
+        : `<div class="empty-state">${icons.shield}<h3>Fila limpa</h3><p>Nenhum produto aguardando revisao agora.</p></div>`}
     </div>
 
     <!-- Charts -->
     <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">📊 Métricas</h3>
+      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">Metricas</h3>
       <div class="chart-container">
-        <h4>Ocupação de vagas (7 dias)</h4>
+        <h4>Produtos criados nos ultimos 7 dias</h4>
         <canvas id="admin-chart" height="200"></canvas>
       </div>
     </div>
 
     <!-- Top sellers -->
     <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">🏆 Vendedores mais ativos</h3>
+      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">Vendedores mais ativos</h3>
       <div class="sellers-list">
-        ${[
-          { name: 'Maria Clara', course: 'Gastronomia', ads: 5, conversion: '72%', avatar: 'MC' },
-          { name: 'Ana Beatriz', course: 'Engenharia', ads: 3, conversion: '78%', avatar: 'AB' },
-          { name: 'Pedro Henrique', course: 'Design', ads: 4, conversion: '50%', avatar: 'PH' }
-        ].map((s, i) => `
+        ${topSellers.length ? topSellers.map((seller, i) => `
           <div class="seller-row">
             <div style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);color:var(--primary-500);width:24px;">${i + 1}</div>
-            <div class="avatar avatar-sm">${s.avatar}</div>
+            <div class="avatar avatar-sm">${escapeHTML(seller.avatar)}</div>
             <div class="seller-row-info">
-              <h4>${s.name}</h4>
-              <p>${s.course}</p>
+              <h4>${escapeHTML(seller.name)}</h4>
+              <p>${escapeHTML(seller.course || 'Sem curso informado')}</p>
             </div>
             <div class="seller-row-stats">
-              <span>${s.ads} anúncios</span>
-              <span>${s.conversion} conv.</span>
+              <span>${seller.ads} anuncios</span>
+              <span>${seller.active} ativos</span>
             </div>
           </div>
-        `).join('')}
+        `).join('') : `<div class="empty-state">${icons.user}<h3>Nenhum vendedor ativo ainda</h3><p>Quando houver produtos reais, eles aparecerao aqui.</p></div>`}
       </div>
     </div>
   `;
+}
+
+function buildAdminAlerts() {
+  const alertsList = [];
+  const pendingCount = (loadedPendingAds || []).length;
+  const activeProducts = (loadedAllProducts || []).filter(product => product.status === 'active');
+  if (pendingCount > 0) {
+    alertsList.push({
+      level: pendingCount >= 5 ? 'critical' : 'warning',
+      title: `${pendingCount} anuncio${pendingCount > 1 ? 's' : ''} aguardando moderacao`,
+      description: 'Revise a fila para liberar ou solicitar ajustes aos vendedores.',
+      time: 'Agora',
+      action: 'Moderar agora',
+    });
+  }
+  if (activeProducts.length === 0) {
+    alertsList.push({
+      level: 'warning',
+      title: 'Nenhum produto ativo na vitrine',
+      description: 'A vitrine de compradores fica vazia ate que um produto seja aprovado.',
+      time: 'Agora',
+      action: 'Ver moderacao',
+    });
+  }
+  return alertsList;
+}
+
+function buildTopSellers() {
+  const sellers = new Map();
+  (loadedAllProducts || []).forEach(product => {
+    const seller = product.seller || {};
+    const id = seller.id || product.sellerId || 'unknown';
+    const current = sellers.get(id) || {
+      name: seller.name || 'Vendedor',
+      course: seller.course || '',
+      avatar: seller.avatar || seller.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'VD',
+      ads: 0,
+      active: 0,
+    };
+    current.ads += 1;
+    if (product.status === 'active') current.active += 1;
+    sellers.set(id, current);
+  });
+  return Array.from(sellers.values())
+    .sort((a, b) => b.active - a.active || b.ads - a.ads)
+    .slice(0, 5);
 }
 
 function renderModeration() {
@@ -260,34 +316,38 @@ function renderModerationCard(ad) {
 }
 
 function renderCategories() {
+  const rows = categories.filter(c => c.id !== 'all').map(category => {
+    const stats = loadedCategoryStats?.[category.id] || {};
+    const active = Number(stats.active || 0);
+    const queue = Number(stats.queue || stats.pending || 0);
+    const total = Math.max(active + queue, 1);
+    const pct = Math.min(Math.round((active / total) * 100), 100);
+    return { ...category, active, queue, total, pct };
+  });
   return `
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">Mapa de Calor — Categorias</h3>
+        <h3 class="admin-section-title">Categorias reais</h3>
       </div>
       <div class="category-heat-grid">
-        ${(USE_MOCKS ? categoryHeat : []).map(cat => {
-          const pct = (cat.slotsUsed / cat.slotsTotal) * 100;
+        ${rows.map(cat => {
+          const pct = cat.pct;
           const barClass = pct >= 100 ? 'danger' : pct >= 70 ? 'warning' : 'success';
-          const statusBadge = cat.status === 'full' ? 'badge-danger' : cat.status === 'warning' ? 'badge-warning' : 'badge-success';
-          const statusLabel = cat.status === 'full' ? 'Lotado' : cat.status === 'warning' ? 'Acima de 70%' : 'Disponível';
+          const statusBadge = cat.active > 0 ? 'badge-success' : cat.queue > 0 ? 'badge-warning' : 'badge-neutral';
+          const statusLabel = cat.active > 0 ? 'Com ofertas' : cat.queue > 0 ? 'Em analise' : 'Sem ofertas';
           return `
             <div class="category-heat-card">
               <div class="category-heat-header">
-                <span class="category-heat-name">${categories.find(c => c.id === cat.id)?.icon || ''} ${escapeHTML(cat.name)}</span>
+                <span class="category-heat-name">${cat.icon || ''} ${escapeHTML(cat.name)}</span>
                 <span class="badge ${statusBadge}">${statusLabel}</span>
               </div>
-              <div class="category-heat-slots">${cat.slotsUsed} de ${cat.slotsTotal} vagas ocupadas</div>
+              <div class="category-heat-slots">${cat.active} ativos · ${cat.queue} em analise</div>
               <div class="progress-bar">
                 <div class="progress-fill ${barClass}" style="width:${pct}%;"></div>
               </div>
               <div class="category-heat-footer">
-                <span>Fila: ${escapeHTML(cat.queue)} aguardando</span>
-                <span>Duração: ${escapeHTML(cat.duration)}</span>
-              </div>
-              <div class="category-heat-actions">
-                <button class="btn btn-ghost btn-sm">Editar vagas</button>
-                <button class="btn btn-ghost btn-sm">Editar duração</button>
+                <span>${pct}% dos anuncios da categoria estao ativos</span>
+                <span>Dados do Supabase</span>
               </div>
             </div>
           `;
@@ -298,27 +358,33 @@ function renderCategories() {
 }
 
 function renderReports() {
+  const s = loadedStats || (USE_MOCKS ? adminStats : {});
+  const sellersCount = new Set((loadedAllProducts || []).map(product => product.seller?.id || product.sellerId).filter(Boolean)).size;
+  const activeProducts = (loadedAllProducts || []).filter(product => product.status === 'active').length;
+  const mostActiveCategory = categories.filter(c => c.id !== 'all')
+    .map(category => ({ category, count: loadedCategoryStats?.[category.id]?.active || 0 }))
+    .sort((a, b) => b.count - a.count)[0]?.category;
   return `
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">📊 Impacto Institucional</h3>
-        <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar PDF</button>
+        <h3 class="admin-section-title">Impacto institucional</h3>
+        <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar TXT</button>
       </div>
       <div class="admin-stats" style="margin-bottom:var(--space-5);padding:0;">
-        <div class="stat-card"><div class="stat-label">Vendedores ativos</div><div class="stat-value">28</div></div>
-        <div class="stat-card"><div class="stat-label">Compradores ativos</div><div class="stat-value">187</div></div>
-        <div class="stat-card"><div class="stat-label">Cupons gerados</div><div class="stat-value">486</div></div>
-        <div class="stat-card"><div class="stat-label">Cupons usados</div><div class="stat-value">312</div></div>
-        <div class="stat-card"><div class="stat-label">Conversão</div><div class="stat-value">64%</div></div>
-        <div class="stat-card"><div class="stat-label">Cat. mais ativa</div><div class="stat-value">🍔</div></div>
+        <div class="stat-card"><div class="stat-label">Vendedores com produtos</div><div class="stat-value">${sellersCount}</div></div>
+        <div class="stat-card"><div class="stat-label">Produtos ativos</div><div class="stat-value">${activeProducts}</div></div>
+        <div class="stat-card"><div class="stat-label">Cupons gerados</div><div class="stat-value">${s.couponsGenerated?.value ?? 0}</div></div>
+        <div class="stat-card"><div class="stat-label">Cupons usados</div><div class="stat-value">${s.couponsUsed?.value ?? 0}</div></div>
+        <div class="stat-card"><div class="stat-label">Conversao</div><div class="stat-value">${s.conversionRate?.value ?? '0%'}</div></div>
+        <div class="stat-card"><div class="stat-label">Cat. mais ativa</div><div class="stat-value">${mostActiveCategory?.icon || '-'}</div></div>
       </div>
       <div class="reports-grid">
         <div class="chart-container">
-          <h4>Cupons gerados por categoria</h4>
+          <h4>Produtos ativos por categoria</h4>
           <canvas id="report-chart-1" height="200"></canvas>
         </div>
         <div class="chart-container">
-          <h4>Conversão por categoria</h4>
+          <h4>Produtos em analise por categoria</h4>
           <canvas id="report-chart-2" height="200"></canvas>
         </div>
       </div>
@@ -329,40 +395,32 @@ function renderReports() {
 function renderSettings() {
   return `
     <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-5);">⚙️ Configurações Institucionais</h3>
+      <h3 class="admin-section-title" style="margin-bottom:var(--space-5);">Configuracoes institucionais</h3>
       <div class="settings-section">
         <div class="setting-item">
           <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
-          <button class="btn btn-ghost btn-sm">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="fullName">Editar</button>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
-          <button class="btn btn-ghost btn-sm">Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Logo da instituição</h4><p>Logo atual configurado</p></div>
-          <button class="btn btn-ghost btn-sm">Alterar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="domain">Editar</button>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${activeInstitution.primaryColor};display:inline-block;"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
-          <button class="btn btn-ghost btn-sm">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-setting="primaryColor">Editar</button>
         </div>
         <div class="divider"></div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Autoaprovação para bons vendedores</h4><p>Vendedores com 5+ anúncios aprovados sem recusa</p></div>
-          <div class="toggle active" id="toggle-auto"></div>
+          <div class="toggle ${activeInstitution.settings?.autoApproveTrustedSellers ? 'active' : ''}" data-setting-toggle="autoApproveTrustedSellers"></div>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
-          <div class="toggle active" id="toggle-consent"></div>
+          <div class="toggle ${activeInstitution.settings?.requireMinorConsent !== false ? 'active' : ''}" data-setting-toggle="requireMinorConsent"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Políticas de uso</h4><p>Termos e condições do marketplace</p></div>
-          <button class="btn btn-ghost btn-sm">Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Multi-tenant</h4><p>Configuração de múltiplos campus</p></div>
-          <button class="btn btn-ghost btn-sm">Configurar</button>
+          <div class="setting-item-info"><h4>Regras de uso</h4><p>Termos e politicas devem ficar no contrato ou em uma pagina dedicada antes de serem publicados no app.</p></div>
+          <span class="badge badge-neutral">Sem acao no app</span>
         </div>
       </div>
     </div>
@@ -402,6 +460,14 @@ function bindAdminEvents(container) {
       return;
     }
 
+    const rejectBtn = event.target.closest?.('.reject-btn');
+    if (rejectBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showRejectModal(rejectBtn.dataset.adId, container);
+      return;
+    }
+
     const adjustBtn = event.target.closest?.('.adjust-btn');
     if (adjustBtn) {
       event.preventDefault();
@@ -423,54 +489,40 @@ function bindAdminEvents(container) {
     }
   });
 
-  // Approve
-  container.querySelectorAll('.approve-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      btn.innerHTML = `${icons.loader} Aprovando...`;
-      const result = await approveProduct(btn.dataset.adId);
+  // Toggles
+  container.querySelectorAll('.toggle').forEach(toggle => {
+    toggle.addEventListener('click', async () => {
+      if (!activeInstitution?.id) {
+        showToast('Instituicao real nao encontrada para salvar.', 'error');
+        return;
+      }
+      const key = toggle.dataset.settingToggle;
+      const nextValue = !toggle.classList.contains('active');
+      toggle.classList.toggle('active', nextValue);
+      const settings = { ...(activeInstitution.settings || {}), [key]: nextValue };
+      const result = await updateInstitution(activeInstitution.id, { settings });
       if (result?.success) {
-        showToast('Anúncio aprovado com sucesso!', 'success');
-        btn.closest('.moderation-card').style.opacity = '0.3';
-        btn.closest('.moderation-card').style.pointerEvents = 'none';
+        activeInstitution = result.institution;
+        showToast('Configuracao salva.', 'success');
       } else {
-        showToast(result?.error || 'Não foi possível aprovar o anúncio.', 'error');
-        btn.disabled = false;
-        btn.innerHTML = `${icons.check} Aprovar`;
+        toggle.classList.toggle('active', !nextValue);
+        showToast(result?.error || 'Nao foi possivel salvar.', 'error');
       }
     });
   });
 
-  // Reject
-  container.querySelectorAll('.reject-btn').forEach(btn => {
-    btn.addEventListener('click', () => showRejectModal(btn.dataset.adId, container));
-  });
-
-  // Adjust
-  container.querySelectorAll('.adjust-btn').forEach(btn => {
-    btn.addEventListener('click', () => showAdjustModal(btn.dataset.adId));
-  });
-
-  // Toggles
-  container.querySelectorAll('.toggle').forEach(toggle => {
-    toggle.addEventListener('click', () => { toggle.classList.toggle('active'); });
-  });
-
-  // Settings buttons — open modal with edit form
-  container.querySelectorAll('.settings-section .btn').forEach(btn => {
+  // Real editable institution fields
+  container.querySelectorAll('.settings-section .btn[data-setting]').forEach(btn => {
     btn.addEventListener('click', () => {
       const settingItem = btn.closest('.setting-item');
       const title = settingItem?.querySelector('h4')?.textContent || '';
       const currentVal = settingItem?.querySelector('p')?.textContent?.trim() || '';
+      const settingKey = btn.dataset.setting;
       const modalRoot = document.getElementById('modal-root');
 
       let inputHtml = `<input type="text" class="input-field" id="settingEditVal" value="${currentVal}" style="margin-top:var(--space-3);" />`;
-      if (title.includes('Cor')) {
-        inputHtml = `<input type="color" id="settingEditVal" value="#2563eb" style="width:100%;height:48px;border-radius:8px;border:1px solid var(--gray-700);margin-top:var(--space-3);cursor:pointer;" />`;
-      } else if (title.includes('Logo')) {
-        inputHtml = `<input type="file" accept="image/*" id="settingEditVal" class="input-field" style="margin-top:var(--space-3);" />`;
-      } else if (title.includes('Políticas') || title.includes('Multi')) {
-        inputHtml = `<textarea class="input-field" id="settingEditVal" rows="4" style="margin-top:var(--space-3);">${currentVal}</textarea>`;
+      if (settingKey === 'primaryColor') {
+        inputHtml = `<input type="color" id="settingEditVal" value="${escapeHTML(activeInstitution.primaryColor || '#2563eb')}" style="width:100%;height:48px;border-radius:8px;border:1px solid var(--gray-700);margin-top:var(--space-3);cursor:pointer;" />`;
       }
 
       modalRoot.innerHTML = `
@@ -488,21 +540,37 @@ function bindAdminEvents(container) {
       `;
       modalRoot.querySelector('#settings-edit-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
       modalRoot.querySelector('#cancel-setting').addEventListener('click', () => modalRoot.innerHTML = '');
-      modalRoot.querySelector('#confirm-setting').addEventListener('click', () => {
-        modalRoot.innerHTML = '';
-        showToast(`"${title}" atualizado com sucesso!`, 'success');
+      modalRoot.querySelector('#confirm-setting').addEventListener('click', async () => {
+        if (!activeInstitution?.id) {
+          showToast('Instituicao real nao encontrada para salvar.', 'error');
+          return;
+        }
+        const confirmBtn = modalRoot.querySelector('#confirm-setting');
+        const value = modalRoot.querySelector('#settingEditVal')?.value?.trim();
+        if (!value) {
+          showToast('Preencha o campo.', 'error');
+          return;
+        }
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Salvando...';
+        const result = await updateInstitution(activeInstitution.id, { [settingKey]: value });
+        if (result?.success) {
+          activeInstitution = result.institution;
+          modalRoot.innerHTML = '';
+          showToast(`"${title}" salvo.`, 'success');
+          renderAdminPage(container);
+        } else {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = 'Salvar';
+          showToast(result?.error || 'Nao foi possivel salvar.', 'error');
+        }
       });
     });
   });
 
-  // Period filter
-  container.querySelector('#btnPeriodFilter')?.addEventListener('click', () => {
-    const label = container.querySelector('#periodLabel');
-    const options = ['7d', '30d', '90d'];
-    const curr = label?.textContent.trim() || '7d';
-    const next = options[(options.indexOf(curr) + 1) % options.length];
-    if (label) label.textContent = next;
-    showToast(`Período alterado para ${next}`, 'info');
+  container.querySelector('#btnAdminRefresh')?.addEventListener('click', async () => {
+    showToast('Atualizando dados...', 'info');
+    await renderAdminPage(container);
   });
 
   // Admin bell notification
@@ -518,7 +586,7 @@ function bindAdminEvents(container) {
       if (action === 'Editar vagas') {
         adminView = 'categories';
         renderAdminPage(container);
-      } else if (action === 'Moderar agora') {
+      } else if (action === 'Moderar agora' || action === 'Ver moderacao') {
         adminView = 'moderation';
         renderAdminPage(container);
       } else if (action === 'Visualizar') {
@@ -528,48 +596,13 @@ function bindAdminEvents(container) {
         adminView = 'moderation';
         renderAdminPage(container);
       } else {
-        showToast('Detalhes visualizados.', 'info');
+        adminView = 'moderation';
+        renderAdminPage(container);
       }
     });
   });
   
-  // Heatmap actions
-  container.querySelectorAll('.category-heat-actions .btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const isSlots = btn.textContent.includes('vagas');
-      const card = btn.closest('.category-heat-card');
-      const catName = card?.querySelector('.category-heat-name')?.textContent?.trim() || 'Categoria';
-      const modalRoot = document.getElementById('modal-root');
-      modalRoot.innerHTML = `
-        <div class="modal-backdrop" id="edit-cat-modal">
-          <div class="modal-content">
-            <div class="modal-handle"></div>
-            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar ${isSlots ? 'Vagas' : 'Duração'}</h3>
-            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">${catName}</p>
-            <div class="input-group">
-              <label>${isSlots ? 'Número máximo de vagas' : 'Duração do anúncio'}</label>
-              <input type="${isSlots ? 'number' : 'text'}" class="input-field" id="catEditVal"
-                placeholder="${isSlots ? 'Ex: 8' : 'Ex: 24h'}" min="1" max="20" />
-            </div>
-            <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-              <button class="btn btn-secondary" style="flex:1;" id="cancel-cat-edit">Cancelar</button>
-              <button class="btn btn-primary" style="flex:1;" id="confirm-cat-edit">Salvar</button>
-            </div>
-          </div>
-        </div>
-      `;
-      modalRoot.querySelector('#edit-cat-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-      modalRoot.querySelector('#cancel-cat-edit').addEventListener('click', () => modalRoot.innerHTML = '');
-      modalRoot.querySelector('#confirm-cat-edit').addEventListener('click', () => {
-        const val = document.getElementById('catEditVal')?.value;
-        if (!val) { showToast('Preencha o campo.', 'error'); return; }
-        modalRoot.innerHTML = '';
-        showToast(`${isSlots ? 'Vagas' : 'Duração'} de ${catName} atualizada para ${val}${isSlots ? ' vagas' : ''}!`, 'success');
-      });
-    });
-  });
-
-  // Export PDF
+  // Export plain text report
   container.querySelector('#btnExportPDF')?.addEventListener('click', () => {
     const s = loadedStats || (USE_MOCKS ? adminStats : {});
     const report = `RELATÓRIO LINKA - ${escapeHTML(activeInstitution.fullName)}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\nAlunos: ${s.students?.value ?? 0}\nCliques: ${s.clicks?.value ?? 0}\nCupons Gerados: ${s.couponsGenerated?.value ?? 0}\nCupons Usados: ${s.couponsUsed?.value ?? 0}\nConversão: ${s.conversionRate?.value ?? '0%'}\nPendentes: ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}\n`;
@@ -578,14 +611,14 @@ function bindAdminEvents(container) {
     const a = document.createElement('a');
     a.href = url; a.download = `relatorio-linka-${Date.now()}.txt`;
     a.click(); URL.revokeObjectURL(url);
-    showToast('Relatório exportado!', 'success');
+    showToast('Relatorio exportado!', 'success');
   });
 
   // Charts
   setTimeout(() => {
     drawAdminChart(container.querySelector('#admin-chart'));
-    drawBarChart(container.querySelector('#report-chart-1'));
-    drawBarChart(container.querySelector('#report-chart-2'));
+    drawBarChart(container.querySelector('#report-chart-1'), 'active');
+    drawBarChart(container.querySelector('#report-chart-2'), 'queue');
   }, 100);
 }
 
@@ -705,12 +738,32 @@ function drawAdminChart(canvas) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const data = [18, 22, 20, 25, 23, 19, 24];
-  const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  const now = new Date();
+  const buckets = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(now);
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - index));
+    return {
+      key: day.toISOString().slice(0, 10),
+      label: day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+      count: 0,
+    };
+  });
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  (loadedAllProducts || []).forEach((product) => {
+    if (!product.createdAt) return;
+    const day = new Date(product.createdAt);
+    if (Number.isNaN(day.getTime())) return;
+    day.setHours(0, 0, 0, 0);
+    const bucket = bucketMap.get(day.toISOString().slice(0, 10));
+    if (bucket) bucket.count += 1;
+  });
+  const data = buckets.map((bucket) => bucket.count);
+  const labels = buckets.map((bucket) => bucket.label);
   const w = rect.width, h = rect.height;
   const pad = { top: 20, right: 20, bottom: 30, left: 30 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
-  const max = Math.max(...data) * 1.2;
+  const max = Math.max(1, ...data) * 1.2;
 
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth = 1;
@@ -747,7 +800,7 @@ function drawAdminChart(canvas) {
   });
 }
 
-function drawBarChart(canvas) {
+function drawBarChart(canvas, metric = 'active') {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -756,13 +809,19 @@ function drawBarChart(canvas) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const data = [45, 28, 35, 18, 12];
-  const labels = ['Lanches', 'Moda', 'Serviços', 'Digital', 'Outros'];
-  const colors = ['#00E5A0', '#00cc8e', '#00b37d', '#009a6c', '#00805a'];
+  const rows = categories.filter(c => c.id !== 'all').map((category) => ({
+    label: category.name.split(' ')[0],
+    value: Number(loadedCategoryStats?.[category.id]?.[metric] || 0),
+  }));
+  const data = rows.map((row) => row.value);
+  const labels = rows.map((row) => row.label);
+  const colors = metric === 'active'
+    ? ['#00E5A0', '#22c55e', '#14b8a6', '#3b82f6', '#a855f7']
+    : ['#F5A623', '#f97316', '#eab308', '#fb7185', '#c084fc'];
   const w = rect.width, h = rect.height;
   const pad = { top: 10, right: 10, bottom: 30, left: 10 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
-  const max = Math.max(...data) * 1.2;
+  const max = Math.max(1, ...data) * 1.2;
   const barW = (cw / data.length) * 0.6;
   const gap = (cw / data.length) * 0.4;
 

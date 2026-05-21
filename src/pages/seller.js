@@ -127,6 +127,8 @@ async function renderSellerPage(container) {
     if (!loadedCoupons || loadedCoupons.length === 0) loadedCoupons = USE_MOCKS ? sellerCoupons : [];
   } catch { loadedCoupons = USE_MOCKS ? sellerCoupons : []; }
 
+  enrichAdsWithCouponStats();
+
   container.innerHTML = `
     <div class="page seller-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
@@ -185,6 +187,7 @@ function renderDashboard() {
     expired: ads.filter(a => a.status === 'expired').length,
     rejected: ads.filter(a => a.status === 'rejected').length,
   };
+  if (activeTab === 'queue' && statusCounts.queue === 0) activeTab = statusCounts.pending > 0 ? 'pending' : 'active';
 
   // Compute real stats from loaded data
   const computedStats = {
@@ -241,7 +244,7 @@ function renderDashboard() {
       <div class="tabs">
         <button class="tab ${activeTab === 'active' ? 'active' : ''}" data-tab="active">Ativos <span class="tab-count">${statusCounts.active}</span></button>
         <button class="tab ${activeTab === 'pending' ? 'active' : ''}" data-tab="pending">Em aprovação <span class="tab-count">${statusCounts.pending}</span></button>
-        <button class="tab ${activeTab === 'queue' ? 'active' : ''}" data-tab="queue">Na fila <span class="tab-count">${statusCounts.queue}</span></button>
+        ${statusCounts.queue > 0 ? `<button class="tab ${activeTab === 'queue' ? 'active' : ''}" data-tab="queue">Na fila <span class="tab-count">${statusCounts.queue}</span></button>` : ''}
         <button class="tab ${activeTab === 'expired' ? 'active' : ''}" data-tab="expired">Expirados <span class="tab-count">${statusCounts.expired}</span></button>
         <button class="tab ${activeTab === 'rejected' ? 'active' : ''}" data-tab="rejected">Recusados <span class="tab-count">${statusCounts.rejected}</span></button>
       </div>
@@ -251,11 +254,10 @@ function renderDashboard() {
       ${renderAdsByStatus()}
     </div>
 
-    <!-- Performance charts placeholder -->
     <div class="performance-section">
-      <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">📊 Desempenho</h3>
+      <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Desempenho</h3>
       <div class="chart-container">
-        <h4>Cupons por dia (últimos 7 dias)</h4>
+        <h4>Cupons gerados nos ultimos 7 dias</h4>
         <canvas id="seller-chart" height="200"></canvas>
       </div>
     </div>
@@ -264,6 +266,22 @@ function renderDashboard() {
       💡 "Cada cupom gerado mostra interesse real no seu produto."
     </div>
   `;
+}
+
+function enrichAdsWithCouponStats() {
+  if (!Array.isArray(loadedAds) || !Array.isArray(loadedCoupons)) return;
+  const stats = new Map();
+  loadedCoupons.forEach((coupon) => {
+    if (!coupon.productId) return;
+    const current = stats.get(coupon.productId) || { total: 0, used: 0 };
+    current.total += 1;
+    if (coupon.status === 'used') current.used += 1;
+    stats.set(coupon.productId, current);
+  });
+  loadedAds = loadedAds.map((ad) => {
+    const adStats = stats.get(ad.id) || { total: 0, used: 0 };
+    return { ...ad, couponsGenerated: adStats.total, couponsUsed: adStats.used };
+  });
 }
 
 function renderSellerOnboarding(ads, isMPConnected) {
@@ -449,13 +467,13 @@ function renderSellerCoupons() {
         <div class="coupon-item">
           <div class="coupon-item-header">
             <span class="coupon-item-code">${escapeHTML(c.code)}</span>
-            <span class="badge ${c.status === 'pending' ? 'badge-warning' : c.status === 'used' ? 'badge-success' : 'badge-neutral'}">
-              ${c.status === 'pending' ? 'Pendente' : c.status === 'used' ? 'Usado' : 'Expirado'}
+            <span class="badge ${c.status === 'active' || c.status === 'pending' ? 'badge-warning' : c.status === 'used' ? 'badge-success' : 'badge-neutral'}">
+              ${c.status === 'active' ? 'Ativo' : c.status === 'pending' ? 'Pendente' : c.status === 'used' ? 'Usado' : 'Expirado'}
             </span>
           </div>
           <div class="coupon-item-product">${escapeHTML(c.product)}</div>
           <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · ${escapeHTML(c.createdAt)}</div>
-          ${c.status === 'pending' ? `
+          ${c.status === 'active' || c.status === 'pending' ? `
             <button class="btn btn-success btn-sm btn-block mark-used-btn" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
               ${icons.check} Marcar como usado
             </button>
@@ -509,7 +527,7 @@ async function renderSellerPayments() {
   return `
     <div style="padding:var(--space-4) var(--space-5) var(--space-2);">
       <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-1);">Minhas Vendas</h2>
-      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Acompanhe os pagamentos Pix recebidos.</p>
+      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Acompanhe pagamentos Pix e cartao recebidos pelo Mercado Pago.</p>
     </div>
     <div class="payments-stats-grid">
       <div class="payment-stat-card revenue">
@@ -861,7 +879,7 @@ function bindSellerEvents(container) {
   // Simple chart
   setTimeout(() => {
     const canvas = container.querySelector('#seller-chart');
-    if (canvas) drawSimpleChart(canvas);
+    if (canvas) drawSimpleChart(canvas, loadedCoupons || []);
   }, 100);
 
   // Bottom nav — event delegation on <nav> for reliable click detection
@@ -894,7 +912,7 @@ function bindSellerEvents(container) {
   }
 }
 
-function drawSimpleChart(canvas) {
+function drawSimpleChart(canvas, coupons = []) {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -904,14 +922,35 @@ function drawSimpleChart(canvas) {
   canvas.style.width = rect.width + 'px';
   canvas.style.height = rect.height + 'px';
 
-  const data = [3, 5, 2, 7, 4, 6, 8];
-  const labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+  const now = new Date();
+  const buckets = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(now);
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() - (6 - index));
+    return {
+      key: day.toISOString().slice(0, 10),
+      label: day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+      count: 0,
+    };
+  });
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+  coupons.forEach((coupon) => {
+    const rawDate = coupon.createdAtRaw || coupon.createdAt;
+    if (!rawDate) return;
+    const day = new Date(rawDate);
+    if (Number.isNaN(day.getTime())) return;
+    day.setHours(0, 0, 0, 0);
+    const bucket = bucketMap.get(day.toISOString().slice(0, 10));
+    if (bucket) bucket.count += 1;
+  });
+  const data = buckets.map((bucket) => bucket.count);
+  const labels = buckets.map((bucket) => bucket.label);
   const w = rect.width;
   const h = rect.height;
   const padding = { top: 30, right: 20, bottom: 30, left: 40 };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
-  const maxVal = Math.max(...data) + 2; // Extra headroom
+  const maxVal = Math.max(1, ...data) + 1;
 
   // Y-axis labels and grid lines
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';

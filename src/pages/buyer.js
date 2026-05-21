@@ -53,6 +53,7 @@ let searchQuery = '';
 let currentView = 'home'; // home | detail | coupons | payment | notifications
 let currentPayment = null;
 let selectedProduct = null;
+let selectedProductImageIndex = 0;
 let paymentTimerInterval = null;
 let paymentPollInterval = null;
 let cachedProducts = null;
@@ -343,7 +344,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           const isSoldOut = p.slots.used >= p.slots.total;
           
           return `
-          <div class="product-card ${isSoldOut ? 'sold-out' : ''}">
+          <div class="product-card ${isSoldOut ? 'sold-out' : ''}" data-product-card="${p.id}" role="button" tabindex="0" aria-label="Ver detalhes de ${escapeHTML(p.title)}" style="cursor:pointer;">
             <div class="card-image-area">
               ${getProductImage(p.images?.[0], 400, 160, p.category)}
               <div class="cat-badge">${catIcon} ${escapeHTML(catName)}</div>
@@ -466,7 +467,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Get coupon
   container.querySelectorAll('.get-coupon-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
       if (!btn.disabled) {
         const productId = btn.dataset.id;
         const product = filteredProducts.find(p => p.id == productId);
@@ -477,17 +479,35 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // View details - now opens product detail page
   container.querySelectorAll('.view-details-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const productId = btn.dataset.id;
-      const product = filteredProducts.find(p => p.id == productId);
-      if (product) {
-        selectedProduct = product;
-        currentView = 'detail';
-        incrementProductClicks(productId);
-        renderBuyerPage(container);
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openProductDetail(btn.dataset.id, container);
+    });
+  });
+
+  container.querySelectorAll('[data-product-card]').forEach(card => {
+    const open = () => openProductDetail(card.dataset.productCard, container);
+    card.addEventListener('click', (event) => {
+      if (event.target.closest('button, a, input, select, textarea')) return;
+      open();
+    });
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
       }
     });
   });
+}
+
+function openProductDetail(productId, container) {
+  const product = (cachedProducts || (USE_MOCKS ? mockProducts : [])).find(p => String(p.id) === String(productId));
+  if (!product) return;
+  selectedProduct = product;
+  selectedProductImageIndex = 0;
+  currentView = 'detail';
+  incrementProductClicks(productId);
+  renderBuyerPage(container);
 }
 
 function renderProductSkeletons() {
@@ -609,9 +629,11 @@ async function showPaymentSelectionModal(product, container) {
     }
     const btn = document.getElementById('btnPayCard');
     btn.innerHTML = `${icons.refresh} <span>Aguarde...</span>`;
+    btn.disabled = true;
     try {
       const url = await createCheckoutPreference(product, null, getUser());
-      window.location.href = url; // Redirects to mercado pago
+      showToast('Redirecionando para o checkout seguro...', 'info');
+      window.location.assign(url);
     } catch (err) {
       if (err?.message === 'AUTH_REQUIRED') {
         window.location.hash = '#/auth';
@@ -619,6 +641,7 @@ async function showPaymentSelectionModal(product, container) {
       }
       showToast(getPaymentUnavailableMessage(err.message), 'error');
       btn.innerHTML = `<span>Tentar novamente</span>`;
+      btn.disabled = false;
     }
   });
 }
@@ -1215,6 +1238,9 @@ function renderProductDetail(container) {
   const slots = getSlotsInfo(p.slots?.used || 0, p.slots?.total || 5);
   const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
   const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
+  const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
+  selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
+  const currentImage = images[selectedProductImageIndex];
 
   container.innerHTML = `
     <div class="buyer-wrapper">
@@ -1226,15 +1252,29 @@ function renderProductDetail(container) {
       </header>
 
       <div class="detail-container" style="padding:0 16px 120px;">
-        <!-- Product Image -->
-        <div class="detail-image" style="border-radius:16px;overflow:hidden;height:220px;margin-bottom:20px;position:relative;">
-          ${getProductImage(p.images?.[0], 400, 220, p.category)}
+        <!-- Product Gallery -->
+        <div class="detail-image" id="detailImageViewer" style="border-radius:16px;overflow:hidden;height:240px;margin-bottom:10px;position:relative;cursor:${images.length ? 'zoom-in' : 'default'};">
+          ${getProductImage(currentImage, 480, 260, p.category)}
           <div class="cat-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
           ${isSoldOut
             ? '<div class="discount-badge soldout-badge">ESGOTADO</div>'
             : `<div class="discount-badge">-${p.discount}%</div>`
           }
+          ${images.length > 1 ? `
+            <button class="icon-btn detail-gallery-arrow" id="btnPrevPhoto" type="button" aria-label="Foto anterior" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">‹</button>
+            <button class="icon-btn detail-gallery-arrow" id="btnNextPhoto" type="button" aria-label="Proxima foto" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">›</button>
+            <div style="position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;">${selectedProductImageIndex + 1}/${images.length}</div>
+          ` : ''}
         </div>
+        ${images.length > 1 ? `
+          <div class="detail-thumbnails" style="display:flex;gap:8px;overflow-x:auto;padding:2px 0 18px;margin-bottom:2px;">
+            ${images.map((image, index) => `
+              <button type="button" class="detail-thumb ${index === selectedProductImageIndex ? 'active' : ''}" data-photo-index="${index}" aria-label="Ver foto ${index + 1}" style="width:64px;height:52px;flex:0 0 auto;border-radius:10px;overflow:hidden;border:2px solid ${index === selectedProductImageIndex ? '#00E5A0' : '#1E1E2A'};background:#111118;padding:0;">
+                ${getProductImage(image, 96, 72, p.category)}
+              </button>
+            `).join('')}
+          </div>
+        ` : ''}
 
         <!-- Title & Description -->
         <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;">${escapeHTML(p.title)}</h2>
@@ -1305,6 +1345,72 @@ function renderProductDetail(container) {
   container.querySelector('#btnBuyDetail')?.addEventListener('click', () => {
     if (!isSoldOut) showPaymentSelectionModal(p, container);
   });
+
+  const setPhoto = (nextIndex) => {
+    if (!images.length) return;
+    selectedProductImageIndex = (nextIndex + images.length) % images.length;
+    renderProductDetail(container);
+  };
+
+  container.querySelector('#btnPrevPhoto')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setPhoto(selectedProductImageIndex - 1);
+  });
+  container.querySelector('#btnNextPhoto')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setPhoto(selectedProductImageIndex + 1);
+  });
+  container.querySelectorAll('[data-photo-index]').forEach(btn => {
+    btn.addEventListener('click', () => setPhoto(Number(btn.dataset.photoIndex)));
+  });
+  container.querySelector('#detailImageViewer')?.addEventListener('click', () => {
+    if (!images.length) return;
+    showProductImageLightbox(container, p, images, selectedProductImageIndex);
+  });
+}
+
+function showProductImageLightbox(container, product, images, startIndex = 0) {
+  let index = startIndex;
+  const modalRoot = document.getElementById('modal-root');
+  const render = () => {
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop visible" id="product-image-lightbox" style="background:rgba(0,0,0,.88);">
+        <div style="width:min(94vw,720px);max-height:92vh;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;color:#fff;">
+            <strong>${escapeHTML(product.title)}</strong>
+            <button class="icon-btn" id="closeLightbox" type="button" style="color:#fff;">${icons.plus}</button>
+          </div>
+          <div style="position:relative;border-radius:16px;overflow:hidden;background:#050508;min-height:280px;max-height:78vh;">
+            ${getProductImage(images[index], 900, 720, product.category)}
+            ${images.length > 1 ? `
+              <button class="icon-btn" id="lightboxPrev" type="button" aria-label="Foto anterior" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">‹</button>
+              <button class="icon-btn" id="lightboxNext" type="button" aria-label="Proxima foto" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">›</button>
+              <div style="position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;padding:5px 12px;border-radius:999px;font-size:12px;">${index + 1}/${images.length}</div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    modalRoot.querySelector('#product-image-lightbox')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) modalRoot.innerHTML = '';
+    });
+    modalRoot.querySelector('#closeLightbox')?.addEventListener('click', () => {
+      modalRoot.innerHTML = '';
+    });
+    modalRoot.querySelector('#lightboxPrev')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      index = (index - 1 + images.length) % images.length;
+      selectedProductImageIndex = index;
+      render();
+    });
+    modalRoot.querySelector('#lightboxNext')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      index = (index + 1) % images.length;
+      selectedProductImageIndex = index;
+      render();
+    });
+  };
+  render();
 }
 
 // ─── HELPER: Shared bottom nav binding ──────────────────

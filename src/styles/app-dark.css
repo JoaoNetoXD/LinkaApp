@@ -403,19 +403,32 @@
 }
 
 /* --- Modal Dark --- */
+#modal-root {
+  --surface-raised: #16161e;
+  --surface-card: #151520;
+  --backdrop: rgba(0,0,0,0.72);
+  --text-primary: #f0f0f5;
+  --text-secondary: #a5a5b5;
+  --text-tertiary: #6e6e85;
+  --border-light: rgba(255,255,255,0.08);
+  --border: rgba(255,255,255,0.12);
+  --gray-300: #2a2a3a;
+  --gray-400: #55556a;
+}
+
 #modal-root .modal-content,
 .buyer-page .modal-content,
 .seller-page .modal-content,
 .admin-page .modal-content {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-light);
-  color: var(--text-primary);
+  background: #16161e;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #f0f0f5;
 }
 #modal-root .modal-backdrop,
 .buyer-page .modal-backdrop,
 .seller-page .modal-backdrop,
 .admin-page .modal-backdrop {
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.72);
 }
 #modal-root .modal-handle,
 .buyer-page .modal-handle,
@@ -426,24 +439,48 @@
 
 #modal-root .modal-content h3,
 #modal-root .modal-content label {
-  color: var(--text-primary);
+  color: #f0f0f5;
 }
 
 #modal-root .modal-content p,
 #modal-root .modal-content span {
-  color: var(--text-secondary);
+  color: #a5a5b5;
 }
 
 #modal-root .input-field,
 #modal-root textarea.input-field {
   background: rgba(6, 8, 14, 0.72) !important;
-  border-color: var(--border) !important;
-  color: var(--text-primary) !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  color: #f0f0f5 !important;
 }
 
 #modal-root .input-field::placeholder,
 #modal-root textarea.input-field::placeholder {
-  color: var(--text-tertiary) !important;
+  color: #6e6e85 !important;
+}
+
+#modal-root .btn-primary,
+#modal-root .btn-success {
+  background: #00E5A0;
+  color: #0A0A0F;
+  border: none;
+  font-weight: 700;
+}
+
+#modal-root .btn-secondary {
+  background: #1e1e2a;
+  color: #f0f0f5;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+#modal-root .btn-danger {
+  background: rgba(239,68,68,0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+#modal-root .btn-ghost {
+  color: #a5a5b5;
 }
 
 /* --- Empty State Dark --- */

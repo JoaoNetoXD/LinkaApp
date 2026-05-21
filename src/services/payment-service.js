@@ -62,7 +62,9 @@ export async function createCheckoutPreference(product, couponCode, buyer) {
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || 'Erro ao gerar checkout.');
     
-    return data.initPoint;
+    const checkoutUrl = data.checkoutUrl || data.initPoint;
+    if (!checkoutUrl) throw new Error('Mercado Pago nao retornou o link de checkout.');
+    return checkoutUrl;
   } catch (err) {
     throw new Error(err.message || 'Erro ao gerar checkout.');
   }
