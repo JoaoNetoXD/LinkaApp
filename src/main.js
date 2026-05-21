@@ -23,6 +23,73 @@ import './styles/mobile-redesign.css';
 
 const app = document.getElementById('app');
 
+const THEME_STORAGE_KEY = 'linka_theme';
+const themeToggleIcons = {
+  moon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+  sun: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+};
+
+function normalizeTheme(theme) {
+  return theme === 'dark' ? 'dark' : 'light';
+}
+
+function getInitialTheme() {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
+  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark';
+  return 'light';
+}
+
+export function getCurrentTheme() {
+  return normalizeTheme(document.documentElement.dataset.theme || getInitialTheme());
+}
+
+export function setAppTheme(theme, { persist = true } = {}) {
+  const normalizedTheme = normalizeTheme(theme);
+  document.documentElement.dataset.theme = normalizedTheme;
+  document.documentElement.style.colorScheme = normalizedTheme;
+  if (persist) localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+  updateThemeToggle();
+  return normalizedTheme;
+}
+
+export function toggleAppTheme() {
+  return setAppTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark');
+}
+
+function updateThemeToggle() {
+  const button = document.getElementById('themeToggleFab');
+  if (!button) return;
+
+  const currentTheme = getCurrentTheme();
+  const nextLabel = currentTheme === 'dark' ? 'Claro' : 'Black';
+  button.dataset.theme = currentTheme;
+  button.setAttribute('aria-label', `Alternar para tema ${nextLabel.toLowerCase()}`);
+  button.setAttribute('title', `Tema ${nextLabel}`);
+  button.innerHTML = `
+    <span class="theme-toggle-icon">${currentTheme === 'dark' ? themeToggleIcons.sun : themeToggleIcons.moon}</span>
+    <span class="theme-toggle-label">${nextLabel}</span>
+  `;
+}
+
+function mountThemeToggle() {
+  let button = document.getElementById('themeToggleFab');
+  if (!button) {
+    button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'themeToggleFab';
+    button.className = 'theme-toggle-fab';
+    button.addEventListener('click', () => {
+      const theme = toggleAppTheme();
+      showToast(theme === 'dark' ? 'Tema black ativado.' : 'Tema claro ativado.', 'success');
+    });
+    document.body.appendChild(button);
+  }
+  updateThemeToggle();
+}
+
+setAppTheme(getInitialTheme(), { persist: false });
+
 // SVG icons used across the app
 export const icons = {
   home: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
@@ -268,7 +335,8 @@ onAuthStateChange(async (event, session) => {
 window.addEventListener('hashchange', handleRoute);
 
 // Init
-handleRoute();
+mountThemeToggle();
+handleRoute().finally(mountThemeToggle);
 
 // Register service worker
 if ('serviceWorker' in navigator) {

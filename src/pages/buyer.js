@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
 import { products as mockProducts, categories, coupons, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
@@ -923,6 +923,28 @@ function renderProfileActions(role) {
   `;
 }
 
+function renderProfileThemePanel(currentTheme) {
+  const isDark = currentTheme === 'dark';
+  return `
+    <section class="profile-panel profile-theme-panel">
+      <div class="profile-panel-heading">
+        <div class="profile-panel-icon">${icons.settings}</div>
+        <div>
+          <h2>Aparencia</h2>
+          <p>Escolha o tema que fica melhor para ler e usar no celular.</p>
+        </div>
+      </div>
+      <button type="button" class="profile-theme-toggle" id="btnProfileThemeToggle" aria-label="Alternar tema do aplicativo">
+        <span class="profile-theme-state">
+          <strong>${isDark ? 'Tema black ativo' : 'Tema claro ativo'}</strong>
+          <small>${isDark ? 'Toque para voltar ao claro' : 'Toque para usar o black'}</small>
+        </span>
+        <span class="profile-theme-pill">${isDark ? 'Black' : 'Claro'}</span>
+      </button>
+    </section>
+  `;
+}
+
 function renderProfile(container) {
   const user = getUser();
   const isLoggedIn = !!globalSession;
@@ -932,6 +954,7 @@ function renderProfile(container) {
   const email = user.email || '';
   const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
   const whatsappStatus = user.whatsapp ? 'Configurado' : 'Nao informado';
+  const currentTheme = getCurrentTheme();
 
   container.innerHTML = `
     <div class="buyer-wrapper">
@@ -953,6 +976,8 @@ function renderProfile(container) {
             </div>
             <button type="button" class="btn-primary" id="btnGoLogin">Fazer login</button>
           </section>
+
+          ${renderProfileThemePanel(currentTheme)}
         ` : `
           <section class="profile-hero-panel">
             <div class="profile-avatar-large">${escapeHTML(initials)}</div>
@@ -1000,6 +1025,8 @@ function renderProfile(container) {
             </div>
             ${renderProfileActions(role)}
           </section>
+
+          ${renderProfileThemePanel(currentTheme)}
 
           <section class="profile-panel">
             <div class="profile-panel-heading">
@@ -1093,6 +1120,11 @@ function renderProfile(container) {
   document.getElementById('btnOpenBuyerHome')?.addEventListener('click', () => {
     currentView = 'home';
     renderBuyerPage(container);
+  });
+  document.getElementById('btnProfileThemeToggle')?.addEventListener('click', () => {
+    const theme = toggleAppTheme();
+    showToast(theme === 'dark' ? 'Tema black ativado.' : 'Tema claro ativado.', 'success');
+    renderProfile(container);
   });
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {

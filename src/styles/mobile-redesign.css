@@ -4,26 +4,36 @@
    ============================================================ */
 
 :root {
-  --mobile-bg: #edf4ff;
-  --mobile-bg-2: #f8fbff;
+  color-scheme: light;
+  --mobile-bg: #eaf2ff;
+  --mobile-bg-2: #f7fbff;
   --mobile-surface: #ffffff;
-  --mobile-surface-soft: #f3f7ff;
-  --mobile-line: #dfe9f7;
-  --mobile-line-strong: #c9d8ec;
-  --mobile-ink: #132033;
-  --mobile-muted: #6c7a90;
-  --mobile-faint: #9aa8ba;
+  --mobile-surface-soft: #eef5ff;
+  --mobile-line: #cbd8ea;
+  --mobile-line-strong: #9fb2cc;
+  --mobile-ink: #0b1220;
+  --mobile-muted: #35445c;
+  --mobile-faint: #64748b;
   --mobile-blue: #2f6df6;
   --mobile-blue-2: #1854d8;
   --mobile-cyan: #16b8d8;
   --mobile-teal: #13c99a;
   --mobile-yellow: #ffd84d;
   --mobile-coral: #ff4d67;
-  --mobile-shadow: 0 18px 45px rgba(35, 78, 135, 0.16);
-  --mobile-shadow-soft: 0 10px 28px rgba(35, 78, 135, 0.1);
+  --mobile-app-bg: linear-gradient(180deg, rgba(224, 237, 255, 0.98) 0%, rgba(247, 251, 255, 0.99) 34%, #f7fbff 100%);
+  --mobile-body-bg: linear-gradient(180deg, rgba(217, 232, 255, 0.94), rgba(247, 251, 255, 0.99) 36%, #f7fbff 100%);
+  --mobile-header-bg: rgba(247, 251, 255, 0.94);
+  --mobile-nav-bg: rgba(255, 255, 255, 0.96);
+  --mobile-card-bg: rgba(255, 255, 255, 0.97);
+  --mobile-input-bg: #ffffff;
+  --mobile-image-bg: #e7effa;
+  --mobile-shadow: 0 18px 45px rgba(35, 78, 135, 0.18);
+  --mobile-shadow-soft: 0 10px 28px rgba(35, 78, 135, 0.12);
+  --mobile-shadow-strong: 0 24px 60px rgba(35, 78, 135, 0.2);
 }
 
 body:has(.buyer-wrapper),
+body:has(.buyer-page),
 body:has(.seller-page),
 body:has(.admin-page),
 body:has(.auth-wrapper),
@@ -73,6 +83,7 @@ body:has(.payment-screen) {
 }
 
 .buyer-wrapper,
+.buyer-page,
 .seller-page,
 .admin-page {
   background:
@@ -1277,6 +1288,582 @@ body:has(.payment-screen) {
 
   .seller-stats-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   THEME SYSTEM + READABILITY PASS
+   High-contrast light mode and a real black mode.
+   ============================================================ */
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --mobile-bg: #070b14;
+  --mobile-bg-2: #0b1220;
+  --mobile-surface: #111827;
+  --mobile-surface-soft: #172033;
+  --mobile-line: #26344d;
+  --mobile-line-strong: #3a4b68;
+  --mobile-ink: #f8fafc;
+  --mobile-muted: #cbd5e1;
+  --mobile-faint: #94a3b8;
+  --mobile-blue: #60a5fa;
+  --mobile-blue-2: #2563eb;
+  --mobile-cyan: #22d3ee;
+  --mobile-teal: #2dd4bf;
+  --mobile-yellow: #facc15;
+  --mobile-coral: #fb7185;
+  --mobile-app-bg:
+    radial-gradient(circle at 18% -8%, rgba(37, 99, 235, 0.24), transparent 30%),
+    radial-gradient(circle at 96% 8%, rgba(20, 184, 166, 0.16), transparent 28%),
+    linear-gradient(180deg, #070b14 0%, #0a1020 42%, #080c15 100%);
+  --mobile-body-bg:
+    radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.2), transparent 34%),
+    linear-gradient(180deg, #050814 0%, #070b14 58%, #05070d 100%);
+  --mobile-header-bg: rgba(10, 16, 32, 0.86);
+  --mobile-nav-bg: rgba(13, 20, 34, 0.92);
+  --mobile-card-bg: rgba(17, 24, 39, 0.94);
+  --mobile-input-bg: rgba(9, 14, 26, 0.92);
+  --mobile-image-bg: #0f172a;
+  --mobile-shadow: 0 20px 48px rgba(0, 0, 0, 0.42);
+  --mobile-shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.32);
+  --mobile-shadow-strong: 0 28px 70px rgba(0, 0, 0, 0.52);
+}
+
+html[data-theme="dark"] .buyer-page,
+html[data-theme="dark"] .seller-page,
+html[data-theme="dark"] .admin-page {
+  --surface: var(--mobile-surface);
+  --surface-alt: var(--mobile-bg-2);
+  --surface-raised: var(--mobile-surface);
+  --surface-card: var(--mobile-surface);
+  --text-primary: var(--mobile-ink);
+  --text-secondary: var(--mobile-muted);
+  --text-tertiary: var(--mobile-faint);
+  --text-inverse: #050814;
+  --border-light: rgba(38, 52, 77, 0.72);
+  --border: var(--mobile-line);
+  --border-strong: var(--mobile-line-strong);
+  --primary-50: rgba(96, 165, 250, 0.14);
+  --primary-100: rgba(96, 165, 250, 0.2);
+  --primary-200: rgba(96, 165, 250, 0.28);
+  --primary-300: #93c5fd;
+  --primary-400: #60a5fa;
+  --primary-500: var(--mobile-blue);
+  --primary-600: #3b82f6;
+  --primary-700: #2563eb;
+  --success-50: rgba(45, 212, 191, 0.12);
+  --success-100: rgba(45, 212, 191, 0.18);
+  --success-600: #2dd4bf;
+  --success-700: #5eead4;
+  --warning-50: rgba(250, 204, 21, 0.12);
+  --warning-100: rgba(250, 204, 21, 0.18);
+  --warning-500: #facc15;
+  --danger-50: rgba(251, 113, 133, 0.12);
+  --danger-100: rgba(251, 113, 133, 0.18);
+  --danger-500: var(--mobile-coral);
+  --danger-600: #fb7185;
+  --gradient-brand: linear-gradient(135deg, #2563eb 0%, #22d3ee 100%);
+}
+
+body:has(.buyer-wrapper),
+body:has(.buyer-page),
+body:has(.seller-page),
+body:has(.admin-page),
+body:has(.auth-wrapper),
+body:has(.payment-screen) {
+  background: var(--mobile-body-bg) !important;
+  color: var(--mobile-ink) !important;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.buyer-wrapper,
+.buyer-page,
+.seller-page,
+.admin-page {
+  background: var(--mobile-app-bg) !important;
+}
+
+.theme-toggle-fab {
+  position: fixed;
+  right: max(14px, calc((100vw - 430px) / 2 + 14px));
+  bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 88px);
+  z-index: 260;
+  min-width: 78px;
+  height: 42px;
+  padding: 0 12px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 999px;
+  background: var(--mobile-nav-bg);
+  color: var(--mobile-ink);
+  box-shadow: var(--mobile-shadow-soft);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  font-family: var(--font-family);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.theme-toggle-fab:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--mobile-blue) 38%, transparent);
+  outline-offset: 3px;
+}
+
+.theme-toggle-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--mobile-surface-soft);
+  color: var(--mobile-blue);
+}
+
+body:not(:has(.buyer-wrapper)):not(:has(.buyer-page)):not(:has(.seller-page)):not(:has(.admin-page)):not(:has(.auth-wrapper)):not(:has(.payment-screen)) .theme-toggle-fab {
+  display: none;
+}
+
+body:has(.buyer-wrapper) .theme-toggle-fab,
+body:has(.buyer-page) .theme-toggle-fab {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .theme-toggle-fab {
+    right: max(20px, calc((100vw - 460px) / 2 + 18px));
+  }
+
+  body:has(.admin-page) .theme-toggle-fab {
+    right: max(20px, calc((100vw - min(1180px, calc(100vw - 56px))) / 2 + 20px));
+  }
+}
+
+.buyer-page,
+.seller-page,
+.admin-page,
+.auth-wrapper,
+.payment-screen {
+  color: var(--mobile-ink) !important;
+}
+
+.buyer-page h1,
+.buyer-page h2,
+.buyer-page h3,
+.buyer-page h4,
+.seller-page h1,
+.seller-page h2,
+.seller-page h3,
+.seller-page h4,
+.admin-page h1,
+.admin-page h2,
+.admin-page h3,
+.admin-page h4,
+.auth-wrapper h1,
+.auth-wrapper h2,
+.auth-wrapper h3,
+.payment-screen h1,
+.payment-screen h2,
+.payment-screen h3,
+.modal-content h1,
+.modal-content h2,
+.modal-content h3,
+.modal-content h4,
+.payment-modal-content h1,
+.payment-modal-content h2,
+.payment-modal-content h3 {
+  color: var(--mobile-ink) !important;
+  letter-spacing: 0;
+}
+
+.buyer-page p,
+.seller-page p,
+.admin-page p,
+.auth-wrapper p,
+.payment-screen p,
+.modal-content p,
+.payment-modal-content p,
+.buyer-page label,
+.seller-page label,
+.admin-page label,
+.auth-wrapper label {
+  color: var(--mobile-muted) !important;
+}
+
+.btn-secondary,
+.buyer-page .btn-secondary,
+.seller-page .btn-secondary,
+.admin-page .btn-secondary,
+.btn-details,
+.btn-payment-option,
+.period-filter,
+.admin-logout-btn,
+.buyer-mode-btn,
+.notification-btn,
+.icon-btn,
+.user-avatar,
+.avatar {
+  background: var(--mobile-surface) !important;
+  color: var(--mobile-ink) !important;
+  border-color: var(--mobile-line) !important;
+  box-shadow: var(--mobile-shadow-soft) !important;
+}
+
+.buyer-mode-btn svg,
+.notification-btn svg,
+.icon-btn svg,
+.btn-secondary svg,
+.btn-details svg {
+  color: var(--mobile-blue) !important;
+  stroke: currentColor !important;
+}
+
+.btn-danger,
+.buyer-page .btn-danger,
+.seller-page .btn-danger,
+.admin-page .btn-danger,
+.profile-logout-btn {
+  background: color-mix(in srgb, var(--mobile-coral) 13%, var(--mobile-surface)) !important;
+  color: var(--mobile-coral) !important;
+  border-color: color-mix(in srgb, var(--mobile-coral) 34%, var(--mobile-line)) !important;
+}
+
+.input-field,
+.profile-input,
+.auth-input,
+.search-bar,
+.pix-code-field,
+.buyer-page .input-field,
+.seller-page .input-field,
+.admin-page .input-field,
+.seller-page textarea.input-field,
+.seller-page select.input-field,
+.seller-page input.input-field,
+.admin-page textarea.input-field,
+.admin-page select.input-field,
+.admin-page input.input-field {
+  background: var(--mobile-input-bg) !important;
+  color: var(--mobile-ink) !important;
+  border-color: var(--mobile-line) !important;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--mobile-blue) 8%, transparent) !important;
+}
+
+.input-field::placeholder,
+.profile-input::placeholder,
+.auth-input::placeholder,
+.search-bar input::placeholder,
+.seller-page .input-field::placeholder,
+.admin-page .input-field::placeholder {
+  color: var(--mobile-faint) !important;
+  opacity: 1;
+}
+
+.glass-card,
+.stat-card,
+.profile-panel,
+.profile-hero-panel,
+.seller-setup-card,
+.seller-ad-card,
+.coupon-item,
+.payment-list-item,
+.payment-stat-card,
+.alert-card,
+.admin-section,
+.moderation-card,
+.category-row,
+.report-card,
+.settings-card,
+.empty-state,
+.market-empty-state,
+.product-card,
+.chart-container,
+.seller-edit-metrics div,
+.photo-upload-slot,
+.discount-preview,
+.ad-preview-container,
+.qr-code-wrapper,
+.payment-summary,
+.payment-instruction,
+.coupon-modal-details,
+.coupon-warning,
+.auth-mode-switch,
+.auth-form,
+.auth-role-btn {
+  background: var(--mobile-card-bg) !important;
+  border-color: var(--mobile-line) !important;
+  color: var(--mobile-ink) !important;
+  box-shadow: var(--mobile-shadow-soft) !important;
+}
+
+.buyer-header,
+.buyer-wrapper > .minimal-header,
+.seller-page .app-header,
+.admin-page .app-header {
+  background: var(--mobile-header-bg) !important;
+  border-color: var(--mobile-line) !important;
+  box-shadow: var(--mobile-shadow-soft) !important;
+}
+
+.buyer-header::after {
+  background: var(--mobile-line) !important;
+}
+
+.bottom-nav,
+.buyer-wrapper .bottom-nav,
+.seller-page .bottom-nav,
+.admin-page .bottom-nav {
+  background: var(--mobile-nav-bg) !important;
+  border-color: var(--mobile-line) !important;
+  box-shadow: var(--mobile-shadow-strong) !important;
+}
+
+.chip,
+.buyer-page .chip,
+.seller-page .chip,
+.admin-page .chip,
+.tab {
+  background: color-mix(in srgb, var(--mobile-surface) 88%, transparent) !important;
+  color: var(--mobile-muted) !important;
+  border-color: var(--mobile-line) !important;
+}
+
+.card-image-area,
+.detail-image,
+.seller-ad-thumb,
+.moderation-thumb {
+  background: var(--mobile-image-bg) !important;
+}
+
+.cat-badge,
+.market-empty-icon,
+.profile-role-pill,
+.profile-live-dot,
+.profile-avatar-large,
+.profile-panel-icon,
+.profile-action-icon,
+.stat-icon,
+.stat-icon-wrapper .stat-icon,
+.payment-stat-card::before,
+.seller-setup-steps span,
+.seller-setup-steps .done span {
+  background: color-mix(in srgb, var(--mobile-blue) 14%, var(--mobile-surface)) !important;
+  color: var(--mobile-blue) !important;
+}
+
+.profile-action-card,
+.auth-role-btn {
+  background: var(--mobile-surface) !important;
+}
+
+.profile-theme-toggle {
+  width: 100%;
+  min-height: 64px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 18px;
+  background: var(--mobile-surface);
+  color: var(--mobile-ink);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--mobile-blue) 7%, transparent);
+  font-family: var(--font-family);
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-theme-toggle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--mobile-blue) 38%, transparent);
+  outline-offset: 3px;
+}
+
+.profile-theme-state {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.profile-theme-state strong {
+  color: var(--mobile-ink) !important;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.profile-theme-state small {
+  color: var(--mobile-muted) !important;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-theme-pill {
+  flex: 0 0 auto;
+  min-width: 64px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--mobile-blue), var(--mobile-blue-2));
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.profile-action-card--accent,
+.profile-action-card--admin,
+.auth-role-btn.active,
+.seller-setup-card,
+.mp-connect-banner {
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--mobile-blue) 14%, var(--mobile-surface)) 0%,
+      color-mix(in srgb, var(--mobile-cyan) 10%, var(--mobile-surface)) 100%) !important;
+  border-color: color-mix(in srgb, var(--mobile-blue) 30%, var(--mobile-line)) !important;
+}
+
+.auth-role-btn strong,
+.auth-role-btn span,
+.profile-action-card strong,
+.profile-action-card span,
+.seller-ad-info .ad-title,
+.moderation-info h4,
+.seller-row-info h4,
+.alert-card-content h4,
+.category-info h4,
+.settings-card h4 {
+  color: var(--mobile-ink) !important;
+}
+
+.auth-role-btn.active strong,
+.profile-kicker,
+.seller-setup-kicker,
+.discount-preview .final-price,
+.final-price,
+.payment-list-amount,
+.revenue-value,
+.success-value,
+.price-discount {
+  color: var(--mobile-blue) !important;
+}
+
+.seller-ad-info .ad-category,
+.seller-ad-metrics,
+.moderation-meta,
+.seller-row-info p,
+.seller-row-stats,
+.alert-card-content p,
+.category-info p,
+.settings-card p,
+.payment-modal-body .btn-payment-option small {
+  color: var(--mobile-muted) !important;
+}
+
+.modal-content,
+.payment-modal-content,
+.payment-premium-card {
+  background: var(--mobile-card-bg) !important;
+  border-color: var(--mobile-line) !important;
+  color: var(--mobile-ink) !important;
+}
+
+.modal-handle {
+  background: var(--mobile-line-strong) !important;
+}
+
+.payment-screen,
+.auth-wrapper {
+  background: var(--mobile-app-bg) !important;
+}
+
+.detail-container [style*="background:#111118"],
+.detail-container [style*="background: #111118"] {
+  background: var(--mobile-card-bg) !important;
+  border: 1px solid var(--mobile-line) !important;
+  color: var(--mobile-ink) !important;
+}
+
+.detail-container [style*="color:#9CA3AF"],
+.detail-container [style*="color:#6B7280"],
+.detail-container [style*="color: #9CA3AF"],
+.detail-container [style*="color: #6B7280"] {
+  color: var(--mobile-muted) !important;
+}
+
+.detail-thumb {
+  background: var(--mobile-surface) !important;
+  border-color: var(--mobile-line) !important;
+}
+
+.detail-thumb.active {
+  border-color: var(--mobile-blue) !important;
+}
+
+.detail-gallery-arrow {
+  background: color-mix(in srgb, #000 42%, transparent) !important;
+  color: #fff !important;
+  border-color: color-mix(in srgb, #fff 18%, transparent) !important;
+}
+
+.badge-success {
+  background: color-mix(in srgb, var(--mobile-teal) 15%, var(--mobile-surface)) !important;
+  color: color-mix(in srgb, var(--mobile-teal) 78%, var(--mobile-ink)) !important;
+}
+
+.badge-warning {
+  background: color-mix(in srgb, var(--mobile-yellow) 18%, var(--mobile-surface)) !important;
+  color: color-mix(in srgb, #a16207 70%, var(--mobile-ink)) !important;
+}
+
+.badge-danger {
+  background: color-mix(in srgb, var(--mobile-coral) 15%, var(--mobile-surface)) !important;
+  color: var(--mobile-coral) !important;
+}
+
+.badge-primary,
+.badge-neutral {
+  background: color-mix(in srgb, var(--mobile-blue) 13%, var(--mobile-surface)) !important;
+  color: var(--mobile-blue) !important;
+}
+
+html[data-theme="dark"] .inst-banner {
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.95) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(20, 184, 166, 0.82) 100%) !important;
+  border: 1px solid rgba(96, 165, 250, 0.24) !important;
+}
+
+html[data-theme="dark"] .notification-btn .badge {
+  border-color: var(--mobile-surface) !important;
+}
+
+html[data-theme="dark"] .mp-connect-warning {
+  background: rgba(250, 204, 21, 0.12) !important;
+  color: #fde68a !important;
+  border-color: rgba(250, 204, 21, 0.28) !important;
+}
+
+html[data-theme="dark"] .btn-mp {
+  color: #ffffff !important;
+}
+
+@media (max-width: 430px) {
+  .theme-toggle-label {
+    display: none;
+  }
+
+  .theme-toggle-fab {
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+    right: 14px;
   }
 }
 
