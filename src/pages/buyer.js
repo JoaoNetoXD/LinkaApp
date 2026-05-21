@@ -9,15 +9,68 @@ import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
+const guestUser = {
+  id: null,
+  name: 'Visitante',
+  fullName: 'Visitante',
+  email: '',
+  role: 'buyer',
+  avatar: 'LK',
+  whatsapp: '',
+  verified: false,
+};
+
+function getInitials(name, fallback = 'LK') {
+  const initials = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || fallback;
+}
+
+function isAuthenticated() {
+  return Boolean(globalSession?.user?.id);
+}
 
 // Helper: get current user from real auth or mock
 function getUser() {
-  if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'U' };
-  if (globalSession?.user) return { ...currentUser, id: globalSession.user.id, email: globalSession.user.email, name: globalSession.user.user_metadata?.full_name || currentUser.name, role: globalSession.user.user_metadata?.role || 'buyer' };
-  return currentUser;
+  const baseUser = USE_MOCKS ? currentUser : guestUser;
+
+  if (globalProfile) {
+    const name = globalProfile.name || baseUser.name || 'Usuario';
+    return {
+      ...baseUser,
+      ...globalProfile,
+      name,
+      fullName: name,
+      avatar: globalProfile.avatar || getInitials(name),
+    };
+  }
+
+  if (globalSession?.user) {
+    const metadata = globalSession.user.user_metadata || {};
+    const name = metadata.full_name || metadata.name || globalSession.user.email?.split('@')[0] || baseUser.name || 'Usuario';
+    return {
+      ...baseUser,
+      id: globalSession.user.id,
+      email: globalSession.user.email || '',
+      name,
+      fullName: name,
+      role: metadata.role || baseUser.role || 'buyer',
+      whatsapp: metadata.whatsapp || baseUser.whatsapp || '',
+      avatar: getInitials(name, 'U'),
+    };
+  }
+
+  return baseUser;
 }
 
 function getAccountRole() {
+  if (!isAuthenticated()) return 'buyer';
   return globalProfile?.role || globalSession?.user?.user_metadata?.role || 'buyer';
 }
 
@@ -99,7 +152,9 @@ async function syncCheckoutReturnIfNeeded() {
 }
 
 async function syncInstitutionForUser() {
-  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  const institutionId = isAuthenticated()
+    ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
+    : null;
   if (institutionId) {
     const realInstitution = await getInstitution(institutionId);
     if (realInstitution) {
@@ -107,7 +162,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
 }
 
 async function saveCurrentProfileFields({ name, whatsapp }) {
@@ -262,7 +317,7 @@ function renderEmptyProductsState() {
         : 'Se voce quer vender, ative o modo vendedor e cadastre o primeiro produto da instituicao.'}</p>
       <div class="market-empty-actions">
         <button class="btn-primary" id="btnEmptySellerFlow">${isSeller ? 'Abrir painel de vendas' : 'Quero vender no Linka'}</button>
-        ${!globalSession ? `<button class="btn-details" id="btnEmptyLogin">Entrar para comprar</button>` : ''}
+        ${!isAuthenticated() ? `<button class="btn-details" id="btnEmptyLogin">Entrar para comprar</button>` : ''}
       </div>
     </div>
   `;
@@ -287,7 +342,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   }
 
   const filteredProducts = products;
-  const showSellerAccess = Boolean(globalSession?.user?.id);
+  const user = getUser();
+  const showSellerAccess = isAuthenticated();
+  const greetingName = isAuthenticated()
+    ? (user.name || user.fullName || 'usuario').split(' ')[0]
+    : 'visitante';
+  const avatarLabel = isAuthenticated() ? (user.avatar || 'U') : 'LK';
 
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
@@ -295,7 +355,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       <header class="buyer-header">
         <div class="buyer-header-top">
           <div class="buyer-greeting">
-            <h1>Olá, ${escapeHTML((getUser().name || 'Visitante').split(' ')[0])}</h1>
+            <h1>Olá, ${escapeHTML(greetingName)}</h1>
             <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
           </div>
           <div class="buyer-actions">
@@ -314,7 +374,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               ${icons.bell}
               <span class="badge" id="notifBadge">0</span>
             </button>
-            <div class="user-avatar">${escapeHTML(getUser().avatar || 'U')}</div>
+            <div class="user-avatar">${escapeHTML(avatarLabel)}</div>
           </div>
         </div>
         <div class="search-bar">
@@ -445,6 +505,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Notification button
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
+    if (!isAuthenticated()) {
+      showToast('Entre para ver suas notificacoes.', 'info');
+      window.location.hash = '#/auth';
+      return;
+    }
     currentView = 'notifications';
     renderBuyerPage(container);
   });
@@ -459,11 +524,16 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
 
   // Load notification badge count
-  const userId = globalSession?.user?.id || getUser().id;
-  getUnreadCount(userId).then(count => {
+  const userId = globalSession?.user?.id;
+  if (!userId) {
     const badge = container.querySelector('#notifBadge');
-    if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
-  }).catch(() => {});
+    if (badge) badge.style.display = 'none';
+  } else {
+    getUnreadCount(userId).then(count => {
+      const badge = container.querySelector('#notifBadge');
+      if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+    }).catch(() => {});
+  }
 
   // Category clicks
   container.querySelectorAll('.chip').forEach(chip => {
@@ -554,6 +624,7 @@ function getPaymentUnavailableMessage(message = '') {
 }
 
 function showPaymentUnavailableModal(product, container, message) {
+  container.querySelector('#paymentSelectionModal')?.remove();
   const modalHTML = `
     <div class="payment-modal-overlay" id="paymentSelectionModal">
       <div class="payment-modal-content">
@@ -583,13 +654,68 @@ function showPaymentUnavailableModal(product, container, message) {
   });
 }
 
+function showLoginRequiredModal(product, container) {
+  container.querySelector('#paymentSelectionModal')?.remove();
+  const modalHTML = `
+    <div class="payment-modal-overlay" id="paymentSelectionModal">
+      <div class="payment-modal-content login-required-modal">
+        <div class="payment-modal-header">
+          <h3>Entre para comprar</h3>
+          <button class="icon-btn close-modal-btn">${icons.plus}</button>
+        </div>
+        <div class="payment-modal-body">
+          <p class="payment-modal-desc">Para gerar Pix, pagar com cartao e receber seu cupom, acesse ou crie sua conta Linka.</p>
+          <div class="login-required-product">
+            <strong>${escapeHTML(product.title)}</strong>
+            <span>${formatCurrency(product.discountPrice)}</span>
+          </div>
+          <button class="btn-payment-option primary-option" id="btnLoginToBuy">
+            ${icons.user}
+            <span>Entrar e continuar</span>
+            <small>Leva menos de um minuto</small>
+          </button>
+          <button class="btn-payment-option" id="btnKeepViewingProduct">
+            ${icons.eye}
+            <span>Ver detalhes do produto</span>
+            <small>Fotos, descricao e vendedor</small>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', modalHTML);
+  const modal = document.getElementById('paymentSelectionModal');
+  setTimeout(() => modal.classList.add('visible'), 10);
+
+  const close = () => {
+    modal.classList.remove('visible');
+    setTimeout(() => modal.remove(), 300);
+  };
+
+  modal.querySelector('.close-modal-btn').addEventListener('click', close);
+  modal.querySelector('#btnLoginToBuy').addEventListener('click', () => {
+    close();
+    window.location.hash = '#/auth';
+  });
+  modal.querySelector('#btnKeepViewingProduct').addEventListener('click', () => {
+    close();
+    openProductDetail(product.id, container);
+  });
+}
+
 async function showPaymentSelectionModal(product, container) {
+  if (!isAuthenticated()) {
+    showLoginRequiredModal(product, container);
+    return;
+  }
+
   const readiness = await checkProductPaymentReady(product.id);
   if (!readiness.ready) {
     showPaymentUnavailableModal(product, container, readiness.message);
     return;
   }
 
+  container.querySelector('#paymentSelectionModal')?.remove();
   const modalHTML = `
     <div class="payment-modal-overlay" id="paymentSelectionModal">
       <div class="payment-modal-content">
@@ -663,12 +789,15 @@ async function showPaymentSelectionModal(product, container) {
 
 async function renderCoupons(container) {
   // Load coupons from Supabase (or use local mock only in DEV)
-  let userCoupons;
+  let userCoupons = [];
+  const isLoggedIn = isAuthenticated();
   try {
-    userCoupons = await getBuyerCoupons(globalSession?.user?.id || getUser().id);
-    if (!userCoupons || userCoupons.length === 0) userCoupons = USE_MOCKS ? coupons : [];
+    if (isLoggedIn) {
+      userCoupons = await getBuyerCoupons(globalSession.user.id);
+    }
+    if (!userCoupons || userCoupons.length === 0) userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
   } catch {
-    userCoupons = USE_MOCKS ? coupons : [];
+    userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
   }
 
   container.innerHTML = `
@@ -679,9 +808,10 @@ async function renderCoupons(container) {
       
       <div class="coupons-list">
         ${userCoupons.length === 0 ? `
-          <div style="text-align:center;padding:60px 20px;color:#6B7280;">
-            ${icons.ticket}<p style="margin-top:12px;">Você ainda não tem cupons.</p>
-            <p style="font-size:12px;">Compre um produto para gerar um cupom.</p>
+          <div class="empty-state coupons-empty-state" style="text-align:center;padding:60px 20px;">
+            ${icons.ticket}<p style="margin-top:12px;">${isLoggedIn ? 'Voce ainda nao tem cupons.' : 'Entre para ver seus cupons.'}</p>
+            <p style="font-size:12px;">${isLoggedIn ? 'Compre um produto para gerar um cupom.' : 'Seus cupons reais ficam vinculados a sua conta.'}</p>
+            ${!isLoggedIn ? `<button class="btn-primary" id="btnCouponsLogin" style="margin-top:16px;">Entrar agora</button>` : ''}
           </div>
         ` : userCoupons.map(c => `
           <div class="coupon-card ${c.status}">
@@ -736,6 +866,10 @@ async function renderCoupons(container) {
   // Bind Bottom Nav (reuse same handler)
   bindBuyerBottomNav(container);
 
+  container.querySelector('#btnCouponsLogin')?.addEventListener('click', () => {
+    window.location.hash = '#/auth';
+  });
+
   // Copy coupon code to clipboard
   container.querySelectorAll('.copy-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -751,7 +885,7 @@ async function renderCoupons(container) {
 
 function renderProfileLegacy(container) {
   const user = getUser();
-  const isLoggedIn = !!globalSession;
+  const isLoggedIn = isAuthenticated();
   const role = getAccountRole();
   const isSeller = ['seller', 'admin'].includes(role);
 
@@ -961,7 +1095,7 @@ function renderProfileThemePanel(currentTheme) {
 
 function renderProfile(container) {
   const user = getUser();
-  const isLoggedIn = !!globalSession;
+  const isLoggedIn = isAuthenticated();
   const role = getAccountRole();
   const roleMeta = getProfileRoleMeta(role);
   const displayName = user.fullName || user.name || 'Usuario';
@@ -1495,7 +1629,43 @@ async function handlePaymentApproved(pixData, product, container) {
 // ─── NOTIFICATIONS PAGE ─────────────────────────────────
 
 async function renderNotifications(container) {
-  const userId = globalSession?.user?.id || getUser().id;
+  const userId = globalSession?.user?.id;
+  if (!userId) {
+    container.innerHTML = `
+      <div class="buyer-wrapper">
+        <header class="buyer-header minimal-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="icon-btn" id="btnBackFromNotif" style="color:inherit;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            </button>
+            <h1>Notificacoes</h1>
+          </div>
+        </header>
+        <div style="padding:8px 16px 100px;">
+          <div class="empty-state" style="text-align:center;padding:60px 20px;">
+            ${icons.bell}<p style="margin-top:12px;">Entre para ver suas notificacoes.</p>
+            <p style="font-size:12px;">Alertas de compra, cupons e vendas ficam salvos na sua conta.</p>
+            <button class="btn-primary" id="btnNotifLogin" style="margin-top:16px;">Entrar agora</button>
+          </div>
+        </div>
+      </div>
+      <nav class="bottom-nav">
+        <div class="bottom-nav-item" data-nav="home">${icons.home}<span>Inicio</span><div class="nav-indicator"></div></div>
+        <div class="bottom-nav-item" data-nav="cats">${icons.grid}<span>Categorias</span><div class="nav-indicator"></div></div>
+        <div class="bottom-nav-item" data-nav="coupons">${icons.ticket}<span>Cupons</span><div class="nav-indicator"></div></div>
+        <div class="bottom-nav-item" data-nav="profile">${icons.user}<span>Perfil</span><div class="nav-indicator"></div></div>
+      </nav>
+    `;
+    container.querySelector('#btnBackFromNotif')?.addEventListener('click', () => {
+      currentView = 'home'; renderBuyerPage(container);
+    });
+    container.querySelector('#btnNotifLogin')?.addEventListener('click', () => {
+      window.location.hash = '#/auth';
+    });
+    bindBuyerBottomNav(container);
+    return;
+  }
+
   const notifs = await getNotifications(userId);
   const typeIcons = { success: icons.checkCircle, warning: icons.alertTriangle, error: icons.x, info: icons.bell };
   const typeColors = { success: '#00E5A0', warning: '#F59E0B', error: '#E24B4A', info: '#6B7280' };
@@ -1535,8 +1705,7 @@ async function renderNotifications(container) {
   });
 
   container.querySelector('#btnMarkAllRead')?.addEventListener('click', async () => {
-    const uid = globalSession?.user?.id || getUser().id;
-    await markAllAsRead(uid);
+    await markAllAsRead(userId);
     showToast('Todas as notificações marcadas como lidas.', 'success');
     renderNotifications(container);
   });

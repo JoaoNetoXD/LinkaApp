@@ -1227,6 +1227,48 @@ body:has(.payment-screen) {
   font-size: 12px !important;
 }
 
+.payment-modal-body .btn-payment-option.primary-option {
+  background: linear-gradient(135deg, var(--mobile-blue), var(--mobile-blue-2)) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 14px 30px rgba(47, 109, 246, 0.28) !important;
+}
+
+.payment-modal-body .btn-payment-option.primary-option small {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.login-required-product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  border: 1px solid var(--mobile-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--mobile-blue) 7%, var(--mobile-surface));
+  color: var(--mobile-ink);
+}
+
+.login-required-product strong,
+.login-required-product span {
+  min-width: 0;
+  color: inherit;
+}
+
+.login-required-product strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-required-product span {
+  flex-shrink: 0;
+  font-weight: 900;
+  color: var(--mobile-blue);
+}
+
 /* Auth */
 .auth-wrapper {
   background: linear-gradient(180deg, #edf4ff, #f8fbff) !important;

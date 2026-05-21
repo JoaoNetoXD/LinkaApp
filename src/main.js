@@ -251,6 +251,9 @@ async function handleRoute() {
 
   const session = await getCurrentSession();
   globalSession = session;
+  if (!session?.user?.id) {
+    globalProfile = null;
+  }
 
   // Check auth for protected routes
   const isProtectedRoute = path.startsWith('/seller') || path.startsWith('/admin') || path === 'seller' || path === 'admin';

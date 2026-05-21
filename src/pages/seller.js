@@ -7,23 +7,55 @@ import { uploadMultipleImages, compressImage, createPreviewURL } from '../servic
 import { getInstitution } from '../services/institution-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
+const guestUser = {
+  id: null,
+  name: 'Visitante',
+  fullName: 'Visitante',
+  email: '',
+  whatsapp: '',
+  avatar: 'LK',
+};
+
+function getInitials(name, fallback = 'LK') {
+  const initials = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || fallback;
+}
 
 // Helper to get the current user (real auth or mock)
 function getUser() {
-  if (globalProfile) return { ...currentUser, ...globalProfile, fullName: globalProfile.name, avatar: globalProfile.name?.split(' ').map(n=>n[0]).join('').slice(0,2) || 'U' };
-  if (globalSession?.user) {
-    const name = globalSession.user.user_metadata?.full_name || globalSession.user.email?.split('@')[0] || 'Usuário';
+  const baseUser = USE_MOCKS ? currentUser : guestUser;
+
+  if (globalProfile) {
+    const name = globalProfile.name || baseUser.name || 'Usuario';
     return {
-      ...currentUser,
-      id: globalSession.user.id,
-      email: globalSession.user.email,
+      ...baseUser,
+      ...globalProfile,
       name,
       fullName: name,
-      whatsapp: globalSession.user.user_metadata?.whatsapp || currentUser.whatsapp,
-      avatar: name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U',
+      avatar: globalProfile.avatar || getInitials(name),
     };
   }
-  return currentUser;
+
+  if (globalSession?.user) {
+    const name = globalSession.user.user_metadata?.full_name || globalSession.user.email?.split('@')[0] || 'Usuario';
+    return {
+      ...baseUser,
+      id: globalSession.user.id,
+      email: globalSession.user.email || '',
+      name,
+      fullName: name,
+      whatsapp: globalSession.user.user_metadata?.whatsapp || baseUser.whatsapp || '',
+      avatar: getInitials(name, 'U'),
+    };
+  }
+  return baseUser;
 }
 
 let sellerView = 'dashboard'; // dashboard | create | edit | ads | coupons | payments
@@ -90,7 +122,9 @@ function renderMercadoPagoRedirectState(url, redirectUri) {
 }
 
 async function syncInstitutionForUser() {
-  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  const institutionId = globalSession?.user?.id
+    ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
+    : null;
   if (institutionId) {
     const realInstitution = await getInstitution(institutionId);
     if (realInstitution) {
@@ -98,7 +132,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
 }
 
 export function renderSeller(container, subpage) {

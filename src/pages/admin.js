@@ -37,7 +37,9 @@ function resetModerationBusy(card, activeButton, originalHtml) {
 }
 
 async function syncInstitutionForUser() {
-  const institutionId = globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null;
+  const institutionId = globalSession?.user?.id
+    ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
+    : null;
   if (institutionId) {
     const realInstitution = await getInstitution(institutionId);
     if (realInstitution) {
@@ -45,14 +47,14 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  if ((globalProfile?.role || globalSession?.user?.user_metadata?.role) === 'admin') {
+  if (globalSession?.user?.id && (globalProfile?.role || globalSession?.user?.user_metadata?.role) === 'admin') {
     const institutions = await getAllInstitutions();
     if (institutions.length === 1) {
       activeInstitution = institutions[0];
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Instituição', fullName: 'Instituição', domain: '', primaryColor: '#2563eb' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
 }
 
 export function renderAdmin(container, subpage) {
