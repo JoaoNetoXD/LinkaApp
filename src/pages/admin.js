@@ -12,6 +12,8 @@ let loadedStats = null;
 let loadedAllProducts = [];
 let loadedCategoryStats = {};
 let activeInstitution = institution;
+let selectedCategoryId = null;
+let categoryStatusFilter = 'all';
 
 function removePendingAd(adId) {
   if (!Array.isArray(loadedPendingAds)) return;
@@ -324,45 +326,204 @@ function renderModerationCard(ad) {
   `;
 }
 
-function renderCategories() {
-  const rows = categories.filter(c => c.id !== 'all').map(category => {
-    const stats = loadedCategoryStats?.[category.id] || {};
-    const active = Number(stats.active || 0);
-    const queue = Number(stats.queue || stats.pending || 0);
-    const total = Math.max(active + queue, 1);
-    const pct = Math.min(Math.round((active / total) * 100), 100);
-    return { ...category, active, queue, total, pct };
+function getAdminCategoryRows() {
+  const products = Array.isArray(loadedAllProducts) ? loadedAllProducts.filter(Boolean) : [];
+  return categories.filter(c => c.id !== 'all').map(category => {
+    const items = products.filter(product => product.category === category.id);
+    const fallbackStats = loadedCategoryStats?.[category.id] || {};
+    const active = items.length
+      ? items.filter(product => product.status === 'active').length
+      : Number(fallbackStats.active || 0);
+    const queue = items.length
+      ? items.filter(product => product.status === 'pending' || product.status === 'queue').length
+      : Number(fallbackStats.queue || fallbackStats.pending || 0);
+    const rejected = items.filter(product => product.status === 'rejected').length;
+    const expired = items.filter(product => product.status === 'expired').length;
+    const clicks = items.reduce((sum, product) => sum + Number(product.clicks || 0), 0);
+    const slotsUsed = items.reduce((sum, product) => sum + Number(product.slots?.used || 0), 0);
+    const slotsTotal = items.reduce((sum, product) => sum + Number(product.slots?.total || 0), 0);
+    const total = items.length || active + queue;
+    const pct = total ? Math.min(Math.round((active / total) * 100), 100) : 0;
+    return {
+      ...category,
+      items,
+      active,
+      queue,
+      rejected,
+      expired,
+      clicks,
+      slotsUsed,
+      slotsTotal,
+      total,
+      pct,
+    };
   });
+}
+
+function getProductStatusMeta(status) {
+  const map = {
+    active: { label: 'Ativo', badge: 'badge-success' },
+    pending: { label: 'Em analise', badge: 'badge-warning' },
+    queue: { label: 'Na fila', badge: 'badge-warning' },
+    rejected: { label: 'Ajuste/recusa', badge: 'badge-danger' },
+    expired: { label: 'Expirado', badge: 'badge-neutral' },
+  };
+  return map[status] || { label: 'Sem status', badge: 'badge-neutral' };
+}
+
+function getCategoryProducts(categoryId) {
+  const products = Array.isArray(loadedAllProducts) ? loadedAllProducts.filter(Boolean) : [];
+  return products.filter(product => product.category === categoryId);
+}
+
+function filterCategoryProducts(products) {
+  if (categoryStatusFilter === 'active') return products.filter(product => product.status === 'active');
+  if (categoryStatusFilter === 'pending') return products.filter(product => product.status === 'pending' || product.status === 'queue');
+  if (categoryStatusFilter === 'rejected') return products.filter(product => product.status === 'rejected');
+  if (categoryStatusFilter === 'expired') return products.filter(product => product.status === 'expired');
+  return products;
+}
+
+function formatAdminDate(value) {
+  if (!value) return 'Sem data';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sem data';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function renderCategoryProductRow(product) {
+  const category = categories.find(c => c.id === product.category);
+  const status = getProductStatusMeta(product.status);
+  const image = Array.isArray(product.images) ? product.images[0] : product.images;
+  const isModeratable = product.status === 'pending' || product.status === 'queue';
+  return `
+    <article class="category-product-row" data-category-product-row="${escapeHTML(product.id)}">
+      <button class="category-product-thumb" type="button" data-category-product-detail="${escapeHTML(product.id)}" aria-label="Abrir detalhes de ${escapeHTML(product.title)}">
+        ${getProductImage(image, 96, 96, product.category)}
+      </button>
+      <div class="category-product-main">
+        <div class="category-product-titleline">
+          <button class="category-product-title" type="button" data-category-product-detail="${escapeHTML(product.id)}">${escapeHTML(product.title)}</button>
+          <span class="badge ${status.badge}">${status.label}</span>
+        </div>
+        <div class="category-product-meta">
+          <span>${icons.user} ${escapeHTML(product.seller?.name || 'Vendedor sem perfil')}</span>
+          <span>${icons.tag} ${escapeHTML(category?.name || product.category || 'Categoria')}</span>
+          <span>${icons.clock} ${formatAdminDate(product.createdAt)}</span>
+        </div>
+        ${product.rejectionReason ? `<p class="category-product-reason">${escapeHTML(product.rejectionReason)}</p>` : ''}
+        <div class="category-product-kpis">
+          <span>${formatCurrency(product.discountPrice)}</span>
+          <span>${Number(product.clicks || 0)} cliques</span>
+          <span>${Number(product.slots?.used || 0)}/${Number(product.slots?.total || 5)} vagas</span>
+        </div>
+      </div>
+      <div class="category-product-actions">
+        <button class="btn btn-secondary btn-sm" type="button" data-category-product-detail="${escapeHTML(product.id)}">${icons.eye} Detalhes</button>
+        ${isModeratable ? `
+          <button class="btn btn-success btn-sm" type="button" data-category-product-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-category-product-adjust="${escapeHTML(product.id)}">Ajuste</button>
+        ` : ''}
+      </div>
+    </article>
+  `;
+}
+
+function renderCategories() {
+  const rows = getAdminCategoryRows();
+  if (!selectedCategoryId || !rows.some(row => row.id === selectedCategoryId)) {
+    selectedCategoryId = rows.find(row => row.queue > 0)?.id || rows.find(row => row.total > 0)?.id || rows[0]?.id || null;
+  }
+  const selectedCategory = rows.find(row => row.id === selectedCategoryId) || rows[0];
+  const selectedProducts = selectedCategory ? getCategoryProducts(selectedCategory.id) : [];
+  const filteredProducts = filterCategoryProducts(selectedProducts);
+  const totals = rows.reduce((acc, row) => ({
+    products: acc.products + row.total,
+    active: acc.active + row.active,
+    queue: acc.queue + row.queue,
+    rejected: acc.rejected + row.rejected,
+  }), { products: 0, active: 0, queue: 0, rejected: 0 });
+  const filters = [
+    { id: 'all', label: 'Todos', count: selectedProducts.length },
+    { id: 'pending', label: 'Em analise', count: selectedProducts.filter(product => product.status === 'pending' || product.status === 'queue').length },
+    { id: 'active', label: 'Ativos', count: selectedProducts.filter(product => product.status === 'active').length },
+    { id: 'rejected', label: 'Ajustes', count: selectedProducts.filter(product => product.status === 'rejected').length },
+    { id: 'expired', label: 'Expirados', count: selectedProducts.filter(product => product.status === 'expired').length },
+  ];
+
   return `
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">Categorias reais</h3>
+        <div>
+          <h3 class="admin-section-title">Gestao de categorias</h3>
+          <p class="admin-section-subtitle">Dados reais dos anuncios. Clique em uma categoria para operar a fila, os ativos e os ajustes.</p>
+        </div>
+        <span class="admin-section-count">${totals.products} produtos</span>
+      </div>
+      <div class="category-summary-grid">
+        <div class="category-metric-card"><span>Total</span><strong>${totals.products}</strong><small>Anuncios cadastrados</small></div>
+        <div class="category-metric-card success"><span>Ativos</span><strong>${totals.active}</strong><small>Visiveis para compradores</small></div>
+        <div class="category-metric-card warning"><span>Fila</span><strong>${totals.queue}</strong><small>Aguardando moderacao</small></div>
+        <div class="category-metric-card danger"><span>Ajustes</span><strong>${totals.rejected}</strong><small>Com retorno ao vendedor</small></div>
       </div>
       <div class="category-heat-grid">
         ${rows.map(cat => {
           const pct = cat.pct;
-          const barClass = pct >= 100 ? 'danger' : pct >= 70 ? 'warning' : 'success';
+          const barClass = pct >= 80 ? 'success' : cat.queue > 0 ? 'warning' : 'danger';
           const statusBadge = cat.active > 0 ? 'badge-success' : cat.queue > 0 ? 'badge-warning' : 'badge-neutral';
           const statusLabel = cat.active > 0 ? 'Com ofertas' : cat.queue > 0 ? 'Em analise' : 'Sem ofertas';
           return `
-            <div class="category-heat-card">
+            <article class="category-heat-card ${selectedCategory?.id === cat.id ? 'is-selected' : ''}" role="button" tabindex="0" data-category-select="${escapeHTML(cat.id)}" aria-pressed="${selectedCategory?.id === cat.id ? 'true' : 'false'}">
               <div class="category-heat-header">
-                <span class="category-heat-name">${cat.icon || ''} ${escapeHTML(cat.name)}</span>
+                <span class="category-heat-icon">${icons[cat.id] || icons.package}</span>
+                <span class="category-heat-name">${escapeHTML(cat.name)}</span>
                 <span class="badge ${statusBadge}">${statusLabel}</span>
               </div>
-              <div class="category-heat-slots">${cat.active} ativos · ${cat.queue} em analise</div>
+              <div class="category-heat-slots">${cat.active} ativos - ${cat.queue} em analise - ${cat.rejected} ajustes</div>
               <div class="progress-bar">
                 <div class="progress-fill ${barClass}" style="width:${pct}%;"></div>
               </div>
               <div class="category-heat-footer">
-                <span>${pct}% dos anuncios da categoria estao ativos</span>
-                <span>Dados do Supabase</span>
+                <span>${pct}% ativos</span>
+                <span>${cat.clicks} cliques</span>
               </div>
-            </div>
+              <div class="category-heat-actions">
+                <button class="btn btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver produtos</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}" ${cat.queue ? '' : 'disabled'}>Moderar</button>
+              </div>
+            </article>
           `;
         }).join('')}
       </div>
     </div>
+
+    <section class="admin-section category-management-panel" id="category-management-panel">
+      <div class="category-management-header">
+        <div class="category-management-title">
+          <span class="category-management-icon">${icons[selectedCategory?.id] || icons.package}</span>
+          <div>
+            <h3>${escapeHTML(selectedCategory?.name || 'Categoria')}</h3>
+            <p>${selectedCategory?.total || 0} anuncios - ${selectedCategory?.active || 0} ativos - ${selectedCategory?.queue || 0} em analise</p>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Abrir moderacao</button>
+      </div>
+
+      <div class="category-filter-row" role="tablist" aria-label="Filtrar produtos da categoria">
+        ${filters.map(filter => `
+          <button class="category-filter-btn ${categoryStatusFilter === filter.id ? 'active' : ''}" type="button" data-category-filter="${filter.id}" role="tab" aria-selected="${categoryStatusFilter === filter.id ? 'true' : 'false'}">
+            ${escapeHTML(filter.label)}
+            <span>${filter.count}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="category-products-list">
+        ${filteredProducts.length
+          ? filteredProducts.map(product => renderCategoryProductRow(product)).join('')
+          : `<div class="empty-state compact">${icons.package}<h3>Nenhum produto neste filtro</h3><p>Quando houver anuncios reais nessa categoria, eles aparecem aqui para analise e acompanhamento.</p></div>`}
+      </div>
+    </section>
   `;
 }
 
@@ -442,6 +603,114 @@ function renderSettings() {
   `;
 }
 
+function scrollCategoryManagementIntoView(container) {
+  requestAnimationFrame(() => {
+    container.querySelector('#category-management-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function showAdminProductDetails(productId, container) {
+  const product = (loadedAllProducts || []).find(item => String(item.id) === String(productId));
+  if (!product) {
+    showToast('Produto nao encontrado nesta sessao.', 'error');
+    return;
+  }
+
+  const modalRoot = document.getElementById('modal-root');
+  const category = categories.find(c => c.id === product.category);
+  const status = getProductStatusMeta(product.status);
+  const images = Array.isArray(product.images) && product.images.length ? product.images : [null];
+  const isModeratable = product.status === 'pending' || product.status === 'queue';
+
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="admin-product-modal">
+      <div class="modal-content admin-product-modal-content">
+        <div class="modal-handle"></div>
+        <div class="admin-product-modal-header">
+          <div>
+            <span class="badge ${status.badge}">${status.label}</span>
+            <h3>${escapeHTML(product.title)}</h3>
+            <p>${escapeHTML(category?.name || product.category || 'Categoria')}</p>
+          </div>
+          <button class="btn btn-ghost btn-icon" type="button" id="close-admin-product-modal" aria-label="Fechar">${icons.x}</button>
+        </div>
+        <div class="admin-product-detail-gallery">
+          <div class="admin-product-detail-main">
+            ${getProductImage(images[0], 480, 280, product.category)}
+          </div>
+          ${images.length > 1 ? `
+            <div class="admin-product-detail-thumbs">
+              ${images.map(image => `<div>${getProductImage(image, 96, 72, product.category)}</div>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+        <div class="admin-product-detail-grid">
+          <div><span>Preco final</span><strong>${formatCurrency(product.discountPrice)}</strong></div>
+          <div><span>Preco original</span><strong>${formatCurrency(product.originalPrice)}</strong></div>
+          <div><span>Desconto</span><strong>${Number(product.discount || 0)}%</strong></div>
+          <div><span>Cliques</span><strong>${Number(product.clicks || 0)}</strong></div>
+        </div>
+        <div class="admin-product-detail-block">
+          <h4>Descricao</h4>
+          <p>${escapeHTML(product.description || 'Sem descricao cadastrada.')}</p>
+        </div>
+        <div class="admin-product-detail-block">
+          <h4>Vendedor</h4>
+          <p>${escapeHTML(product.seller?.name || 'Vendedor sem perfil')} ${product.seller?.email ? `- ${escapeHTML(product.seller.email)}` : ''}</p>
+        </div>
+        ${product.rejectionReason ? `
+          <div class="admin-product-detail-block danger">
+            <h4>Retorno registrado</h4>
+            <p>${escapeHTML(product.rejectionReason)}</p>
+          </div>
+        ` : ''}
+        <div class="admin-product-modal-actions">
+          ${isModeratable ? `
+            <button class="btn btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
+            <button class="btn btn-secondary" type="button" data-modal-adjust="${escapeHTML(product.id)}">Solicitar ajuste</button>
+            <button class="btn btn-danger" type="button" data-modal-reject="${escapeHTML(product.id)}">Recusar</button>
+          ` : `
+            <button class="btn btn-secondary" type="button" id="close-admin-product-modal-secondary">Fechar</button>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const closeModal = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('#admin-product-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeModal();
+  });
+  modalRoot.querySelector('#close-admin-product-modal')?.addEventListener('click', closeModal);
+  modalRoot.querySelector('#close-admin-product-modal-secondary')?.addEventListener('click', closeModal);
+  modalRoot.querySelector('[data-modal-adjust]')?.addEventListener('click', (event) => {
+    const id = event.currentTarget.dataset.modalAdjust;
+    closeModal();
+    showAdjustModal(id, container);
+  });
+  modalRoot.querySelector('[data-modal-reject]')?.addEventListener('click', (event) => {
+    const id = event.currentTarget.dataset.modalReject;
+    closeModal();
+    showRejectModal(id, container);
+  });
+  modalRoot.querySelector('[data-modal-approve]')?.addEventListener('click', async (event) => {
+    const approveBtn = event.currentTarget;
+    approveBtn.disabled = true;
+    approveBtn.innerHTML = `${icons.loader} Aprovando...`;
+    const result = await approveProduct(approveBtn.dataset.modalApprove);
+    if (result?.success) {
+      closeModal();
+      showToast('Produto aprovado com sucesso.', 'success');
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+    } else {
+      approveBtn.disabled = false;
+      approveBtn.innerHTML = `${icons.check} Aprovar`;
+      showToast(result?.error || 'Nao foi possivel aprovar o produto.', 'error');
+    }
+  });
+}
+
 function bindAdminEvents(container) {
   // Tabs
   container.querySelectorAll('[data-admin-tab]').forEach(tab => {
@@ -490,6 +759,98 @@ function bindAdminEvents(container) {
       showAdjustModal(adjustBtn.dataset.adId, container);
     }
   }, true);
+
+  container.addEventListener('click', async (event) => {
+    const productDetailBtn = event.target.closest?.('[data-category-product-detail]');
+    if (productDetailBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      showAdminProductDetails(productDetailBtn.dataset.categoryProductDetail, container);
+      return;
+    }
+
+    const approveProductBtn = event.target.closest?.('[data-category-product-approve]');
+    if (approveProductBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const productId = approveProductBtn.dataset.categoryProductApprove;
+      const originalHtml = approveProductBtn.innerHTML;
+      approveProductBtn.disabled = true;
+      approveProductBtn.innerHTML = `${icons.loader} Aprovando...`;
+      try {
+        const result = await approveProduct(productId);
+        if (!result?.success) throw new Error(result?.error || 'Nao foi possivel aprovar o produto.');
+        removePendingAd(productId);
+        showToast('Produto aprovado com sucesso.', 'success');
+        await renderAdminPage(container);
+        scrollCategoryManagementIntoView(container);
+      } catch (error) {
+        approveProductBtn.disabled = false;
+        approveProductBtn.innerHTML = originalHtml;
+        showToast(error.message || 'Nao foi possivel aprovar o produto.', 'error');
+      }
+      return;
+    }
+
+    const adjustProductBtn = event.target.closest?.('[data-category-product-adjust]');
+    if (adjustProductBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      showAdjustModal(adjustProductBtn.dataset.categoryProductAdjust, container);
+      return;
+    }
+
+    const categoryFilter = event.target.closest?.('[data-category-filter]');
+    if (categoryFilter) {
+      event.preventDefault();
+      event.stopPropagation();
+      categoryStatusFilter = categoryFilter.dataset.categoryFilter || 'all';
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+      return;
+    }
+
+    const categoryModerate = event.target.closest?.('[data-category-moderate]');
+    if (categoryModerate) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectedCategoryId = categoryModerate.dataset.categoryModerate;
+      categoryStatusFilter = 'pending';
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+      return;
+    }
+
+    const categoryOpen = event.target.closest?.('[data-category-open]');
+    if (categoryOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectedCategoryId = categoryOpen.dataset.categoryOpen;
+      categoryStatusFilter = 'all';
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+      return;
+    }
+
+    const categorySelect = event.target.closest?.('[data-category-select]');
+    if (categorySelect && !event.target.closest('button')) {
+      selectedCategoryId = categorySelect.dataset.categorySelect;
+      categoryStatusFilter = 'all';
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+    }
+  });
+
+  container.querySelectorAll('[data-category-select]').forEach(card => {
+    card.addEventListener('keydown', async (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      selectedCategoryId = card.dataset.categorySelect;
+      categoryStatusFilter = 'all';
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+    });
+  });
 
   container.querySelector('#btnAdminLogout')?.addEventListener('click', async () => {
     const logoutBtn = container.querySelector('#btnAdminLogout');
