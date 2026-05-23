@@ -59,7 +59,7 @@ function getUser() {
   return baseUser;
 }
 
-let sellerView = 'dashboard'; // dashboard | create | edit | ads | coupons | payments
+let sellerView = 'dashboard'; // dashboard | ads | insights | create | edit | coupons | payments
 let paymentsFilter = 'all';
 let activeTab = 'active';
 let loadedAds = null;
@@ -72,7 +72,6 @@ let loadedCategories = mockCategories;
 let loadedPayments = [];
 let loadedPaymentStats = null;
 let sellerNavFocus = 'dashboard';
-let sellerScrollTarget = null;
 
 const SELLER_SHELL_TTL_MS = 30_000;
 const SELLER_DATA_TTL_MS = 20_000;
@@ -290,7 +289,7 @@ function renderMercadoPagoRedirectState(url, redirectUri) {
       <div class="modal-content mp-connect-modal">
         <div class="modal-handle"></div>
         <div class="mp-connect-logo" aria-hidden="true">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
+          ${renderMercadoPagoMark()}
         </div>
         <h3>Redirecionando para o Mercado Pago</h3>
         <p>Vamos abrir a autorização em uma página segura do Mercado Pago. Depois de aprovar, você volta automaticamente para a Linka.</p>
@@ -302,7 +301,18 @@ function renderMercadoPagoRedirectState(url, redirectUri) {
 }
 
 function renderMercadoPagoMark() {
-  return `<span class="mp-logo-mark" aria-hidden="true">MP</span>`;
+  return `
+    <span class="mp-logo-mark" aria-hidden="true">
+      <svg viewBox="0 0 92 60" role="img" focusable="false">
+        <rect x="4" y="8" width="84" height="44" rx="22" fill="#00B1EA"/>
+        <path d="M28 29c5-5 10-7 15-7 6 0 9 3 13 7" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+        <path d="M23 34c5 5 11 8 18 8 6 0 12-2 17-7" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+        <path d="M38 30l6 5 9-10" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M57 29c4-4 8-6 13-6" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".88"/>
+        <path d="M57 35c4 3 8 5 13 5" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".88"/>
+      </svg>
+    </span>
+  `;
 }
 
 function formatMpDate(value) {
@@ -326,7 +336,7 @@ function renderMercadoPagoStatusPill() {
       ${renderMercadoPagoMark()}
       <span class="mp-status-copy">
         <strong>Mercado Pago</strong>
-        <small>${liveMode ? 'Producao conectada' : 'Conta conectada'}</small>
+        <small>${liveMode ? 'Produção conectada' : 'Conta conectada'}</small>
       </span>
       ${icons.chevronRight || ''}
     </button>
@@ -390,11 +400,11 @@ function showMercadoPagoInfoModal(container) {
         <p>Os pagamentos aprovados dos seus produtos vão direto para esta conta. A Linka não cobra comissão sobre a venda.</p>
         <div class="mp-connection-grid">
           <div class="mp-connection-row"><span>Status</span><strong>Pronto para receber</strong></div>
-          <div class="mp-connection-row"><span>Comissao Linka</span><strong>0%</strong></div>
-          <div class="mp-connection-row"><span>Modo</span><strong>${account.liveMode ? 'Producao' : 'Conta autorizada'}</strong></div>
+          <div class="mp-connection-row"><span>Comissão Linka</span><strong>0%</strong></div>
+          <div class="mp-connection-row"><span>Modo</span><strong>${account.liveMode ? 'Produção' : 'Conta autorizada'}</strong></div>
           <div class="mp-connection-row"><span>Conta Mercado Pago</span><strong>${escapeHTML(account.collectorId || 'Autorizada via OAuth')}</strong></div>
           <div class="mp-connection-row"><span>Conectado em</span><strong>${escapeHTML(formatMpDate(account.connectedAt))}</strong></div>
-          <div class="mp-connection-row"><span>Renovacao segura</span><strong>${escapeHTML(formatMpDate(account.expiresAt))}</strong></div>
+          <div class="mp-connection-row"><span>Renovação segura</span><strong>${escapeHTML(formatMpDate(account.expiresAt))}</strong></div>
         </div>
         <button class="btn btn-mp btn-block" id="refresh-mp-status">Atualizar status</button>
         <button class="btn btn-secondary btn-block" id="reconnect-mp" style="margin-top:var(--space-3);">Reconectar conta</button>
@@ -446,6 +456,12 @@ export function renderSeller(container, subpage) {
   } else if (subpage === 'payments') {
     sellerView = 'payments';
     sellerNavFocus = 'payments';
+  } else if (subpage === 'ads') {
+    sellerView = 'ads';
+    sellerNavFocus = 'ads';
+  } else if (subpage === 'insights') {
+    sellerView = 'insights';
+    sellerNavFocus = 'dashboard';
   } else {
     sellerView = 'dashboard';
     sellerNavFocus = 'dashboard';
@@ -459,7 +475,7 @@ async function renderSellerPage(container, { force = false } = {}) {
   const mpResult = mpParams.get('mp');
   const mpReason = mpParams.get('reason');
   await loadSellerShellData(user, { force: force || Boolean(mpResult) });
-  const needsMainData = ['dashboard', 'edit', 'coupons'].includes(sellerView);
+  const needsMainData = ['dashboard', 'ads', 'insights', 'edit', 'coupons'].includes(sellerView);
   if (needsMainData) {
     await loadSellerMainData(user, { force });
   }
@@ -494,7 +510,19 @@ async function renderSellerPage(container, { force = false } = {}) {
       </header>
 
       <div class="app-body" id="seller-content">
-        ${sellerView === 'create' ? renderCreateForm() : sellerView === 'edit' ? renderEditProductForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
+        ${sellerView === 'create'
+          ? renderCreateForm()
+          : sellerView === 'edit'
+            ? renderEditProductForm()
+            : sellerView === 'ads'
+              ? renderSellerAdsManager()
+              : sellerView === 'insights'
+                ? renderSellerInsights()
+                : sellerView === 'coupons'
+                  ? renderSellerCoupons()
+                  : sellerView === 'payments'
+                    ? await renderSellerPayments()
+                    : renderDashboard()}
       </div>
       <nav class="bottom-nav">
         <div class="bottom-nav-item ${sellerNavFocus === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
@@ -517,27 +545,53 @@ async function renderSellerPage(container, { force = false } = {}) {
     </div>
   `;
   bindSellerEvents(container);
-  if (sellerScrollTarget) {
-    const target = sellerScrollTarget;
-    sellerScrollTarget = null;
-    requestAnimationFrame(() => scrollToSellerSection(container, target));
-  }
 }
 
-function setSellerNavFocus(container, focus) {
-  sellerNavFocus = focus;
-  container.querySelectorAll('.seller-page .bottom-nav-item').forEach((item) => {
-    item.classList.toggle('active', item.dataset.nav === focus);
-  });
+function getSellerAdsData() {
+  return loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
 }
 
-function scrollToSellerSection(container, target) {
-  const selectors = {
-    ads: '#seller-ads-section',
-    performance: '.performance-section',
+function getSellerCouponData() {
+  return loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
+}
+
+function getSellerStatusCounts(ads = getSellerAdsData()) {
+  return {
+    all: ads.length,
+    active: ads.filter(a => a.status === 'active').length,
+    pending: ads.filter(a => a.status === 'pending').length,
+    queue: ads.filter(a => a.status === 'queue').length,
+    expired: ads.filter(a => a.status === 'expired').length,
+    rejected: ads.filter(a => a.status === 'rejected').length,
   };
-  const element = container.querySelector(selectors[target] || target);
-  if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function getSellerComputedStats(ads = getSellerAdsData(), coupons = getSellerCouponData()) {
+  const statusCounts = getSellerStatusCounts(ads);
+  const couponsGenerated = ads.reduce((sum, ad) => sum + (ad.couponsGenerated || 0), 0) || coupons.length;
+  const couponsUsed = ads.reduce((sum, ad) => sum + (ad.couponsUsed || 0), 0) || coupons.filter(c => c.status === 'used').length;
+  return {
+    totalAds: statusCounts.all,
+    activeAds: statusCounts.active,
+    pendingAds: statusCounts.pending + statusCounts.queue,
+    expiredAds: statusCounts.expired,
+    rejectedAds: statusCounts.rejected,
+    couponsGenerated,
+    couponsUsed,
+    totalClicks: ads.reduce((sum, ad) => sum + (ad.clicks || 0), 0),
+    conversionRate: couponsGenerated > 0 ? Math.round((couponsUsed / couponsGenerated) * 100) : 0,
+  };
+}
+
+function getSellerCategoryName(categoryId) {
+  return getSellerCategories().find(c => c.id === categoryId)?.name || categoryId || 'Sem categoria';
+}
+
+function formatSellerDate(value) {
+  if (!value) return 'Sem data';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sem data';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 function renderSellerStatCard({ icon, value, label, action, hint }) {
@@ -554,35 +608,17 @@ function renderSellerStatCard({ icon, value, label, action, hint }) {
 }
 
 function renderDashboard() {
-  const ads = loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
-  const coupons = loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
-  const statusCounts = {
-    active: ads.filter(a => a.status === 'active').length,
-    pending: ads.filter(a => a.status === 'pending').length,
-    queue: ads.filter(a => a.status === 'queue').length,
-    expired: ads.filter(a => a.status === 'expired').length,
-    rejected: ads.filter(a => a.status === 'rejected').length,
-  };
-  if (activeTab === 'queue' && statusCounts.queue === 0) activeTab = statusCounts.pending > 0 ? 'pending' : 'active';
-
-  // Compute real stats from loaded data
-  const computedStats = {
-    activeAds: statusCounts.active,
-    couponsGenerated: ads.reduce((s, a) => s + (a.couponsGenerated || 0), 0) || coupons.length,
-    couponsUsed: ads.reduce((s, a) => s + (a.couponsUsed || 0), 0) || coupons.filter(c => c.status === 'used').length,
-    totalClicks: ads.reduce((s, a) => s + (a.clicks || 0), 0),
-  };
-  const convRate = computedStats.couponsGenerated > 0
-    ? Math.round((computedStats.couponsUsed / computedStats.couponsGenerated) * 100) + '%'
-    : '0%';
+  const ads = getSellerAdsData();
+  const computedStats = getSellerComputedStats(ads);
+  const convRate = `${computedStats.conversionRate}%`;
   const setupBlock = renderSellerOnboarding(ads, Boolean(mpConnection.connected));
 
   return `
     <div class="seller-stats-grid">
-      ${renderSellerStatCard({ icon: icons.package, value: computedStats.activeAds, label: 'Anúncios', action: 'ads', hint: 'Ver produtos' })}
-      ${renderSellerStatCard({ icon: icons.ticket, value: computedStats.couponsGenerated, label: 'Cupons', action: 'coupons', hint: 'Abrir cupons' })}
+      ${renderSellerStatCard({ icon: icons.package, value: computedStats.totalAds, label: 'Anúncios', action: 'ads', hint: 'Gerenciar' })}
+      ${renderSellerStatCard({ icon: icons.ticket, value: computedStats.couponsGenerated, label: 'Cupons', action: 'coupons', hint: 'Ver detalhes' })}
       ${renderSellerStatCard({ icon: icons.checkCircle, value: convRate, label: 'Conversão', action: 'payments', hint: 'Ver vendas' })}
-      ${renderSellerStatCard({ icon: icons.eye, value: computedStats.totalClicks, label: 'Cliques', action: 'ads', hint: 'Desempenho' })}
+      ${renderSellerStatCard({ icon: icons.eye, value: computedStats.totalClicks, label: 'Cliques', action: 'clicks', hint: 'Analisar' })}
     </div>
 
     ${setupBlock}
@@ -590,33 +626,17 @@ function renderDashboard() {
     <div class="seller-cta-inline">
       <button class="btn btn-primary create-ad-cta btn-block" style="display:flex; justify-content:center; align-items:center; gap:8px;">${icons.plus} Criar Novo Anúncio</button>
     </div>
-
-    <!-- Ads by status -->
-    <div class="seller-tabs-container" id="seller-ads-section">
-      <div class="tabs">
-        <button class="tab ${activeTab === 'active' ? 'active' : ''}" data-tab="active">Ativos <span class="tab-count">${statusCounts.active}</span></button>
-        <button class="tab ${activeTab === 'pending' ? 'active' : ''}" data-tab="pending">Em aprovação <span class="tab-count">${statusCounts.pending}</span></button>
-        ${statusCounts.queue > 0 ? `<button class="tab ${activeTab === 'queue' ? 'active' : ''}" data-tab="queue">Na fila <span class="tab-count">${statusCounts.queue}</span></button>` : ''}
-        <button class="tab ${activeTab === 'expired' ? 'active' : ''}" data-tab="expired">Expirados <span class="tab-count">${statusCounts.expired}</span></button>
-        <button class="tab ${activeTab === 'rejected' ? 'active' : ''}" data-tab="rejected">Recusados <span class="tab-count">${statusCounts.rejected}</span></button>
+    <section class="seller-dashboard-card">
+      <div>
+        <span class="seller-setup-kicker">Operação da loja</span>
+        <h3>Continue de onde faz sentido</h3>
+        <p>Use as áreas detalhadas para gerenciar anúncios, validar cupons e acompanhar vendas reais sem se perder em uma tela única.</p>
       </div>
-    </div>
-
-    <div class="seller-ads-list">
-      ${renderAdsByStatus()}
-    </div>
-
-    <div class="performance-section">
-      <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Desempenho</h3>
-      <div class="chart-container">
-        <h4>Cupons gerados nos últimos 7 dias</h4>
-        <canvas id="seller-chart" height="200"></canvas>
+      <div class="seller-dashboard-actions">
+        <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Abrir anúncios</button>
+        <button class="btn btn-secondary" type="button" data-seller-action="clicks">${icons.eye} Ver análise</button>
       </div>
-    </div>
-
-    <div class="motivational-msg">
-      "Cada cupom gerado mostra interesse real no seu produto."
-    </div>
+    </section>
   `;
 }
 
@@ -648,7 +668,7 @@ function renderSellerOnboarding(ads, isMPConnected) {
       <section class="seller-setup-card">
         <div>
           <span class="seller-setup-kicker">Quase pronto</span>
-          <h3>Seu produto ja foi criado</h3>
+          <h3>Seu produto já foi criado</h3>
           <p>Agora falta a aprovação para ele aparecer na vitrine dos compradores. Quando estiver ativo, o pagamento cai direto no seu Mercado Pago.</p>
         </div>
       </section>
@@ -680,8 +700,8 @@ function renderSellerOnboarding(ads, isMPConnected) {
 }
 
 function renderAdsByStatus() {
-  const ads = loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
-  const filtered = ads.filter(a => a.status === activeTab);
+  const ads = getSellerAdsData();
+  const filtered = activeTab === 'all' ? ads : ads.filter(a => a.status === activeTab);
   if (ads.length === 0) {
     return `
       <div class="empty-state seller-first-empty">
@@ -694,6 +714,7 @@ function renderAdsByStatus() {
   }
   if (filtered.length === 0) {
     const messages = {
+      all: 'Nenhum anúncio cadastrado.',
       active: 'Nenhum anúncio ativo no momento.',
       pending: 'Nenhum anúncio aguardando aprovação.',
       queue: 'Nenhum anúncio na fila.',
@@ -703,6 +724,136 @@ function renderAdsByStatus() {
     return `<div class="empty-state">${icons.package}<h3>${messages[activeTab]}</h3><p>Seu primeiro anúncio pode aparecer na vitrine da instituição.</p></div>`;
   }
   return filtered.map(ad => renderSellerAdCard(ad)).join('');
+}
+
+function renderSellerAdsTabs(statusCounts) {
+  return `
+    <div class="seller-tabs-container" id="seller-ads-section">
+      <div class="tabs">
+        <button class="tab ${activeTab === 'all' ? 'active' : ''}" data-tab="all">Todos <span class="tab-count">${statusCounts.all}</span></button>
+        <button class="tab ${activeTab === 'active' ? 'active' : ''}" data-tab="active">Ativos <span class="tab-count">${statusCounts.active}</span></button>
+        <button class="tab ${activeTab === 'pending' ? 'active' : ''}" data-tab="pending">Em aprovação <span class="tab-count">${statusCounts.pending}</span></button>
+        ${statusCounts.queue > 0 ? `<button class="tab ${activeTab === 'queue' ? 'active' : ''}" data-tab="queue">Na fila <span class="tab-count">${statusCounts.queue}</span></button>` : ''}
+        <button class="tab ${activeTab === 'expired' ? 'active' : ''}" data-tab="expired">Expirados <span class="tab-count">${statusCounts.expired}</span></button>
+        <button class="tab ${activeTab === 'rejected' ? 'active' : ''}" data-tab="rejected">Recusados <span class="tab-count">${statusCounts.rejected}</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSellerAdsManager() {
+  const ads = getSellerAdsData();
+  const statusCounts = getSellerStatusCounts(ads);
+  const stats = getSellerComputedStats(ads);
+  if (!['all', 'active', 'pending', 'queue', 'expired', 'rejected'].includes(activeTab)) activeTab = 'all';
+
+  return `
+    <section class="seller-view-header">
+      <div>
+        <span class="seller-setup-kicker">Gestão de anúncios</span>
+        <h2>Anúncios da loja</h2>
+        <p>Produtos reais do vendedor, separados por status. Edite, renove ou remova da vitrine quando necessário.</p>
+      </div>
+      <button class="btn btn-primary new-ad-trigger" type="button">${icons.plus} Novo anúncio</button>
+    </section>
+
+    <div class="seller-detail-grid">
+      <button class="seller-detail-card" type="button" data-tab-shortcut="all"><span>Total</span><strong>${statusCounts.all}</strong><small>Cadastrados</small></button>
+      <button class="seller-detail-card" type="button" data-tab-shortcut="active"><span>Ativos</span><strong>${statusCounts.active}</strong><small>Na vitrine</small></button>
+      <button class="seller-detail-card" type="button" data-tab-shortcut="pending"><span>Em análise</span><strong>${statusCounts.pending + statusCounts.queue}</strong><small>Aguardando admin</small></button>
+      <button class="seller-detail-card" type="button" data-tab-shortcut="expired"><span>Expirados</span><strong>${statusCounts.expired}</strong><small>Fora da vitrine</small></button>
+    </div>
+
+    <section class="seller-status-note">
+      <strong>${icons.shield} Exclusão segura</strong>
+      <span>Ao excluir, o anúncio sai da vitrine e fica arquivado como expirado para preservar histórico de cupons e pagamentos.</span>
+    </section>
+
+    ${renderSellerAdsTabs(statusCounts)}
+
+    <div class="seller-ads-list seller-manager-list">
+      ${renderAdsByStatus()}
+    </div>
+
+    <section class="seller-view-footer">
+      <strong>${stats.totalClicks} cliques registrados</strong>
+      <span>${stats.couponsGenerated} cupons gerados · ${stats.couponsUsed} usados · ${stats.conversionRate}% de conversão</span>
+    </section>
+  `;
+}
+
+function renderSellerInsights() {
+  const ads = getSellerAdsData();
+  const coupons = getSellerCouponData();
+  const stats = getSellerComputedStats(ads, coupons);
+  const topAds = [...ads]
+    .sort((a, b) => (b.clicks || 0) - (a.clicks || 0))
+    .slice(0, 6);
+  const categoryMap = new Map();
+  ads.forEach((ad) => {
+    const key = ad.category || 'others';
+    const current = categoryMap.get(key) || { name: getSellerCategoryName(key), ads: 0, clicks: 0, coupons: 0 };
+    current.ads += 1;
+    current.clicks += Number(ad.clicks || 0);
+    current.coupons += Number(ad.couponsGenerated || 0);
+    categoryMap.set(key, current);
+  });
+  const categories = [...categoryMap.values()].sort((a, b) => b.clicks - a.clicks);
+
+  return `
+    <section class="seller-view-header">
+      <div>
+        <span class="seller-setup-kicker">Análise real</span>
+        <h2>Cliques e conversão</h2>
+        <p>Dados calculados a partir dos anúncios, cupons e interações registradas no banco.</p>
+      </div>
+      <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Ver anúncios</button>
+    </section>
+
+    <div class="seller-detail-grid">
+      <div class="seller-detail-card"><span>Cliques</span><strong>${stats.totalClicks}</strong><small>Total registrado</small></div>
+      <div class="seller-detail-card"><span>Cupons</span><strong>${stats.couponsGenerated}</strong><small>Gerados</small></div>
+      <div class="seller-detail-card"><span>Usados</span><strong>${stats.couponsUsed}</strong><small>Validados</small></div>
+      <div class="seller-detail-card"><span>Conversão</span><strong>${stats.conversionRate}%</strong><small>Cupom usado/gerado</small></div>
+    </div>
+
+    <div class="performance-section seller-insights-chart">
+      <div class="chart-container">
+        <h4>Cupons gerados nos últimos 7 dias</h4>
+        <canvas id="seller-chart" height="200"></canvas>
+      </div>
+    </div>
+
+    <section class="seller-insight-panel">
+      <h3>Produtos com mais cliques</h3>
+      <div class="seller-insight-list">
+        ${topAds.length ? topAds.map((ad) => `
+          <button class="seller-insight-row" type="button" data-open-ad-id="${ad.id}">
+            <span class="seller-insight-thumb">${getProductImage(ad.images?.[0], 80, 80, ad.category)}</span>
+            <span class="seller-insight-main">
+              <strong>${escapeHTML(ad.title)}</strong>
+              <small>${escapeHTML(getSellerCategoryName(ad.category))} · ${escapeHTML(formatSellerDate(ad.createdAt))}</small>
+            </span>
+            <span class="seller-insight-metric">${ad.clicks || 0}<small>cliques</small></span>
+          </button>
+        `).join('') : `
+          <div class="empty-state seller-first-empty">${icons.eye}<h3>Sem cliques ainda</h3><p>Quando compradores abrirem seus produtos, a análise aparece aqui.</p></div>
+        `}
+      </div>
+    </section>
+
+    <section class="seller-insight-panel">
+      <h3>Categorias</h3>
+      <div class="seller-category-insights">
+        ${categories.length ? categories.map((item) => `
+          <div class="seller-category-insight">
+            <strong>${escapeHTML(item.name)}</strong>
+            <span>${item.ads} anúncios · ${item.clicks} cliques · ${item.coupons} cupons</span>
+          </div>
+        `).join('') : '<p class="seller-muted-text">Cadastre anúncios para medir categorias.</p>'}
+      </div>
+    </section>
+  `;
 }
 
 function renderSellerAdCard(ad) {
@@ -719,7 +870,7 @@ function renderSellerAdCard(ad) {
             <h4 class="ad-title">${escapeHTML(ad.title)}</h4>
             ${isAct ? '<div class="pulse-light"></div>' : ''}
           </div>
-          <div class="ad-category">${escapeHTML(getSellerCategories().find(c => c.id === ad.category)?.name || ad.category)}</div>
+          <div class="ad-category">${escapeHTML(getSellerCategoryName(ad.category))}</div>
           <div class="seller-ad-metrics">
             <span title="Cliques">${icons.eye} ${ad.clicks}</span>
             <span title="Gerados">${icons.ticket} ${ad.couponsGenerated}</span>
@@ -732,7 +883,7 @@ function renderSellerAdCard(ad) {
         <div class="seller-ad-actions">
           <button class="btn btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${ad.id}">${icons.fileText}<span>Editar</span></button>
           ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" type="button" data-ad-id="${ad.id}">${icons.refresh}<span>Renovar</span></button>` : ''}
-          ${ad.status !== 'expired' ? `<button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>` : ''}
+          ${ad.status !== 'expired' ? `<button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>` : '<span class="seller-archive-note">Arquivado</span>'}
         </div>
       </div>
       ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${escapeHTML(ad.rejectionReason)}</div>` : ''}
@@ -1087,7 +1238,11 @@ function bindSellerEvents(container) {
   container.querySelectorAll('.new-ad-trigger').forEach((btn) => {
     btn.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
   });
-  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'dashboard'; sellerNavFocus = 'dashboard'; renderSellerPage(container); });
+  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => {
+    selectedAdId = null;
+    sellerView = sellerNavFocus === 'ads' ? 'ads' : 'dashboard';
+    renderSellerPage(container);
+  });
   container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
     window.location.hash = '#/buyer';
   });
@@ -1098,9 +1253,9 @@ function bindSellerEvents(container) {
     control.addEventListener('click', () => {
       const action = control.dataset.sellerAction;
       if (action === 'ads') {
-        sellerView = 'dashboard';
+        sellerView = 'ads';
         sellerNavFocus = 'ads';
-        sellerScrollTarget = 'ads';
+        activeTab = 'all';
         renderSellerPage(container);
       } else if (action === 'coupons') {
         sellerView = 'coupons';
@@ -1113,7 +1268,20 @@ function bindSellerEvents(container) {
         renderSellerPage(container);
       } else if (action === 'mp-info') {
         showMercadoPagoInfoModal(container);
+      } else if (action === 'clicks') {
+        sellerView = 'insights';
+        sellerNavFocus = 'dashboard';
+        renderSellerPage(container);
       }
+    });
+  });
+
+  container.querySelectorAll('[data-tab-shortcut]').forEach((shortcut) => {
+    shortcut.addEventListener('click', () => {
+      activeTab = shortcut.dataset.tabShortcut || 'all';
+      sellerView = 'ads';
+      sellerNavFocus = 'ads';
+      renderSellerPage(container);
     });
   });
 
@@ -1302,7 +1470,7 @@ function bindSellerEvents(container) {
       if (result.success) {
         showToast('Anúncio enviado para aprovação!', 'success');
         invalidateSellerCache({ data: true, payments: true });
-        sellerView = 'dashboard';
+        sellerView = 'ads';
         sellerNavFocus = 'ads';
         activeTab = 'pending';
         renderSellerPage(container, { force: true });
@@ -1345,7 +1513,7 @@ function bindSellerEvents(container) {
         showToast('Anúncio atualizado e enviado para aprovação.', 'success');
         invalidateSellerCache({ data: true, payments: true });
         selectedAdId = null;
-        sellerView = 'dashboard';
+        sellerView = 'ads';
         sellerNavFocus = 'ads';
         activeTab = 'pending';
         renderSellerPage(container, { force: true });
@@ -1411,7 +1579,9 @@ function bindSellerEvents(container) {
         if (result?.success) {
           showToast('Anúncio renovado e enviado para aprovação!', 'success');
           invalidateSellerCache({ data: true });
+          sellerView = 'ads';
           sellerNavFocus = 'ads';
+          activeTab = 'pending';
           renderSellerPage(container, { force: true });
         } else {
           showToast(result?.error || 'Não foi possível renovar o anúncio.', 'error');
@@ -1441,17 +1611,10 @@ function bindSellerEvents(container) {
         activeTab = 'active';
         renderSellerPage(container);
       } else if (nav === 'ads') {
-        setSellerNavFocus(container, 'ads');
-        if (sellerView === 'dashboard') {
-          const adsSection = container.querySelector('#seller-ads-section');
-          if (adsSection) adsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          sellerView = 'dashboard';
-          activeTab = 'active';
-          sellerNavFocus = 'ads';
-          sellerScrollTarget = 'ads';
-          renderSellerPage(container);
-        }
+        sellerView = 'ads';
+        sellerNavFocus = 'ads';
+        activeTab = 'all';
+        renderSellerPage(container);
       } else if (nav === 'coupons') {
         sellerView = 'coupons'; sellerNavFocus = 'coupons'; renderSellerPage(container);
       } else if (nav === 'payments') {
@@ -1475,7 +1638,7 @@ function showDeleteProductModal(adId, container) {
         <div class="modal-handle"></div>
         <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Excluir da vitrine?</h3>
         <p style="font-size:var(--font-size-sm);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--space-4);">
-          O produto <strong>${escapeHTML(ad.title)}</strong> deixara de aparecer para compradores. Pagamentos, cupons e historico financeiro serao preservados.
+          O produto <strong>${escapeHTML(ad.title)}</strong> deixará de aparecer para compradores. Pagamentos, cupons e histórico financeiro serão preservados.
         </p>
         <div style="display:flex;gap:var(--space-3);">
           <button class="btn btn-secondary" style="flex:1;" id="cancel-delete-product">Cancelar</button>
@@ -1501,7 +1664,7 @@ function showDeleteProductModal(adId, container) {
       showToast('Produto removido da vitrine.', 'success');
       invalidateSellerCache({ data: true, payments: true });
       selectedAdId = null;
-      sellerView = 'dashboard';
+      sellerView = 'ads';
       sellerNavFocus = 'ads';
       activeTab = 'expired';
       renderSellerPage(container, { force: true });
