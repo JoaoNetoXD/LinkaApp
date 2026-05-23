@@ -1,10 +1,11 @@
 ﻿import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
-import { sellerAds, sellerCoupons, categories, currentUser, institution, sellerStats } from '../data/mock.js';
+import { sellerAds, sellerCoupons, categories as mockCategories, currentUser, institution, sellerStats } from '../data/mock.js';
 import { getSellerPayments, getPaymentStats, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../services/coupon-service.js';
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
 import { getInstitution } from '../services/institution-service.js';
+import { getCategories } from '../services/category-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -67,6 +68,12 @@ let activeInstitution = institution;
 let mpConnection = { connected: false, oauthConfigured: false };
 let lastMpNotice = '';
 let selectedAdId = null;
+let loadedCategories = mockCategories;
+
+function getSellerCategories(includeAll = true) {
+  const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
+  return includeAll ? rows : rows.filter((category) => category.id !== 'all');
+}
 
 function shouldUseSellerMocks() {
   return USE_MOCKS && !globalSession?.user?.id;
@@ -135,6 +142,14 @@ async function syncInstitutionForUser() {
   activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
 }
 
+async function syncSellerCategories() {
+  try {
+    loadedCategories = await getCategories();
+  } catch {
+    loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }];
+  }
+}
+
 export function renderSeller(container, subpage) {
   if (subpage === 'create') sellerView = 'create';
   else if (subpage === 'coupons') sellerView = 'coupons';
@@ -145,7 +160,10 @@ export function renderSeller(container, subpage) {
 
 async function renderSellerPage(container) {
   const user = getUser();
-  await syncInstitutionForUser();
+  await Promise.allSettled([
+    syncInstitutionForUser(),
+    syncSellerCategories(),
+  ]);
   try {
     mpConnection = await getMercadoPagoStatus();
   } catch (err) {
@@ -420,7 +438,7 @@ function renderSellerAdCard(ad) {
             <h4 class="ad-title">${escapeHTML(ad.title)}</h4>
             ${isAct ? '<div class="pulse-light"></div>' : ''}
           </div>
-          <div class="ad-category">${escapeHTML(categories.find(c => c.id === ad.category)?.name || ad.category)}</div>
+          <div class="ad-category">${escapeHTML(getSellerCategories().find(c => c.id === ad.category)?.name || ad.category)}</div>
           <div class="seller-ad-metrics">
             <span title="Cliques">${icons.eye} ${ad.clicks}</span>
             <span title="Gerados">${icons.ticket} ${ad.couponsGenerated}</span>
@@ -463,7 +481,7 @@ function renderCreateForm() {
         <label>Categoria</label>
         <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
           <option value="">Selecione...</option>
-          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
+          ${getSellerCategories(false).map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -576,7 +594,7 @@ function renderEditProductForm() {
       <div class="input-group">
         <label>Categoria</label>
         <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
-          ${categories.filter(c => c.id !== 'all').map(c => `<option value="${c.id}" ${c.id === ad.category ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
+          ${getSellerCategories(false).map(c => `<option value="${c.id}" ${c.id === ad.category ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">

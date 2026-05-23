@@ -1,8 +1,9 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
-import { pendingAds, adminStats, categoryHeat, rejectReasons, categories, institution } from '../data/mock.js';
-import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts } from '../services/product-service.js';
+import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
+import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
 import { signOutUser } from '../services/auth-service.js';
+import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -11,9 +12,23 @@ let loadedPendingAds = null;
 let loadedStats = null;
 let loadedAllProducts = [];
 let loadedCategoryStats = {};
+let loadedCategories = mockCategories;
 let activeInstitution = institution;
 let selectedCategoryId = null;
 let categoryStatusFilter = 'all';
+
+function getAdminCategories(includeAll = true) {
+  const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
+  return includeAll ? rows : rows.filter((category) => category.id !== 'all');
+}
+
+function getCategoryRules(categoryId) {
+  return activeInstitution?.settings?.categoryRules?.[categoryId] || '';
+}
+
+function getCategoryLabel(categoryId) {
+  return getAdminCategories().find((category) => category.id === categoryId)?.name || 'Categoria';
+}
 
 function removePendingAd(adId) {
   if (!Array.isArray(loadedPendingAds)) return;
@@ -75,7 +90,7 @@ async function renderAdminPage(container) {
 
   // Load real stats
   try {
-    loadedStats = await getInstitutionStats(null);
+    loadedStats = await getInstitutionStats(activeInstitution?.id || null);
   } catch { loadedStats = USE_MOCKS ? adminStats : null; }
 
   try {
@@ -85,6 +100,10 @@ async function renderAdminPage(container) {
   try {
     loadedCategoryStats = await getCategoryStats();
   } catch { loadedCategoryStats = USE_MOCKS ? categoryHeat : {}; }
+
+  try {
+    loadedCategories = await getCategories();
+  } catch { loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }]; }
   container.innerHTML = `
     <div class="page admin-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
@@ -146,17 +165,17 @@ function renderAdminDashboard() {
   const realAlerts = buildAdminAlerts();
   const topSellers = buildTopSellers();
   const stats = [
-    { label: 'Alunos', value: s.students?.value ?? 0, change: s.students?.change || '', positive: true, icon: icons.user },
-    { label: 'Cliques', value: s.clicks?.value ?? 0, change: s.clicks?.change || '', positive: true, icon: icons.eye },
-    { label: 'Cupons gerados', value: s.couponsGenerated?.value ?? 0, change: s.couponsGenerated?.change || '', positive: true, icon: icons.ticket },
-    { label: 'Cupons usados', value: s.couponsUsed?.value ?? 0, change: s.couponsUsed?.change || '', positive: true, icon: icons.checkCircle },
-    { label: 'Conversão', value: s.conversionRate?.value ?? '0%', change: s.conversionRate?.change || '', positive: true, icon: icons.checkCircle },
-    { label: 'Pendentes', value: (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length, change: '', positive: true, icon: icons.clock },
+    { id: 'students', label: 'Alunos', value: s.students?.value ?? 0, change: s.students?.change || '', positive: true, icon: icons.user },
+    { id: 'clicks', label: 'Cliques', value: s.clicks?.value ?? 0, change: s.clicks?.change || '', positive: true, icon: icons.eye },
+    { id: 'couponsGenerated', label: 'Cupons gerados', value: s.couponsGenerated?.value ?? 0, change: s.couponsGenerated?.change || '', positive: true, icon: icons.ticket },
+    { id: 'couponsUsed', label: 'Cupons usados', value: s.couponsUsed?.value ?? 0, change: s.couponsUsed?.change || '', positive: true, icon: icons.checkCircle },
+    { id: 'conversion', label: 'Conversao', value: s.conversionRate?.value ?? '0%', change: s.conversionRate?.change || '', positive: true, icon: icons.checkCircle },
+    { id: 'pending', label: 'Pendentes', value: (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length, change: '', positive: true, icon: icons.clock },
   ];
   return `
     <div class="admin-stats-grid">
       ${stats.map(s => `
-        <div class="stat-card glass-card">
+        <button class="stat-card glass-card admin-metric-card" type="button" data-admin-metric="${s.id}" aria-label="Abrir detalhes de ${escapeHTML(s.label)}">
           <div class="stat-icon-wrapper">
             <div class="stat-icon">${s.icon || ''}</div>
             <span class="stat-change ${s.positive ? 'positive' : 'negative'}">${s.change}</span>
@@ -165,7 +184,7 @@ function renderAdminDashboard() {
             <div class="stat-value">${s.value}</div>
             <div class="stat-label">${s.label}</div>
           </div>
-        </div>
+        </button>
       `).join('')}
     </div>
 
@@ -306,7 +325,7 @@ function renderModerationCard(ad) {
             <span>📚 ${escapeHTML(ad.seller.course)} · ${escapeHTML(ad.seller.semester)}</span>
           </div>
           <div class="moderation-meta">
-            <span>${icons.tag} ${escapeHTML(categories.find(c => c.id === ad.category)?.name || '')}</span>
+            <span>${icons.tag} ${escapeHTML(getCategoryLabel(ad.category))}</span>
           </div>
           <div class="moderation-pricing">
             <span style="text-decoration:line-through;color:var(--text-tertiary);font-size:var(--font-size-sm);">${formatCurrency(ad.originalPrice)}</span>
@@ -328,7 +347,7 @@ function renderModerationCard(ad) {
 
 function getAdminCategoryRows() {
   const products = Array.isArray(loadedAllProducts) ? loadedAllProducts.filter(Boolean) : [];
-  return categories.filter(c => c.id !== 'all').map(category => {
+  return getAdminCategories(false).map(category => {
     const items = products.filter(product => product.category === category.id);
     const fallbackStats = loadedCategoryStats?.[category.id] || {};
     const active = items.length
@@ -337,7 +356,7 @@ function getAdminCategoryRows() {
     const queue = items.length
       ? items.filter(product => product.status === 'pending' || product.status === 'queue').length
       : Number(fallbackStats.queue || fallbackStats.pending || 0);
-    const rejected = items.filter(product => product.status === 'rejected').length;
+    const rejected = items.filter(product => product.status === 'rejected' || product.status === 'needs_adjustment').length;
     const expired = items.filter(product => product.status === 'expired').length;
     const clicks = items.reduce((sum, product) => sum + Number(product.clicks || 0), 0);
     const slotsUsed = items.reduce((sum, product) => sum + Number(product.slots?.used || 0), 0);
@@ -365,6 +384,7 @@ function getProductStatusMeta(status) {
     active: { label: 'Ativo', badge: 'badge-success' },
     pending: { label: 'Em analise', badge: 'badge-warning' },
     queue: { label: 'Na fila', badge: 'badge-warning' },
+    needs_adjustment: { label: 'Ajuste solicitado', badge: 'badge-warning' },
     rejected: { label: 'Ajuste/recusa', badge: 'badge-danger' },
     expired: { label: 'Expirado', badge: 'badge-neutral' },
   };
@@ -379,7 +399,7 @@ function getCategoryProducts(categoryId) {
 function filterCategoryProducts(products) {
   if (categoryStatusFilter === 'active') return products.filter(product => product.status === 'active');
   if (categoryStatusFilter === 'pending') return products.filter(product => product.status === 'pending' || product.status === 'queue');
-  if (categoryStatusFilter === 'rejected') return products.filter(product => product.status === 'rejected');
+  if (categoryStatusFilter === 'rejected') return products.filter(product => product.status === 'rejected' || product.status === 'needs_adjustment');
   if (categoryStatusFilter === 'expired') return products.filter(product => product.status === 'expired');
   return products;
 }
@@ -392,7 +412,7 @@ function formatAdminDate(value) {
 }
 
 function renderCategoryProductRow(product) {
-  const category = categories.find(c => c.id === product.category);
+  const category = getAdminCategories().find(c => c.id === product.category);
   const status = getProductStatusMeta(product.status);
   const image = Array.isArray(product.images) ? product.images[0] : product.images;
   const isModeratable = product.status === 'pending' || product.status === 'queue';
@@ -420,6 +440,7 @@ function renderCategoryProductRow(product) {
       </div>
       <div class="category-product-actions">
         <button class="btn btn-secondary btn-sm" type="button" data-category-product-detail="${escapeHTML(product.id)}">${icons.eye} Detalhes</button>
+        <button class="btn btn-danger btn-sm" type="button" data-category-product-delete="${escapeHTML(product.id)}">Excluir</button>
         ${isModeratable ? `
           <button class="btn btn-success btn-sm" type="button" data-category-product-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
           <button class="btn btn-ghost btn-sm" type="button" data-category-product-adjust="${escapeHTML(product.id)}">Ajuste</button>
@@ -447,7 +468,7 @@ function renderCategories() {
     { id: 'all', label: 'Todos', count: selectedProducts.length },
     { id: 'pending', label: 'Em analise', count: selectedProducts.filter(product => product.status === 'pending' || product.status === 'queue').length },
     { id: 'active', label: 'Ativos', count: selectedProducts.filter(product => product.status === 'active').length },
-    { id: 'rejected', label: 'Ajustes', count: selectedProducts.filter(product => product.status === 'rejected').length },
+    { id: 'rejected', label: 'Ajustes', count: selectedProducts.filter(product => product.status === 'rejected' || product.status === 'needs_adjustment').length },
     { id: 'expired', label: 'Expirados', count: selectedProducts.filter(product => product.status === 'expired').length },
   ];
 
@@ -458,7 +479,10 @@ function renderCategories() {
           <h3 class="admin-section-title">Gestao de categorias</h3>
           <p class="admin-section-subtitle">Dados reais dos anuncios. Clique em uma categoria para operar a fila, os ativos e os ajustes.</p>
         </div>
-        <span class="admin-section-count">${totals.products} produtos</span>
+        <div class="admin-section-actions">
+          <span class="admin-section-count">${totals.products} produtos</span>
+          <button class="btn btn-primary btn-sm" type="button" data-category-create>${icons.plus} Nova categoria</button>
+        </div>
       </div>
       <div class="category-summary-grid">
         <div class="category-metric-card"><span>Total</span><strong>${totals.products}</strong><small>Anuncios cadastrados</small></div>
@@ -480,6 +504,7 @@ function renderCategories() {
                 <span class="badge ${statusBadge}">${statusLabel}</span>
               </div>
               <div class="category-heat-slots">${cat.active} ativos - ${cat.queue} em analise - ${cat.rejected} ajustes</div>
+              <div class="category-rule-line">${Number(cat.maxSlots || 5)} vagas por anuncio - ${Number(cat.durationHours || 24)}h de vitrine</div>
               <div class="progress-bar">
                 <div class="progress-fill ${barClass}" style="width:${pct}%;"></div>
               </div>
@@ -487,8 +512,10 @@ function renderCategories() {
                 <span>${pct}% ativos</span>
                 <span>${cat.clicks} cliques</span>
               </div>
+              ${getCategoryRules(cat.id) ? `<p class="category-rule-preview">${escapeHTML(getCategoryRules(cat.id))}</p>` : ''}
               <div class="category-heat-actions">
                 <button class="btn btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver produtos</button>
+                <button class="btn btn-ghost btn-sm" type="button" data-category-edit="${escapeHTML(cat.id)}">Regras</button>
                 <button class="btn btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}" ${cat.queue ? '' : 'disabled'}>Moderar</button>
               </div>
             </article>
@@ -503,11 +530,21 @@ function renderCategories() {
           <span class="category-management-icon">${icons[selectedCategory?.id] || icons.package}</span>
           <div>
             <h3>${escapeHTML(selectedCategory?.name || 'Categoria')}</h3>
-            <p>${selectedCategory?.total || 0} anuncios - ${selectedCategory?.active || 0} ativos - ${selectedCategory?.queue || 0} em analise</p>
+            <p>${selectedCategory?.total || 0} anuncios - ${selectedCategory?.active || 0} ativos - ${selectedCategory?.queue || 0} em analise - ${Number(selectedCategory?.maxSlots || 5)} vagas</p>
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Abrir moderacao</button>
+        <div class="category-management-actions">
+          <button class="btn btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras/vagas</button>
+          <button class="btn btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled' : ''}>Excluir categoria</button>
+          <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Abrir moderacao</button>
+        </div>
       </div>
+      ${selectedCategory ? `
+        <div class="category-rule-detail">
+          <strong>Regra atual:</strong>
+          <span>${escapeHTML(getCategoryRules(selectedCategory.id) || 'Sem regra especifica. A categoria usa apenas as regras gerais da instituicao.')}</span>
+        </div>
+      ` : ''}
 
       <div class="category-filter-row" role="tablist" aria-label="Filtrar produtos da categoria">
         ${filters.map(filter => `
@@ -529,25 +566,59 @@ function renderCategories() {
 
 function renderReports() {
   const s = loadedStats || (USE_MOCKS ? adminStats : {});
-  const sellersCount = new Set((loadedAllProducts || []).map(product => product.seller?.id || product.sellerId).filter(Boolean)).size;
-  const activeProducts = (loadedAllProducts || []).filter(product => product.status === 'active').length;
-  const mostActiveCategory = categories.filter(c => c.id !== 'all')
-    .map(category => ({ category, count: loadedCategoryStats?.[category.id]?.active || 0 }))
-    .sort((a, b) => b.count - a.count)[0]?.category;
+  const products = loadedAllProducts || [];
+  const rows = getAdminCategoryRows();
+  const sellersCount = new Set(products.map(product => product.seller?.id || product.sellerId).filter(Boolean)).size;
+  const activeProducts = products.filter(product => product.status === 'active').length;
+  const pendingProducts = products.filter(product => product.status === 'pending' || product.status === 'queue').length;
+  const expiredProducts = products.filter(product => product.status === 'expired').length;
+  const totalClicks = products.reduce((sum, product) => sum + Number(product.clicks || 0), 0);
+  const mostActiveCategory = rows.sort((a, b) => b.active - a.active || b.clicks - a.clicks)[0];
+  const topProducts = [...products].sort((a, b) => Number(b.clicks || 0) - Number(a.clicks || 0)).slice(0, 5);
   return `
     <div class="admin-section">
       <div class="admin-section-header">
-        <h3 class="admin-section-title">Impacto institucional</h3>
-        <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar TXT</button>
+        <div>
+          <h3 class="admin-section-title">Relatorios operacionais</h3>
+          <p class="admin-section-subtitle">Leitura real da base: produtos, vendedores, cliques e fila de moderacao.</p>
+        </div>
+        <div class="admin-section-actions">
+          <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="categories">${icons.grid} Categorias</button>
+          <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar TXT</button>
+        </div>
       </div>
-      <div class="admin-stats" style="margin-bottom:var(--space-5);padding:0;">
-        <div class="stat-card"><div class="stat-label">Vendedores com produtos</div><div class="stat-value">${sellersCount}</div></div>
-        <div class="stat-card"><div class="stat-label">Produtos ativos</div><div class="stat-value">${activeProducts}</div></div>
-        <div class="stat-card"><div class="stat-label">Cupons gerados</div><div class="stat-value">${s.couponsGenerated?.value ?? 0}</div></div>
-        <div class="stat-card"><div class="stat-label">Cupons usados</div><div class="stat-value">${s.couponsUsed?.value ?? 0}</div></div>
-        <div class="stat-card"><div class="stat-label">Conversao</div><div class="stat-value">${s.conversionRate?.value ?? '0%'}</div></div>
-        <div class="stat-card"><div class="stat-label">Cat. mais ativa</div><div class="stat-value">${mostActiveCategory?.icon || '-'}</div></div>
+
+      <div class="report-action-grid">
+        <button class="report-action-card" type="button" data-admin-metric="students"><span>Vendedores</span><strong>${sellersCount}</strong><small>Com produtos cadastrados</small></button>
+        <button class="report-action-card success" type="button" data-admin-tab="categories"><span>Produtos ativos</span><strong>${activeProducts}</strong><small>Visiveis para compradores</small></button>
+        <button class="report-action-card warning" type="button" data-admin-tab="moderation"><span>Pendentes</span><strong>${pendingProducts}</strong><small>Aguardando decisao</small></button>
+        <button class="report-action-card" type="button" data-admin-metric="clicks"><span>Cliques</span><strong>${totalClicks}</strong><small>Interacoes registradas</small></button>
+        <button class="report-action-card" type="button" data-admin-metric="couponsGenerated"><span>Cupons gerados</span><strong>${s.couponsGenerated?.value ?? 0}</strong><small>Emitidos para alunos</small></button>
+        <button class="report-action-card danger" type="button" data-admin-metric="conversion"><span>Conversao</span><strong>${s.conversionRate?.value ?? '0%'}</strong><small>Uso de cupom / geracao</small></button>
       </div>
+
+      <div class="reports-insight-grid">
+        <div class="report-panel">
+          <h4>Saude da vitrine</h4>
+          <div class="report-list">
+            <div><span>Categoria mais ativa</span><strong>${escapeHTML(mostActiveCategory?.name || 'Sem dados')}</strong></div>
+            <div><span>Produtos expirados</span><strong>${expiredProducts}</strong></div>
+            <div><span>Produtos totais</span><strong>${products.length}</strong></div>
+          </div>
+        </div>
+        <div class="report-panel">
+          <h4>Produtos com mais cliques</h4>
+          <div class="report-product-list">
+            ${topProducts.length ? topProducts.map(product => `
+              <button type="button" data-category-product-detail="${escapeHTML(product.id)}">
+                <span>${escapeHTML(product.title)}</span>
+                <strong>${Number(product.clicks || 0)} cliques</strong>
+              </button>
+            `).join('') : '<p class="muted-text">Nenhum clique registrado ainda.</p>'}
+          </div>
+        </div>
+      </div>
+
       <div class="reports-grid">
         <div class="chart-container">
           <h4>Produtos ativos por categoria</h4>
@@ -563,9 +634,29 @@ function renderReports() {
 }
 
 function renderSettings() {
+  const settings = {
+    autoApproveTrustedSellers: false,
+    requireMinorConsent: true,
+    requireSellerWhatsapp: true,
+    requireProductPhoto: true,
+    allowGuestBrowsing: true,
+    minDiscountPercent: 10,
+    maxDiscountPercent: 50,
+    reviewSlaHours: 24,
+    defaultAnnouncementHours: 24,
+    supportWhatsapp: '',
+    termsUrl: '',
+    paymentPolicy: 'O Linka nao cobra taxa. O vendedor recebe diretamente pelo Mercado Pago conectado.',
+    ...(activeInstitution.settings || {}),
+  };
   return `
     <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-5);">Configuracoes institucionais</h3>
+      <div class="admin-section-header">
+        <div>
+          <h3 class="admin-section-title">Configuracoes institucionais</h3>
+          <p class="admin-section-subtitle">Politicas, identidade e regras operacionais usadas pelo app em producao.</p>
+        </div>
+      </div>
       ${!activeInstitution?.id ? `
         <div class="admin-inline-alert">
           ${icons.alertTriangle}
@@ -573,30 +664,84 @@ function renderSettings() {
         </div>
       ` : ''}
       <div class="settings-section">
+        <h4 class="settings-group-title">Identidade</h4>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
+          <div class="setting-item-info"><h4>Nome da instituicao</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting="fullName" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
+          <div class="setting-item-info"><h4>Dominio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting="domain" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${activeInstitution.primaryColor};display:inline-block;"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting="primaryColor" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
         </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>URL do logo</h4><p>${escapeHTML(activeInstitution.logoUrl || 'Nao configurado')}</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting="logoUrl" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
+        </div>
         <div class="divider"></div>
+
+        <h4 class="settings-group-title">Moderacao e seguranca</h4>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Autoaprovação para bons vendedores</h4><p>Vendedores com 5+ anúncios aprovados sem recusa</p></div>
-          <div class="toggle ${activeInstitution.settings?.autoApproveTrustedSellers ? 'active' : ''}" data-setting-toggle="autoApproveTrustedSellers"></div>
+          <div class="setting-item-info"><h4>Autoaprovacao para bons vendedores</h4><p>Vendedores com 5+ anuncios aprovados sem recusa</p></div>
+          <div class="toggle ${settings.autoApproveTrustedSellers ? 'active' : ''}" data-setting-toggle="autoApproveTrustedSellers"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
-          <div class="toggle ${activeInstitution.settings?.requireMinorConsent !== false ? 'active' : ''}" data-setting-toggle="requireMinorConsent"></div>
+          <div class="setting-item-info"><h4>Consentimento de responsavel (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
+          <div class="toggle ${settings.requireMinorConsent !== false ? 'active' : ''}" data-setting-toggle="requireMinorConsent"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Regras de uso</h4><p>Termos e politicas devem ficar no contrato ou em uma pagina dedicada antes de serem publicados no app.</p></div>
-          <span class="badge badge-neutral">Sem acao no app</span>
+          <div class="setting-item-info"><h4>WhatsApp obrigatorio para vendedor</h4><p>Melhora contato, retirada e suporte ao comprador</p></div>
+          <div class="toggle ${settings.requireSellerWhatsapp !== false ? 'active' : ''}" data-setting-toggle="requireSellerWhatsapp"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Foto real obrigatoria</h4><p>Ajuda a moderacao e evita anuncios genericos</p></div>
+          <div class="toggle ${settings.requireProductPhoto !== false ? 'active' : ''}" data-setting-toggle="requireProductPhoto"></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Navegacao de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
+          <div class="toggle ${settings.allowGuestBrowsing !== false ? 'active' : ''}" data-setting-toggle="allowGuestBrowsing"></div>
+        </div>
+        <div class="divider"></div>
+
+        <h4 class="settings-group-title">Regras comerciais</h4>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Desconto minimo</h4><p>${Number(settings.minDiscountPercent || 10)}% por anuncio</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-number="minDiscountPercent">Editar</button>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Desconto maximo</h4><p>${Number(settings.maxDiscountPercent || 50)}% por anuncio</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-number="maxDiscountPercent">Editar</button>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Prazo de revisao</h4><p>${Number(settings.reviewSlaHours || 24)} horas para SLA interno</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-number="reviewSlaHours">Editar</button>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Duracao padrao da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria nao definir</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-number="defaultAnnouncementHours">Editar</button>
+        </div>
+        <div class="divider"></div>
+
+        <h4 class="settings-group-title">Governanca e suporte</h4>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>WhatsApp de suporte da instituicao</h4><p>${escapeHTML(settings.supportWhatsapp || 'Nao configurado')}</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-text="supportWhatsapp">Editar</button>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>URL de termos de uso</h4><p>${escapeHTML(settings.termsUrl || 'Nao configurado')}</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-text="termsUrl">Editar</button>
+        </div>
+        <div class="setting-item">
+          <div class="setting-item-info"><h4>Politica de pagamentos</h4><p>${escapeHTML(settings.paymentPolicy)}</p></div>
+          <button class="btn btn-ghost btn-sm" data-setting-text="paymentPolicy">Editar</button>
+        </div>
+        <div class="settings-real-summary">
+          <span>${getAdminCategories(false).length} categorias reais</span>
+          <span>${(loadedAllProducts || []).length} anuncios no banco</span>
+          <span>${(loadedPendingAds || []).length} pendentes</span>
         </div>
       </div>
     </div>
@@ -617,7 +762,7 @@ function showAdminProductDetails(productId, container) {
   }
 
   const modalRoot = document.getElementById('modal-root');
-  const category = categories.find(c => c.id === product.category);
+  const category = getAdminCategories().find(c => c.id === product.category);
   const status = getProductStatusMeta(product.status);
   const images = Array.isArray(product.images) && product.images.length ? product.images : [null];
   const isModeratable = product.status === 'pending' || product.status === 'queue';
@@ -635,12 +780,12 @@ function showAdminProductDetails(productId, container) {
           <button class="btn btn-ghost btn-icon" type="button" id="close-admin-product-modal" aria-label="Fechar">${icons.x}</button>
         </div>
         <div class="admin-product-detail-gallery">
-          <div class="admin-product-detail-main">
+          <button class="admin-product-detail-main" type="button" data-admin-photo-index="0" aria-label="Ampliar foto principal">
             ${getProductImage(images[0], 480, 280, product.category)}
-          </div>
+          </button>
           ${images.length > 1 ? `
             <div class="admin-product-detail-thumbs">
-              ${images.map(image => `<div>${getProductImage(image, 96, 72, product.category)}</div>`).join('')}
+              ${images.map((image, index) => `<button type="button" data-admin-photo-index="${index}" aria-label="Abrir foto ${index + 1}">${getProductImage(image, 96, 72, product.category)}</button>`).join('')}
             </div>
           ` : ''}
         </div>
@@ -665,6 +810,7 @@ function showAdminProductDetails(productId, container) {
           </div>
         ` : ''}
         <div class="admin-product-modal-actions">
+          <button class="btn btn-danger" type="button" data-modal-delete="${escapeHTML(product.id)}">Excluir da vitrine</button>
           ${isModeratable ? `
             <button class="btn btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
             <button class="btn btn-secondary" type="button" data-modal-adjust="${escapeHTML(product.id)}">Solicitar ajuste</button>
@@ -683,6 +829,14 @@ function showAdminProductDetails(productId, container) {
   });
   modalRoot.querySelector('#close-admin-product-modal')?.addEventListener('click', closeModal);
   modalRoot.querySelector('#close-admin-product-modal-secondary')?.addEventListener('click', closeModal);
+  modalRoot.querySelectorAll('[data-admin-photo-index]').forEach((button) => {
+    button.addEventListener('click', () => showAdminPhotoViewer(images, Number(button.dataset.adminPhotoIndex || 0), product));
+  });
+  modalRoot.querySelector('[data-modal-delete]')?.addEventListener('click', (event) => {
+    const id = event.currentTarget.dataset.modalDelete;
+    closeModal();
+    showDeleteProductModal(id, container);
+  });
   modalRoot.querySelector('[data-modal-adjust]')?.addEventListener('click', (event) => {
     const id = event.currentTarget.dataset.modalAdjust;
     closeModal();
@@ -711,6 +865,292 @@ function showAdminProductDetails(productId, container) {
   });
 }
 
+function showAdminPhotoViewer(images, startIndex = 0, product = {}) {
+  const safeImages = Array.isArray(images) && images.length ? images : [null];
+  let currentIndex = Math.min(Math.max(startIndex, 0), safeImages.length - 1);
+  const modalRoot = document.getElementById('modal-root');
+
+  const render = () => {
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop admin-photo-backdrop" id="admin-photo-modal">
+        <div class="admin-photo-viewer">
+          <button class="btn btn-ghost btn-icon admin-photo-close" type="button" id="close-admin-photo" aria-label="Fechar">${icons.x}</button>
+          <div class="admin-photo-stage">
+            ${getProductImage(safeImages[currentIndex], 900, 680, product.category)}
+          </div>
+          <div class="admin-photo-controls">
+            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-prev" ${safeImages.length <= 1 ? 'disabled' : ''}>Anterior</button>
+            <span>${currentIndex + 1} / ${safeImages.length}</span>
+            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-next" ${safeImages.length <= 1 ? 'disabled' : ''}>Proxima</button>
+          </div>
+        </div>
+      </div>
+    `;
+    modalRoot.querySelector('#admin-photo-modal')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget) modalRoot.innerHTML = '';
+    });
+    modalRoot.querySelector('#close-admin-photo')?.addEventListener('click', () => { modalRoot.innerHTML = ''; });
+    modalRoot.querySelector('#admin-photo-prev')?.addEventListener('click', () => {
+      currentIndex = (currentIndex - 1 + safeImages.length) % safeImages.length;
+      render();
+    });
+    modalRoot.querySelector('#admin-photo-next')?.addEventListener('click', () => {
+      currentIndex = (currentIndex + 1) % safeImages.length;
+      render();
+    });
+  };
+
+  render();
+}
+
+function showDeleteProductModal(productId, container) {
+  const product = (loadedAllProducts || []).find(item => String(item.id) === String(productId));
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="delete-product-modal">
+      <div class="modal-content">
+        <div class="modal-handle"></div>
+        <h3 class="modal-title">Excluir anuncio</h3>
+        <p class="modal-description">Isso remove o produto da vitrine e encerra a oferta para compradores. O historico continua preservado para auditoria.</p>
+        ${product ? `<div class="delete-product-summary"><strong>${escapeHTML(product.title)}</strong><span>${formatCurrency(product.discountPrice)}</span></div>` : ''}
+        <div class="modal-actions">
+          <button class="btn btn-secondary" type="button" id="cancel-delete-product">Cancelar</button>
+          <button class="btn btn-danger" type="button" id="confirm-delete-product">Excluir da vitrine</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('#delete-product-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  modalRoot.querySelector('#cancel-delete-product')?.addEventListener('click', close);
+  modalRoot.querySelector('#confirm-delete-product')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Excluindo...';
+    const result = await deleteSellerProduct(productId);
+    if (result?.success) {
+      close();
+      showToast('Anuncio removido da vitrine.', 'success');
+      await renderAdminPage(container);
+      if (adminView === 'categories') scrollCategoryManagementIntoView(container);
+    } else {
+      button.disabled = false;
+      button.textContent = 'Excluir da vitrine';
+      showToast(result?.error || 'Nao foi possivel excluir o anuncio.', 'error');
+    }
+  });
+}
+
+function showCategoryModal(mode, category, container) {
+  const isEdit = mode === 'edit';
+  const modalRoot = document.getElementById('modal-root');
+  const currentRules = isEdit ? getCategoryRules(category.id) : '';
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="category-modal">
+      <div class="modal-content category-editor-modal">
+        <div class="modal-handle"></div>
+        <form id="category-form">
+          <h3 class="modal-title">${isEdit ? 'Editar categoria' : 'Nova categoria'}</h3>
+          <p class="modal-description">Estas regras ficam salvas no banco e passam a orientar a moderacao e os novos anuncios.</p>
+          <div class="input-group">
+            <label>Nome da categoria</label>
+            <input class="input-field" name="name" value="${escapeHTML(category?.name || '')}" placeholder="Ex.: Livros e apostilas" required maxlength="48" />
+          </div>
+          ${isEdit ? '' : `
+            <div class="input-group">
+              <label>Identificador</label>
+              <input class="input-field" name="id" placeholder="livros-apostilas" maxlength="48" />
+            </div>
+          `}
+          <div class="category-editor-grid">
+            <div class="input-group">
+              <label>Vagas por anuncio</label>
+              <input class="input-field" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
+            </div>
+            <div class="input-group">
+              <label>Horas na vitrine</label>
+              <input class="input-field" name="durationHours" type="number" min="1" max="720" value="${Number(category?.durationHours || 24)}" required />
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Regra da categoria</label>
+            <textarea class="input-field" name="rules" rows="3" placeholder="Ex.: Somente produtos lacrados ou com foto real.">${escapeHTML(currentRules)}</textarea>
+          </div>
+          <div class="modal-inline-status" id="category-modal-status" role="status" aria-live="polite"></div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="cancel-category">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="save-category">${isEdit ? 'Salvar' : 'Criar categoria'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('#category-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  modalRoot.querySelector('#cancel-category')?.addEventListener('click', close);
+  modalRoot.querySelector('#category-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const saveButton = modalRoot.querySelector('#save-category');
+    const statusEl = modalRoot.querySelector('#category-modal-status');
+    const payload = {
+      name: String(form.get('name') || '').trim(),
+      id: String(form.get('id') || '').trim(),
+      maxSlots: Number(form.get('maxSlots') || 5),
+      durationHours: Number(form.get('durationHours') || 24),
+    };
+    const rules = String(form.get('rules') || '').trim();
+
+    saveButton.disabled = true;
+    saveButton.textContent = 'Salvando...';
+    if (statusEl) {
+      statusEl.className = 'modal-inline-status info';
+      statusEl.textContent = 'Salvando categoria no Supabase...';
+    }
+
+    try {
+      const savedCategory = isEdit
+        ? await updateCategory(category.id, payload)
+        : await createCategory(payload);
+
+      if (activeInstitution?.id) {
+        const settings = {
+          ...(activeInstitution.settings || {}),
+          categoryRules: {
+            ...(activeInstitution.settings?.categoryRules || {}),
+            [savedCategory.id]: rules,
+          },
+        };
+        const result = await updateInstitution(activeInstitution.id, { settings });
+        if (result?.success) activeInstitution = result.institution;
+      }
+
+      selectedCategoryId = savedCategory.id;
+      close();
+      showToast(isEdit ? 'Categoria atualizada.' : 'Categoria criada.', 'success');
+      await renderAdminPage(container);
+      scrollCategoryManagementIntoView(container);
+    } catch (error) {
+      saveButton.disabled = false;
+      saveButton.textContent = isEdit ? 'Salvar' : 'Criar categoria';
+      const message = error.message || 'Nao foi possivel salvar a categoria.';
+      if (statusEl) {
+        statusEl.className = 'modal-inline-status error';
+        statusEl.textContent = message;
+      }
+      showToast(message, 'error');
+    }
+  });
+}
+
+function showDeleteCategoryModal(categoryId, container) {
+  const category = getAdminCategoryRows().find((row) => row.id === categoryId);
+  if (!category) return;
+  if (category.total > 0) {
+    showToast('Antes de excluir, mova ou encerre os anuncios vinculados a esta categoria.', 'error');
+    return;
+  }
+
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="delete-category-modal">
+      <div class="modal-content">
+        <div class="modal-handle"></div>
+        <h3 class="modal-title">Excluir categoria</h3>
+        <p class="modal-description">A categoria "${escapeHTML(category.name)}" sera removida do banco. Essa acao so e permitida quando nao ha anuncios vinculados.</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" type="button" id="cancel-delete-category">Cancelar</button>
+          <button class="btn btn-danger" type="button" id="confirm-delete-category">Excluir categoria</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('#delete-category-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  modalRoot.querySelector('#cancel-delete-category')?.addEventListener('click', close);
+  modalRoot.querySelector('#confirm-delete-category')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Excluindo...';
+    try {
+      await deleteCategory(categoryId);
+      close();
+      selectedCategoryId = null;
+      showToast('Categoria excluida.', 'success');
+      await renderAdminPage(container);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Excluir categoria';
+      showToast(error.message || 'Nao foi possivel excluir a categoria.', 'error');
+    }
+  });
+}
+
+function showAdminMetricModal(title, description, rows = []) {
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="metric-modal">
+      <div class="modal-content admin-metric-modal">
+        <div class="modal-handle"></div>
+        <h3 class="modal-title">${escapeHTML(title)}</h3>
+        <p class="modal-description">${escapeHTML(description)}</p>
+        <div class="metric-modal-list">
+          ${rows.length ? rows.map((row) => `
+            <div class="metric-modal-row">
+              <span>${escapeHTML(row.label)}</span>
+              <strong>${escapeHTML(String(row.value))}</strong>
+            </div>
+          `).join('') : '<div class="empty-state compact"><h3>Sem dados para detalhar</h3><p>Assim que houver uso real, esta lista sera preenchida automaticamente.</p></div>'}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="button" id="close-metric-modal">Ok</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('#metric-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  modalRoot.querySelector('#close-metric-modal')?.addEventListener('click', close);
+}
+
+async function handleAdminMetric(metric, container) {
+  if (metric === 'pending') {
+    adminView = 'moderation';
+    await renderAdminPage(container);
+    return;
+  }
+  if (metric === 'clicks') {
+    const rows = getAdminCategoryRows().sort((a, b) => b.clicks - a.clicks);
+    selectedCategoryId = rows[0]?.id || selectedCategoryId;
+    adminView = 'categories';
+    categoryStatusFilter = 'all';
+    await renderAdminPage(container);
+    scrollCategoryManagementIntoView(container);
+    return;
+  }
+  if (metric === 'couponsGenerated' || metric === 'couponsUsed' || metric === 'conversion') {
+    adminView = 'reports';
+    await renderAdminPage(container);
+    return;
+  }
+
+  const stats = loadedStats || {};
+  const sellerCount = new Set((loadedAllProducts || []).map((product) => product.seller?.id || product.sellerId).filter(Boolean)).size;
+  showAdminMetricModal('Alunos da instituicao', 'Resumo operacional com os dados disponiveis no banco.', [
+    { label: 'Alunos cadastrados', value: stats.students?.value ?? 0 },
+    { label: 'Vendedores com produtos', value: sellerCount },
+    { label: 'Dominio institucional', value: activeInstitution?.domain || 'Nao configurado' },
+  ]);
+}
+
 function bindAdminEvents(container) {
   // Tabs
   container.querySelectorAll('[data-admin-tab]').forEach(tab => {
@@ -723,6 +1163,14 @@ function bindAdminEvents(container) {
   });
 
   container.addEventListener('click', async (event) => {
+    const metricBtn = event.target.closest?.('[data-admin-metric]');
+    if (metricBtn) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      await handleAdminMetric(metricBtn.dataset.adminMetric, container);
+      return;
+    }
+
     const approveBtn = event.target.closest?.('.approve-btn');
     if (approveBtn) {
       event.preventDefault();
@@ -761,11 +1209,44 @@ function bindAdminEvents(container) {
   }, true);
 
   container.addEventListener('click', async (event) => {
+    const createCategoryBtn = event.target.closest?.('[data-category-create]');
+    if (createCategoryBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      showCategoryModal('create', null, container);
+      return;
+    }
+
+    const editCategoryBtn = event.target.closest?.('[data-category-edit]');
+    if (editCategoryBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const category = getAdminCategoryRows().find((row) => row.id === editCategoryBtn.dataset.categoryEdit);
+      if (category) showCategoryModal('edit', category, container);
+      return;
+    }
+
+    const deleteCategoryBtn = event.target.closest?.('[data-category-delete]');
+    if (deleteCategoryBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!deleteCategoryBtn.disabled) showDeleteCategoryModal(deleteCategoryBtn.dataset.categoryDelete, container);
+      return;
+    }
+
     const productDetailBtn = event.target.closest?.('[data-category-product-detail]');
     if (productDetailBtn) {
       event.preventDefault();
       event.stopPropagation();
       showAdminProductDetails(productDetailBtn.dataset.categoryProductDetail, container);
+      return;
+    }
+
+    const deleteProductBtn = event.target.closest?.('[data-category-product-delete]');
+    if (deleteProductBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      showDeleteProductModal(deleteProductBtn.dataset.categoryProductDelete, container);
       return;
     }
 
@@ -954,6 +1435,80 @@ function bindAdminEvents(container) {
         } else {
           confirmBtn.disabled = false;
           confirmBtn.textContent = 'Salvar';
+          const errorMessage = result?.error || 'Nao foi possivel salvar.';
+          if (statusEl) {
+            statusEl.className = 'modal-inline-status error';
+            statusEl.textContent = errorMessage;
+          }
+          showToast(errorMessage, 'error');
+        }
+      });
+    });
+  });
+
+  container.querySelectorAll('[data-setting-text], [data-setting-number]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!activeInstitution?.id) {
+        showToast('Instituicao real nao encontrada para salvar.', 'error');
+        return;
+      }
+      const isNumber = Boolean(btn.dataset.settingNumber);
+      const settingKey = btn.dataset.settingNumber || btn.dataset.settingText;
+      const settingItem = btn.closest('.setting-item');
+      const title = settingItem?.querySelector('h4')?.textContent || 'Configuracao';
+      const currentValue = activeInstitution.settings?.[settingKey] ?? '';
+      const modalRoot = document.getElementById('modal-root');
+      modalRoot.innerHTML = `
+        <div class="modal-backdrop" id="settings-json-modal">
+          <div class="modal-content">
+            <div class="modal-handle"></div>
+            <form id="settings-json-form">
+              <h3 class="modal-title">Editar: ${escapeHTML(title)}</h3>
+              <div class="input-group">
+                ${isNumber
+                  ? `<input class="input-field" id="settingJsonVal" type="number" min="0" value="${escapeHTML(String(currentValue || ''))}" />`
+                  : `<textarea class="input-field" id="settingJsonVal" rows="3">${escapeHTML(String(currentValue || ''))}</textarea>`}
+              </div>
+              <div class="modal-inline-status" id="setting-json-status" role="status" aria-live="polite"></div>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancel-json-setting">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="confirm-json-setting">Salvar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+      const close = () => { modalRoot.innerHTML = ''; };
+      modalRoot.querySelector('#settings-json-modal')?.addEventListener('click', (event) => {
+        if (event.target === event.currentTarget) close();
+      });
+      modalRoot.querySelector('#cancel-json-setting')?.addEventListener('click', close);
+      modalRoot.querySelector('#settings-json-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const saveBtn = modalRoot.querySelector('#confirm-json-setting');
+        const statusEl = modalRoot.querySelector('#setting-json-status');
+        const rawValue = modalRoot.querySelector('#settingJsonVal')?.value?.trim() || '';
+        const value = isNumber ? Number(rawValue) : rawValue;
+        if (isNumber && (!Number.isFinite(value) || value < 0)) {
+          showToast('Informe um numero valido.', 'error');
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvando...';
+        if (statusEl) {
+          statusEl.className = 'modal-inline-status info';
+          statusEl.textContent = 'Salvando configuracao...';
+        }
+        const settings = { ...(activeInstitution.settings || {}), [settingKey]: value };
+        const result = await updateInstitution(activeInstitution.id, { settings });
+        if (result?.success) {
+          activeInstitution = result.institution;
+          close();
+          showToast('Configuracao salva.', 'success');
+          renderAdminPage(container);
+        } else {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Salvar';
           const errorMessage = result?.error || 'Nao foi possivel salvar.';
           if (statusEl) {
             statusEl.className = 'modal-inline-status error';
@@ -1206,7 +1761,7 @@ function drawBarChart(canvas, metric = 'active') {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const rows = categories.filter(c => c.id !== 'all').map((category) => ({
+  const rows = getAdminCategories(false).map((category) => ({
     label: category.name.split(' ')[0],
     value: Number(loadedCategoryStats?.[category.id]?.[metric] || 0),
   }));

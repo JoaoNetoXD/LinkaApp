@@ -121,10 +121,27 @@ export async function getSellerProducts(sellerId) {
 /**
  * Create a new product (seller submits ad)
  */
+async function getCategoryDefaults(categoryId) {
+  try {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('max_slots,duration_hours')
+      .eq('id', categoryId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data || {};
+  } catch (error) {
+    console.warn('Nao foi possivel carregar regras da categoria:', error.message);
+    return {};
+  }
+}
+
 export async function createProduct({ sellerId, title, description, categoryId, originalPrice, discount, images = [], whatsapp, institutionId = null }) {
   const discountPrice = Math.round(originalPrice * (1 - discount / 100) * 100) / 100;
 
   try {
+    const categoryDefaults = await getCategoryDefaults(categoryId);
     if (whatsapp) {
       await supabase
         .from('profiles')
@@ -142,7 +159,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
       discount_price: discountPrice,
       images,
       status: 'pending',
-      slots_total: 5,
+      slots_total: Number(categoryDefaults.max_slots || 5),
       slots_used: 0,
       clicks: 0,
     };

@@ -1,10 +1,11 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
-import { products as mockProducts, categories, coupons, currentUser, institution } from '../data/mock.js';
+import { products as mockProducts, categories as mockCategories, coupons, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons } from '../services/coupon-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
 import { getInstitution } from '../services/institution-service.js';
+import { getCategories } from '../services/category-service.js';
 import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
 
@@ -111,11 +112,17 @@ let paymentTimerInterval = null;
 let paymentPollInterval = null;
 let cachedProducts = null;
 let activeInstitution = institution;
+let loadedCategories = mockCategories;
 
 // Intersection Observer for card entrance animation
 let observer = null;
 let lastSyncedCheckoutRef = null;
 const PENDING_CHECKOUT_REF_KEY = 'linka_pending_checkout_ref';
+
+function getMarketCategories(includeAll = true) {
+  const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
+  return includeAll ? rows : rows.filter((category) => category.id !== 'all');
+}
 
 function getPaymentRefFromParams(params) {
   return params.get('payment_id')
@@ -194,6 +201,17 @@ async function syncInstitutionForUser() {
     }
   }
   activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+}
+
+async function syncCategories() {
+  try {
+    loadedCategories = await getCategories();
+    if (!getMarketCategories().some((category) => category.id === activeCategory)) {
+      activeCategory = 'all';
+    }
+  } catch {
+    loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }];
+  }
 }
 
 async function saveCurrentProfileFields({ name, whatsapp }) {
@@ -284,6 +302,7 @@ async function renderBuyerPage(container) {
   await Promise.allSettled([
     syncCheckoutReturnIfNeeded(),
     syncInstitutionForUser(),
+    syncCategories(),
   ]);
 
   if (currentView !== 'home' && container.querySelector('.buyer-home-loading')) {
@@ -416,7 +435,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         <!-- CATEGORY CHIPS (Now in header for stickiness) -->
         <div class="category-scroll">
           <div class="category-chips">
-            ${categories.map(c => `
+            ${getMarketCategories().map(c => `
               <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
                 ${icons[c.id] || icons.others}
                 <span>${escapeHTML(c.name)}</span>
@@ -443,7 +462,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       <!-- PRODUCTS LIST -->
       <div class="products-list ${loading ? 'buyer-home-loading' : ''}">
         ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? renderEmptyProductsState() : filteredProducts.map(p => {
-          const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
+          const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
           const catIcon = icons[p.category] || icons.others;
           const timer = getTimerInfo(p.expiresIn);
           const slots = getSlotsInfo(p.slots.used, p.slots.total);
@@ -1468,7 +1487,7 @@ function renderProductDetail(container) {
   const p = selectedProduct;
   if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
 
-  const catName = categories.find(c => c.id === p.category)?.name || 'Outros';
+  const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
   const timer = getTimerInfo(p.expiresIn || '24h 00min');
   const slots = getSlotsInfo(p.slots?.used || 0, p.slots?.total || 5);
   const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);

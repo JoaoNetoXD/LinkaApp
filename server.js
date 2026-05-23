@@ -148,7 +148,6 @@ function requireSupabaseAdmin() {
   return supabaseAdmin;
 }
 
-const PRODUCT_CATEGORY_IDS = new Set(['food', 'fashion', 'services', 'digital', 'others']);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function assertUuid(value, label = 'ID') {
@@ -207,6 +206,87 @@ function normalizeInstitutionUpdates(body = {}) {
     throw makeHttpError('Nenhum campo valido para salvar.', 400, 'EMPTY_UPDATE');
   }
   return updates;
+}
+
+function slugifyCategoryId(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+}
+
+function normalizeCategoryPayload(body = {}, { partial = false } = {}) {
+  const updates = {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+
+  const rawName = has('name') ? String(body.name || '').trim() : '';
+  if (!partial || has('name')) {
+    if (rawName.length < 3 || rawName.length > 48) {
+      throw makeHttpError('O nome da categoria precisa ter entre 3 e 48 caracteres.', 400, 'INVALID_CATEGORY_NAME');
+    }
+    updates.name = rawName;
+  }
+
+  let id = null;
+  if (!partial) {
+    id = slugifyCategoryId(body.id || rawName);
+    if (!id || id === 'all' || id.length < 2) {
+      throw makeHttpError('Informe um identificador valido para a categoria.', 400, 'INVALID_CATEGORY_ID');
+    }
+  }
+
+  if (!partial || has('maxSlots') || has('max_slots')) {
+    const maxSlots = Number.parseInt(body.maxSlots ?? body.max_slots ?? 5, 10);
+    if (!Number.isInteger(maxSlots) || maxSlots < 1 || maxSlots > 99) {
+      throw makeHttpError('As vagas por anuncio precisam ficar entre 1 e 99.', 400, 'INVALID_CATEGORY_SLOTS');
+    }
+    updates.max_slots = maxSlots;
+  }
+
+  if (!partial || has('durationHours') || has('duration_hours')) {
+    const durationHours = Number.parseInt(body.durationHours ?? body.duration_hours ?? 24, 10);
+    if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 720) {
+      throw makeHttpError('A duracao precisa ficar entre 1 e 720 horas.', 400, 'INVALID_CATEGORY_DURATION');
+    }
+    updates.duration_hours = durationHours;
+  }
+
+  if (partial && Object.keys(updates).length === 0) {
+    throw makeHttpError('Nenhum campo valido para salvar.', 400, 'EMPTY_CATEGORY_UPDATE');
+  }
+
+  return { id, updates };
+}
+
+async function resolveAdminInstitutionId(admin, auth) {
+  if (auth.profile?.institution_id) return auth.profile.institution_id;
+
+  const { data, error } = await admin.from('institutions').select('id').limit(2);
+  if (error) throw error;
+
+  return data?.length === 1 ? data[0].id : null;
+}
+
+async function loadCategoryForMutation(admin, categoryId) {
+  const id = slugifyCategoryId(categoryId);
+  if (!id || id === 'all') {
+    throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+  }
+
+  const { data, error } = await admin
+    .from('categories')
+    .select('id,name,max_slots,duration_hours,institution_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+  }
+  return data;
 }
 
 function requireMercadoPagoOAuthConfig() {
@@ -724,8 +804,8 @@ function normalizeSellerProductUpdate(body, product) {
   }
 
   if (has('categoryId')) {
-    const categoryId = String(body.categoryId || '').trim();
-    if (!PRODUCT_CATEGORY_IDS.has(categoryId)) {
+    const categoryId = slugifyCategoryId(body.categoryId);
+    if (!categoryId) {
       throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
     }
     updates.category_id = categoryId;
@@ -1256,6 +1336,11 @@ app.patch('/api/seller/products/:productId', async (req, res) => {
     assertCanManageSellerProduct(auth, product);
 
     const updates = normalizeSellerProductUpdate(req.body || {}, product);
+    if (updates.category_id) {
+      const category = await loadCategoryForMutation(admin, updates.category_id);
+      updates.slots_total = Number(category.max_slots || product.slots_total || 5);
+      updates.slots_used = Math.min(Number(product.slots_used || 0), updates.slots_total);
+    }
     const whatsapp = String(req.body?.whatsapp || '').trim();
     if (whatsapp) {
       await admin.from('profiles').update({ whatsapp }).eq('id', product.seller_id);
@@ -1330,6 +1415,123 @@ app.post('/api/seller/products/:productId/renew', async (req, res) => {
   } catch (error) {
     console.error('Erro ao renovar produto do vendedor:', error);
     res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_RENEW_ERROR', error: error.message || 'Erro ao renovar produto' });
+  }
+});
+
+app.get('/api/admin/categories', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertAdmin(auth);
+
+    const admin = requireSupabaseAdmin();
+    const { data, error } = await admin
+      .from('categories')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    res.json({ success: true, categories: data || [] });
+  } catch (error) {
+    console.error('Erro ao carregar categorias admin:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_CATEGORIES_ERROR', error: error.message || 'Erro ao carregar categorias' });
+  }
+});
+
+app.post('/api/admin/categories', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertAdmin(auth);
+
+    const admin = requireSupabaseAdmin();
+    const { id, updates } = normalizeCategoryPayload(req.body || {});
+    const institutionId = await resolveAdminInstitutionId(admin, auth);
+
+    const { data, error } = await admin
+      .from('categories')
+      .insert({
+        id,
+        ...updates,
+        institution_id: institutionId,
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        throw makeHttpError('Ja existe uma categoria com esse identificador.', 409, 'CATEGORY_ALREADY_EXISTS');
+      }
+      throw error;
+    }
+
+    res.status(201).json({ success: true, category: data });
+  } catch (error) {
+    console.error('Erro ao criar categoria admin:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_CATEGORY_CREATE_ERROR', error: error.message || 'Erro ao criar categoria' });
+  }
+});
+
+app.patch('/api/admin/categories/:categoryId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertAdmin(auth);
+
+    const admin = requireSupabaseAdmin();
+    const category = await loadCategoryForMutation(admin, req.params.categoryId);
+    const { updates } = normalizeCategoryPayload(req.body || {}, { partial: true });
+
+    const { data, error } = await admin
+      .from('categories')
+      .update(updates)
+      .eq('id', category.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    if (Object.prototype.hasOwnProperty.call(updates, 'max_slots')) {
+      const { error: productError } = await admin
+        .from('products')
+        .update({ slots_total: updates.max_slots })
+        .eq('category_id', category.id)
+        .in('status', ['pending', 'needs_adjustment', 'active']);
+      if (productError) throw productError;
+    }
+
+    res.json({ success: true, category: data });
+  } catch (error) {
+    console.error('Erro ao atualizar categoria admin:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_CATEGORY_UPDATE_ERROR', error: error.message || 'Erro ao atualizar categoria' });
+  }
+});
+
+app.delete('/api/admin/categories/:categoryId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertAdmin(auth);
+
+    const admin = requireSupabaseAdmin();
+    const category = await loadCategoryForMutation(admin, req.params.categoryId);
+    const { count, error: countError } = await admin
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('category_id', category.id);
+
+    if (countError) throw countError;
+    if ((count || 0) > 0) {
+      throw makeHttpError('Nao e possivel excluir uma categoria com anuncios vinculados.', 409, 'CATEGORY_HAS_PRODUCTS');
+    }
+
+    const { error } = await admin.from('categories').delete().eq('id', category.id);
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir categoria admin:', error);
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_CATEGORY_DELETE_ERROR', error: error.message || 'Erro ao excluir categoria' });
   }
 });
 

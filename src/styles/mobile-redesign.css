@@ -2111,3 +2111,355 @@ html[data-theme="dark"] .btn-mp {
     animation: none !important;
   }
 }
+
+/* Admin production polish: one consistent desktop canvas and real controls */
+.admin-page {
+  width: 100% !important;
+  max-width: none !important;
+  align-items: stretch !important;
+  background:
+    radial-gradient(circle at 50% -120px, rgba(37, 99, 235, 0.16), transparent 360px),
+    linear-gradient(90deg, var(--mobile-app-bg) 0%, var(--mobile-app-bg) 100%) !important;
+}
+
+.admin-page .app-header,
+.admin-page .app-body {
+  width: min(1180px, calc(100vw - 32px)) !important;
+  max-width: 1180px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.admin-page .app-header {
+  margin-top: 18px !important;
+  border-radius: 24px !important;
+}
+
+.admin-page .app-body {
+  padding: 24px 0 132px !important;
+}
+
+.admin-tabs-container,
+.admin-stats-grid,
+.admin-section {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.admin-tabs-container {
+  padding: 0 !important;
+}
+
+.admin-stats-grid {
+  padding: 0 !important;
+}
+
+.admin-section {
+  padding: 18px !important;
+  background: var(--mobile-card-bg) !important;
+  border: 1px solid var(--mobile-line) !important;
+  border-radius: 24px !important;
+  box-shadow: var(--mobile-shadow-soft) !important;
+}
+
+.admin-section-header,
+.admin-section-actions,
+.category-management-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.admin-section-header {
+  justify-content: space-between !important;
+}
+
+.admin-section-actions,
+.category-management-actions {
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+}
+
+.admin-metric-card,
+.report-action-card {
+  text-align: left !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  font: inherit !important;
+}
+
+.admin-metric-card:hover,
+.admin-metric-card:focus-visible,
+.report-action-card:hover,
+.report-action-card:focus-visible {
+  transform: translateY(-2px) !important;
+  border-color: color-mix(in srgb, var(--mobile-blue) 58%, var(--mobile-line)) !important;
+  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.18) !important;
+}
+
+.category-rule-line,
+.category-rule-preview,
+.category-rule-detail,
+.muted-text {
+  color: var(--mobile-muted) !important;
+}
+
+.category-rule-line {
+  margin-top: 6px !important;
+  font-size: 12px !important;
+}
+
+.category-rule-preview,
+.category-rule-detail {
+  margin-top: 10px !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.category-rule-detail {
+  display: flex !important;
+  gap: 8px !important;
+  padding: 12px !important;
+  border-radius: 14px !important;
+  background: var(--mobile-surface-soft) !important;
+  border: 1px solid var(--mobile-line) !important;
+}
+
+.category-rule-detail strong {
+  color: var(--mobile-ink) !important;
+  white-space: nowrap !important;
+}
+
+.category-heat-actions,
+.category-product-actions,
+.admin-product-modal-actions,
+.modal-actions {
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+.category-heat-actions .btn,
+.category-product-actions .btn,
+.admin-product-modal-actions .btn,
+.modal-actions .btn {
+  min-height: 40px !important;
+}
+
+.admin-product-detail-main {
+  border: 0 !important;
+  padding: 0 !important;
+  cursor: zoom-in !important;
+}
+
+.admin-product-detail-thumbs {
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)) !important;
+}
+
+.admin-product-detail-thumbs > button {
+  height: 72px !important;
+  border: 1px solid var(--mobile-line) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  background: var(--mobile-image-bg) !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+}
+
+.admin-photo-backdrop {
+  background: rgba(0, 0, 0, 0.86) !important;
+}
+
+.admin-photo-viewer {
+  width: min(940px, calc(100vw - 28px)) !important;
+  max-height: calc(100vh - 40px) !important;
+  display: grid !important;
+  gap: 14px !important;
+}
+
+.admin-photo-stage {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  background: #020617 !important;
+  height: min(70vh, 680px) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+}
+
+.admin-photo-stage img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.admin-photo-close {
+  justify-self: end !important;
+  color: #fff !important;
+}
+
+.admin-photo-controls {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 12px !important;
+  color: #fff !important;
+}
+
+.delete-product-summary,
+.metric-modal-row,
+.report-panel,
+.settings-real-summary {
+  background: var(--mobile-surface-soft) !important;
+  border: 1px solid var(--mobile-line) !important;
+  border-radius: 16px !important;
+}
+
+.delete-product-summary,
+.metric-modal-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 12px !important;
+}
+
+.metric-modal-list,
+.report-list,
+.report-product-list {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.report-action-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)) !important;
+  gap: 12px !important;
+  margin-bottom: 18px !important;
+}
+
+.report-action-card {
+  border: 1px solid var(--mobile-line) !important;
+  border-radius: 18px !important;
+  background: var(--mobile-surface-soft) !important;
+  color: var(--mobile-ink) !important;
+  padding: 16px !important;
+}
+
+.report-action-card span,
+.report-action-card small {
+  display: block !important;
+  color: var(--mobile-muted) !important;
+}
+
+.report-action-card strong {
+  display: block !important;
+  margin: 8px 0 4px !important;
+  color: var(--mobile-ink) !important;
+  font-size: 28px !important;
+}
+
+.reports-insight-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  margin-bottom: 18px !important;
+}
+
+.report-panel {
+  padding: 16px !important;
+}
+
+.report-panel h4 {
+  color: var(--mobile-ink) !important;
+  margin-bottom: 12px !important;
+}
+
+.report-list > div,
+.report-product-list > button {
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--mobile-line) !important;
+  background: transparent !important;
+  color: var(--mobile-ink) !important;
+  text-align: left !important;
+}
+
+.report-list > div:last-child,
+.report-product-list > button:last-child {
+  border-bottom: 0 !important;
+}
+
+.settings-group-title {
+  color: var(--mobile-ink) !important;
+  margin: 8px 0 -4px !important;
+  font-size: 14px !important;
+  letter-spacing: 0 !important;
+}
+
+.settings-real-summary {
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+  padding: 12px !important;
+  color: var(--mobile-muted) !important;
+}
+
+.category-editor-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.modal-title {
+  color: var(--mobile-ink) !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  margin-bottom: 8px !important;
+}
+
+.modal-description {
+  color: var(--mobile-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+  margin-bottom: 16px !important;
+}
+
+@media (max-width: 760px) {
+  .admin-page .app-header,
+  .admin-page .app-body {
+    width: min(100%, calc(100vw - 20px)) !important;
+  }
+
+  .admin-page .app-header {
+    margin-top: 10px !important;
+    border-radius: 20px !important;
+    padding: 14px !important;
+  }
+
+  .admin-section-header,
+  .category-management-header,
+  .category-rule-detail {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .admin-section-actions,
+  .category-management-actions,
+  .category-heat-actions,
+  .category-product-actions,
+  .admin-product-modal-actions,
+  .modal-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .reports-insight-grid,
+  .category-editor-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .category-product-row {
+    grid-template-columns: 80px minmax(0, 1fr) !important;
+  }
+}
