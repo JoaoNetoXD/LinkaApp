@@ -2688,6 +2688,31 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   top: calc(env(safe-area-inset-top, 0px) + 22px) !important;
 }
 
+.category-scroll {
+  scroll-margin-top: 20px;
+}
+
+.category-scroll.category-scroll-highlight .category-chips {
+  animation: categoryFocusNudge 780ms ease both;
+}
+
+.category-scroll.category-scroll-highlight .chip.active,
+.bottom-nav-item.nav-flash {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--mobile-blue) 20%, transparent),
+    0 14px 28px rgba(47, 109, 246, 0.25) !important;
+}
+
+@keyframes categoryFocusNudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-3px);
+  }
+}
+
 .profile-panel,
 .profile-hero-panel,
 .auth-form,

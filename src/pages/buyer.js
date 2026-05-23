@@ -16,12 +16,12 @@ const guestUser = {
   fullName: 'Visitante',
   email: '',
   role: 'buyer',
-  avatar: 'LK',
+  avatar: '',
   whatsapp: '',
   verified: false,
 };
 
-function getInitials(name, fallback = 'LK') {
+function getInitials(name, fallback = 'U') {
   const initials = String(name || '')
     .trim()
     .split(/\s+/)
@@ -113,6 +113,19 @@ let paymentPollInterval = null;
 let cachedProducts = null;
 let activeInstitution = institution;
 let loadedCategories = mockCategories;
+let buyerNavFocus = 'home';
+let focusCategoriesAfterRender = false;
+let buyerShellLoadedAt = 0;
+let buyerShellPromise = null;
+let buyerShellUserKey = null;
+const BUYER_SHELL_TTL_MS = 30000;
+const BUYER_PRODUCTS_TTL_MS = 20000;
+const BUYER_UNREAD_TTL_MS = 30000;
+const BUYER_COUPONS_TTL_MS = 20000;
+const buyerProductsCache = new Map();
+const buyerProductsRequests = new Map();
+const unreadCountCache = new Map();
+const buyerCouponsCache = new Map();
 
 // Intersection Observer for card entrance animation
 let observer = null;
@@ -170,6 +183,7 @@ async function syncCheckoutReturnIfNeeded() {
   try {
     const payment = await checkPaymentStatus(paymentRef);
     if (payment?.status === 'paid') {
+      if (globalSession?.user?.id) buyerCouponsCache.delete(globalSession.user.id);
       showToast('Pagamento confirmado com sucesso!', 'success');
       currentPayment = null;
       currentView = 'coupons';
@@ -214,6 +228,114 @@ async function syncCategories() {
   }
 }
 
+function getProductsCacheKey({ categoryId = activeCategory, search = searchQuery } = {}) {
+  return `${categoryId || 'all'}::${String(search || '').trim().toLowerCase()}`;
+}
+
+async function loadBuyerShellData({ force = false } = {}) {
+  await syncCheckoutReturnIfNeeded();
+
+  const userKey = globalSession?.user?.id || 'guest';
+  const isFresh = buyerShellLoadedAt && buyerShellUserKey === userKey && Date.now() - buyerShellLoadedAt < BUYER_SHELL_TTL_MS;
+  if (!force && isFresh) return;
+  if (!force && buyerShellPromise) return buyerShellPromise;
+
+  buyerShellPromise = Promise.allSettled([
+    syncInstitutionForUser(),
+    syncCategories(),
+  ])
+    .then(() => {
+      buyerShellLoadedAt = Date.now();
+      buyerShellUserKey = userKey;
+    })
+    .finally(() => {
+      buyerShellPromise = null;
+    });
+
+  return buyerShellPromise;
+}
+
+async function loadBuyerProducts({ categoryId = activeCategory, search = searchQuery, force = false } = {}) {
+  const cacheKey = getProductsCacheKey({ categoryId, search });
+  const cached = buyerProductsCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.loadedAt < BUYER_PRODUCTS_TTL_MS) {
+    cachedProducts = cached.products;
+    return cached.products;
+  }
+
+  if (!force && buyerProductsRequests.has(cacheKey)) {
+    return buyerProductsRequests.get(cacheKey);
+  }
+
+  const request = getActiveProducts({ categoryId, search })
+    .then((rows) => {
+      const products = Array.isArray(rows) ? rows : [];
+      cachedProducts = products;
+      buyerProductsCache.set(cacheKey, { products, loadedAt: Date.now() });
+      return products;
+    })
+    .catch(() => {
+      const fallback = cached?.products || (USE_MOCKS ? (cachedProducts || mockProducts) : []);
+      buyerProductsCache.set(cacheKey, { products: fallback, loadedAt: Date.now() });
+      return fallback;
+    })
+    .finally(() => {
+      buyerProductsRequests.delete(cacheKey);
+    });
+
+  buyerProductsRequests.set(cacheKey, request);
+  return request;
+}
+
+async function loadUnreadCount(userId) {
+  if (!userId) return 0;
+  const cached = unreadCountCache.get(userId);
+  if (cached && Date.now() - cached.loadedAt < BUYER_UNREAD_TTL_MS) {
+    return cached.count;
+  }
+  const count = await getUnreadCount(userId);
+  unreadCountCache.set(userId, { count, loadedAt: Date.now() });
+  return count;
+}
+
+async function loadBuyerCoupons(userId) {
+  if (!userId) return USE_MOCKS ? coupons : [];
+  const cached = buyerCouponsCache.get(userId);
+  if (cached && Date.now() - cached.loadedAt < BUYER_COUPONS_TTL_MS) {
+    return cached.coupons;
+  }
+
+  const rows = await getBuyerCoupons(userId);
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  buyerCouponsCache.set(userId, { coupons: normalizedRows, loadedAt: Date.now() });
+  return normalizedRows;
+}
+
+function focusCategoriesSection(container) {
+  const chips = container.querySelector('.category-scroll');
+  if (!chips) return;
+  chips.classList.add('category-scroll-highlight');
+  chips.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => chips.classList.remove('category-scroll-highlight'), 1100);
+}
+
+function openBuyerCategories(container) {
+  buyerNavFocus = 'cats';
+  focusCategoriesAfterRender = true;
+
+  if (currentView === 'home' && container.querySelector('.category-scroll')) {
+    focusCategoriesSection(container);
+    const catsItem = container.querySelector('[data-nav="cats"]');
+    container.querySelectorAll('.bottom-nav-item').forEach(item => item.classList.toggle('active', item === catsItem));
+    catsItem?.classList.add('nav-flash');
+    setTimeout(() => catsItem?.classList.remove('nav-flash'), 800);
+    return;
+  }
+
+  currentView = 'home';
+  renderBuyerPage(container);
+}
+
 async function saveCurrentProfileFields({ name, whatsapp }) {
   if (!globalSession?.user?.id) return;
   const { data, error } = await supabase
@@ -232,10 +354,13 @@ async function saveCurrentProfileFields({ name, whatsapp }) {
 export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
     currentView = 'coupons';
+    buyerNavFocus = 'coupons';
   } else if (subpage === 'profile') {
     currentView = 'profile';
+    buyerNavFocus = 'profile';
   } else {
     currentView = 'home';
+    buyerNavFocus = 'home';
   }
   renderBuyerPage(container);
 }
@@ -246,22 +371,18 @@ function bindBottomNav(container) {
     item.addEventListener('click', () => {
       const nav = item.dataset.nav;
       if (nav === 'home') {
+        buyerNavFocus = 'home';
         currentView = 'home';
         searchQuery = '';
         renderBuyerPage(container);
       } else if (nav === 'cats') {
-        if (currentView !== 'home') {
-          currentView = 'home';
-          renderBuyerPage(container);
-        }
-        setTimeout(() => {
-          const chips = container.querySelector('.category-scroll');
-          if (chips) chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
+        openBuyerCategories(container);
       } else if (nav === 'coupons') {
+        buyerNavFocus = 'coupons';
         currentView = 'coupons';
         renderBuyerPage(container);
       } else if (nav === 'profile') {
+        buyerNavFocus = 'profile';
         currentView = 'profile';
         renderBuyerPage(container);
       }
@@ -299,11 +420,7 @@ async function renderBuyerPage(container) {
     bindBottomNav(container);
   }
 
-  await Promise.allSettled([
-    syncCheckoutReturnIfNeeded(),
-    syncInstitutionForUser(),
-    syncCategories(),
-  ]);
+  await loadBuyerShellData();
 
   if (currentView !== 'home' && container.querySelector('.buyer-home-loading')) {
     return renderBuyerPage(container);
@@ -312,6 +429,10 @@ async function renderBuyerPage(container) {
   if (currentView === 'home') {
     await renderHome(container);
     initObserver();
+    if (focusCategoriesAfterRender) {
+      focusCategoriesAfterRender = false;
+      requestAnimationFrame(() => focusCategoriesSection(container));
+    }
   } else if (currentView === 'detail') {
     renderProductDetail(container);
   } else if (currentView === 'coupons') {
@@ -379,12 +500,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   if (skipFetch) {
     products = cachedProducts || (USE_MOCKS ? mockProducts : []);
   } else {
-    try {
-      products = await getActiveProducts({ categoryId: activeCategory, search: searchQuery });
-      cachedProducts = products;
-    } catch {
-      products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
-    }
+    products = await loadBuyerProducts({ categoryId: activeCategory, search: searchQuery });
   }
 
   if (!products || products.length === 0) {
@@ -397,7 +513,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const greetingName = isAuthenticated()
     ? (user.name || user.fullName || 'usuario').split(' ')[0]
     : 'visitante';
-  const avatarLabel = isAuthenticated() ? (user.avatar || 'U') : 'LK';
 
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
@@ -422,9 +537,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             `}
             <button class="icon-btn notification-btn" id="btnNotifications">
               ${icons.bell}
-              <span class="badge" id="notifBadge">0</span>
+              ${isAuthenticated() ? '<span class="badge" id="notifBadge">0</span>' : ''}
             </button>
-            <div class="user-avatar">${escapeHTML(avatarLabel)}</div>
+            ${isAuthenticated() ? `<div class="user-avatar">${escapeHTML(user.avatar || 'U')}</div>` : ''}
           </div>
         </div>
         <div class="search-bar">
@@ -510,12 +625,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     
     <!-- BOTTOM NAV -->
     <nav class="bottom-nav">
-      <div class="bottom-nav-item ${currentView === 'home' ? 'active' : ''}" data-nav="home">
+      <div class="bottom-nav-item ${currentView === 'home' && buyerNavFocus !== 'cats' ? 'active' : ''}" data-nav="home">
         ${icons.home}
         <span>Início</span>
         <div class="nav-indicator"></div>
       </div>
-      <div class="bottom-nav-item" data-nav="cats">
+      <div class="bottom-nav-item ${currentView === 'home' && buyerNavFocus === 'cats' ? 'active' : ''}" data-nav="cats">
         ${icons.grid}
         <span>Categorias</span>
         <div class="nav-indicator"></div>
@@ -579,7 +694,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     const badge = container.querySelector('#notifBadge');
     if (badge) badge.style.display = 'none';
   } else {
-    getUnreadCount(userId).then(count => {
+    loadUnreadCount(userId).then(count => {
       const badge = container.querySelector('#notifBadge');
       if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
     }).catch(() => {});
@@ -589,9 +704,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   container.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', (e) => {
       const list = container.querySelector('.products-list');
-      list.style.opacity = '0';
-      list.style.transform = 'scale(0.98)';
-      list.style.transition = 'all 0.15s ease-out';
+      buyerNavFocus = chip.dataset.cat === 'all' ? 'home' : 'cats';
+      if (list) {
+        list.style.opacity = '0';
+        list.style.transform = 'scale(0.98)';
+        list.style.transition = 'all 0.15s ease-out';
+      }
       
       setTimeout(() => {
         activeCategory = chip.dataset.cat;
@@ -842,9 +960,7 @@ async function renderCoupons(container) {
   let userCoupons = [];
   const isLoggedIn = isAuthenticated();
   try {
-    if (isLoggedIn) {
-      userCoupons = await getBuyerCoupons(globalSession.user.id);
-    }
+    userCoupons = await loadBuyerCoupons(isLoggedIn ? globalSession.user.id : null);
     if (!userCoupons || userCoupons.length === 0) userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
   } catch {
     userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
@@ -913,9 +1029,6 @@ async function renderCoupons(container) {
       </div>
     </nav>
   `;
-
-  // Bind Bottom Nav (reuse same handler)
-  bindBuyerBottomNav(container);
 
   container.querySelector('#btnCouponsLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
@@ -1051,7 +1164,6 @@ function renderProfileLegacy(container) {
     }
   });
 
-  bindBuyerBottomNav(container);
 }
 
 function getProfileRoleMeta(role) {
@@ -1334,7 +1446,6 @@ function renderProfile(container) {
     }
   });
 
-  bindBuyerBottomNav(container);
 }
 
 function renderPayment(container) {
@@ -1686,30 +1797,13 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
 // ─── HELPER: Shared bottom nav binding ──────────────────
 
 function bindBuyerBottomNav(container) {
-  container.querySelectorAll('.bottom-nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      if (nav === 'home') {
-        currentView = 'home'; searchQuery = '';
-        renderBuyerPage(container);
-      } else if (nav === 'cats') {
-        if (currentView !== 'home') { currentView = 'home'; renderBuyerPage(container); }
-        setTimeout(() => {
-          const chips = container.querySelector('.category-scroll');
-          if (chips) chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      } else if (nav === 'coupons') {
-        currentView = 'coupons'; renderBuyerPage(container);
-      } else if (nav === 'profile') {
-        currentView = 'profile'; renderBuyerPage(container);
-      }
-    });
-  });
+  bindBottomNav(container);
 }
 
 // ─── HELPER: Payment approved handler ───────────────────
 
 async function handlePaymentApproved(pixData, product, container) {
+  if (globalSession?.user?.id) buyerCouponsCache.delete(globalSession.user.id);
   showToast('Pagamento Aprovado! Cupom gerado.', 'success');
   setTimeout(() => {
     currentView = 'coupons';
@@ -1755,7 +1849,6 @@ async function renderNotifications(container) {
     container.querySelector('#btnNotifLogin')?.addEventListener('click', () => {
       window.location.hash = '#/auth';
     });
-    bindBuyerBottomNav(container);
     return;
   }
 
@@ -1799,6 +1892,7 @@ async function renderNotifications(container) {
 
   container.querySelector('#btnMarkAllRead')?.addEventListener('click', async () => {
     await markAllAsRead(userId);
+    unreadCountCache.set(userId, { count: 0, loadedAt: Date.now() });
     showToast('Todas as notificações marcadas como lidas.', 'success');
     renderNotifications(container);
   });
@@ -1813,6 +1907,4 @@ async function renderNotifications(container) {
     });
   });
 
-  // Bind bottom nav
-  bindBuyerBottomNav(container);
 }
