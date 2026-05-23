@@ -154,13 +154,15 @@ function sanitizeUrl(value) {
 // Toast notification system
 export function showToast(message, type = 'info') {
   const container = document.getElementById('toast-root');
+  if (!container) return;
+  container.classList.add('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.innerHTML = `${type === 'success' ? icons.check : type === 'error' ? icons.x : ''} ${escapeHTML(message)}`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transform = 'translateY(-10px)';
+    toast.style.transform = 'translateY(-8px)';
     toast.style.transition = 'all 300ms ease';
     setTimeout(() => toast.remove(), 300);
   }, 3000);

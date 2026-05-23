@@ -16,6 +16,14 @@ let loadedCategories = mockCategories;
 let activeInstitution = institution;
 let selectedCategoryId = null;
 let categoryStatusFilter = 'all';
+const ADMIN_DATA_TTL_MS = 30000;
+let adminDataLoadedAt = 0;
+let adminDataPromise = null;
+
+function invalidateAdminData() {
+  adminDataLoadedAt = 0;
+  adminDataPromise = null;
+}
 
 function getAdminCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
@@ -74,36 +82,64 @@ async function syncInstitutionForUser() {
   activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
 }
 
+function getSettledValue(result, fallback) {
+  return result.status === 'fulfilled' ? result.value : fallback;
+}
+
+async function loadAdminData({ force = false } = {}) {
+  const isFresh = adminDataLoadedAt && Date.now() - adminDataLoadedAt < ADMIN_DATA_TTL_MS;
+  if (!force && isFresh) return;
+  if (!force && adminDataPromise) return adminDataPromise;
+
+  adminDataPromise = (async () => {
+    try {
+      await syncInstitutionForUser();
+    } catch {
+      activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+    }
+    const [
+      pendingResult,
+      statsResult,
+      productsResult,
+      categoryStatsResult,
+      categoriesResult,
+    ] = await Promise.allSettled([
+      getPendingProducts(),
+      getInstitutionStats(activeInstitution?.id || null),
+      getAllProducts(),
+      getCategoryStats(activeInstitution?.id || null),
+      getCategories(),
+    ]);
+
+    const pendingValue = getSettledValue(pendingResult, null);
+    const statsValue = getSettledValue(statsResult, null);
+    const productsValue = getSettledValue(productsResult, null);
+    const categoryStatsValue = getSettledValue(categoryStatsResult, null);
+    const categoriesValue = getSettledValue(categoriesResult, null);
+
+    loadedPendingAds = Array.isArray(pendingValue) ? pendingValue : (USE_MOCKS ? pendingAds : []);
+    loadedStats = statsValue || (USE_MOCKS ? adminStats : null);
+    loadedAllProducts = Array.isArray(productsValue) ? productsValue : (USE_MOCKS ? pendingAds : []);
+    loadedCategoryStats = categoryStatsValue || (USE_MOCKS ? categoryHeat : {});
+    loadedCategories = Array.isArray(categoriesValue) && categoriesValue.length
+      ? categoriesValue
+      : (USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }]);
+    adminDataLoadedAt = Date.now();
+  })().finally(() => {
+    adminDataPromise = null;
+  });
+
+  return adminDataPromise;
+}
+
 export function renderAdmin(container, subpage) {
   if (subpage) adminView = subpage;
   else adminView = 'dashboard';
   renderAdminPage(container);
 }
 
-async function renderAdminPage(container) {
-  await syncInstitutionForUser();
-  // Load pending ads from Supabase
-  try {
-    loadedPendingAds = await getPendingProducts();
-    if (!loadedPendingAds || loadedPendingAds.length === 0) loadedPendingAds = USE_MOCKS ? pendingAds : [];
-  } catch { loadedPendingAds = USE_MOCKS ? pendingAds : []; }
-
-  // Load real stats
-  try {
-    loadedStats = await getInstitutionStats(activeInstitution?.id || null);
-  } catch { loadedStats = USE_MOCKS ? adminStats : null; }
-
-  try {
-    loadedAllProducts = await getAllProducts();
-  } catch { loadedAllProducts = USE_MOCKS ? pendingAds : []; }
-
-  try {
-    loadedCategoryStats = await getCategoryStats();
-  } catch { loadedCategoryStats = USE_MOCKS ? categoryHeat : {}; }
-
-  try {
-    loadedCategories = await getCategories();
-  } catch { loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }]; }
+async function renderAdminPage(container, options = {}) {
+  await loadAdminData({ force: Boolean(options.forceRefresh) });
   container.innerHTML = `
     <div class="page admin-page">
       <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
@@ -855,6 +891,7 @@ function showAdminProductDetails(productId, container) {
     if (result?.success) {
       closeModal();
       showToast('Produto aprovado com sucesso.', 'success');
+      invalidateAdminData();
       await renderAdminPage(container);
       scrollCategoryManagementIntoView(container);
     } else {
@@ -933,6 +970,7 @@ function showDeleteProductModal(productId, container) {
     if (result?.success) {
       close();
       showToast('Anuncio removido da vitrine.', 'success');
+      invalidateAdminData();
       await renderAdminPage(container);
       if (adminView === 'categories') scrollCategoryManagementIntoView(container);
     } else {
@@ -1032,6 +1070,7 @@ function showCategoryModal(mode, category, container) {
       selectedCategoryId = savedCategory.id;
       close();
       showToast(isEdit ? 'Categoria atualizada.' : 'Categoria criada.', 'success');
+      invalidateAdminData();
       await renderAdminPage(container);
       scrollCategoryManagementIntoView(container);
     } catch (error) {
@@ -1083,6 +1122,7 @@ function showDeleteCategoryModal(categoryId, container) {
       close();
       selectedCategoryId = null;
       showToast('Categoria excluida.', 'success');
+      invalidateAdminData();
       await renderAdminPage(container);
     } catch (error) {
       button.disabled = false;
@@ -1184,6 +1224,7 @@ function bindAdminEvents(container) {
         if (!result?.success) throw new Error(result?.error || 'Nao foi possivel aprovar o anuncio.');
         removePendingAd(adId);
         showToast('Anuncio aprovado com sucesso!', 'success');
+        invalidateAdminData();
         await renderAdminPage(container);
       } catch (err) {
         showToast(err.message || 'Nao foi possivel aprovar o anuncio.', 'error');
@@ -1263,6 +1304,7 @@ function bindAdminEvents(container) {
         if (!result?.success) throw new Error(result?.error || 'Nao foi possivel aprovar o produto.');
         removePendingAd(productId);
         showToast('Produto aprovado com sucesso.', 'success');
+        invalidateAdminData();
         await renderAdminPage(container);
         scrollCategoryManagementIntoView(container);
       } catch (error) {
@@ -1522,7 +1564,7 @@ function bindAdminEvents(container) {
 
   container.querySelector('#btnAdminRefresh')?.addEventListener('click', async () => {
     showToast('Atualizando dados...', 'info');
-    await renderAdminPage(container);
+    await renderAdminPage(container, { forceRefresh: true });
   });
 
   // Admin bell notification
@@ -1617,6 +1659,7 @@ function showRejectModal(adId, container) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);
       showToast('Anúncio recusado.', 'error');
+      invalidateAdminData();
       if (container) renderAdminPage(container);
     } else {
       showToast(result?.error || 'Não foi possível recusar o anúncio.', 'error');
@@ -1672,6 +1715,7 @@ function showAdjustModal(adId, container) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);
       showToast('Ajuste solicitado com sucesso!', 'success');
+      invalidateAdminData();
       if (container) renderAdminPage(container);
     } else {
       confirmAdjustBtn.disabled = false;
