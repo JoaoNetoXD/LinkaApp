@@ -1,6 +1,6 @@
 ﻿import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { sellerAds, sellerCoupons, categories as mockCategories, currentUser, institution, sellerStats } from '../data/mock.js';
-import { getSellerPayments, getPaymentStats, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
+import { getSellerPayments, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../services/coupon-service.js';
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
@@ -69,6 +69,23 @@ let mpConnection = { connected: false, oauthConfigured: false };
 let lastMpNotice = '';
 let selectedAdId = null;
 let loadedCategories = mockCategories;
+let loadedPayments = [];
+let loadedPaymentStats = null;
+let sellerNavFocus = 'dashboard';
+let sellerScrollTarget = null;
+
+const SELLER_SHELL_TTL_MS = 30_000;
+const SELLER_DATA_TTL_MS = 20_000;
+const SELLER_PAYMENTS_TTL_MS = 20_000;
+let sellerShellLoadedAt = 0;
+let sellerShellPromise = null;
+let sellerShellUserKey = null;
+let sellerDataLoadedAt = 0;
+let sellerDataPromise = null;
+let sellerDataUserKey = null;
+let sellerPaymentsLoadedAt = 0;
+let sellerPaymentsPromise = null;
+let sellerPaymentsUserKey = null;
 
 function getSellerCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
@@ -79,11 +96,167 @@ function shouldUseSellerMocks() {
   return USE_MOCKS && !globalSession?.user?.id;
 }
 
+function getSellerUserKey(user = getUser()) {
+  return globalSession?.user?.id || user.id || 'guest';
+}
+
+function invalidateSellerCache({ shell = false, data = true, payments = false } = {}) {
+  if (shell) {
+    sellerShellLoadedAt = 0;
+    sellerShellPromise = null;
+  }
+  if (data) {
+    sellerDataLoadedAt = 0;
+    sellerDataPromise = null;
+  }
+  if (payments) {
+    sellerPaymentsLoadedAt = 0;
+    sellerPaymentsPromise = null;
+  }
+}
+
+async function loadSellerShellData(user, { force = false } = {}) {
+  const userKey = getSellerUserKey(user);
+  const fresh = sellerShellUserKey === userKey && Date.now() - sellerShellLoadedAt < SELLER_SHELL_TTL_MS;
+  if (!force && fresh) return;
+  if (!force && sellerShellPromise) return sellerShellPromise;
+
+  sellerShellUserKey = userKey;
+  sellerShellPromise = (async () => {
+    const [institutionResult, categoriesResult, mpResult] = await Promise.allSettled([
+      syncInstitutionForUser(),
+      syncSellerCategories(),
+      getMercadoPagoStatus(),
+    ]);
+
+    if (institutionResult.status === 'rejected') {
+      activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+    }
+
+    if (categoriesResult.status === 'rejected') {
+      loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }];
+    }
+
+    if (mpResult.status === 'fulfilled') {
+      mpConnection = mpResult.value || { connected: false, oauthConfigured: false };
+    } else {
+      mpConnection = {
+        connected: sessionStorage.getItem('mp_connected') === 'true',
+        oauthConfigured: false,
+        setupError: mpResult.reason?.message || 'Não foi possível consultar Mercado Pago.',
+      };
+    }
+
+    sellerShellLoadedAt = Date.now();
+  })();
+
+  try {
+    await sellerShellPromise;
+  } finally {
+    sellerShellPromise = null;
+  }
+}
+
+async function loadSellerMainData(user, { force = false } = {}) {
+  const userKey = getSellerUserKey(user);
+  const fresh = sellerDataUserKey === userKey && Date.now() - sellerDataLoadedAt < SELLER_DATA_TTL_MS;
+  if (!force && fresh && Array.isArray(loadedAds) && Array.isArray(loadedCoupons)) return;
+  if (!force && sellerDataPromise) return sellerDataPromise;
+
+  sellerDataUserKey = userKey;
+  sellerDataPromise = (async () => {
+    const useMocks = shouldUseSellerMocks();
+    const sellerId = user.id || currentUser.id;
+    const [adsResult, couponsResult] = await Promise.allSettled([
+      getSellerProducts(sellerId),
+      fetchSellerCoupons(sellerId),
+    ]);
+
+    loadedAds = adsResult.status === 'fulfilled' && Array.isArray(adsResult.value)
+      ? adsResult.value
+      : [];
+    loadedCoupons = couponsResult.status === 'fulfilled' && Array.isArray(couponsResult.value)
+      ? couponsResult.value
+      : [];
+
+    if (loadedAds.length === 0 && useMocks) loadedAds = sellerAds;
+    if (loadedCoupons.length === 0 && useMocks) loadedCoupons = sellerCoupons;
+
+    enrichAdsWithCouponStats();
+    sellerDataLoadedAt = Date.now();
+  })();
+
+  try {
+    await sellerDataPromise;
+  } finally {
+    sellerDataPromise = null;
+  }
+}
+
+function calculatePaymentStats(allPayments = []) {
+  const paid = allPayments.filter(p => p.status === 'paid');
+  const pending = allPayments.filter(p => p.status === 'pending');
+  const totalGross = paid.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const totalFees = paid.reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
+  const totalNet = paid.reduce((sum, p) => sum + Number(p.sellerAmount || p.amount || 0), 0);
+
+  return {
+    totalReceived: Math.round(totalNet * 100) / 100,
+    totalGross: Math.round(totalGross * 100) / 100,
+    totalFees: Math.round(totalFees * 100) / 100,
+    totalPayments: allPayments.length,
+    paidCount: paid.length,
+    pendingCount: pending.length,
+    commissionRate: 0,
+    conversionRate: allPayments.length > 0
+      ? Math.round((paid.length / allPayments.length) * 100)
+      : 0,
+  };
+}
+
+async function loadSellerPaymentsData(user, { force = false } = {}) {
+  const userKey = getSellerUserKey(user);
+  const fresh = sellerPaymentsUserKey === userKey && Date.now() - sellerPaymentsLoadedAt < SELLER_PAYMENTS_TTL_MS;
+  if (!force && fresh && Array.isArray(loadedPayments) && loadedPaymentStats) return;
+  if (!force && sellerPaymentsPromise) return sellerPaymentsPromise;
+
+  sellerPaymentsUserKey = userKey;
+  sellerPaymentsPromise = (async () => {
+    try {
+      loadedPayments = await getSellerPayments(user.id || currentUser.id);
+      if (!Array.isArray(loadedPayments)) loadedPayments = [];
+      loadedPaymentStats = calculatePaymentStats(loadedPayments);
+    } catch (err) {
+      console.warn('loadSellerPaymentsData failed:', err.message);
+      loadedPayments = [];
+      loadedPaymentStats = shouldUseSellerMocks()
+        ? {
+          totalReceived: sellerStats.activeAds,
+          totalGross: sellerStats.couponsGenerated,
+          totalFees: 0,
+          totalPayments: sellerStats.couponsGenerated,
+          paidCount: sellerStats.couponsUsed,
+          pendingCount: 0,
+          commissionRate: 0,
+          conversionRate: 66,
+        }
+        : calculatePaymentStats([]);
+    }
+    sellerPaymentsLoadedAt = Date.now();
+  })();
+
+  try {
+    await sellerPaymentsPromise;
+  } finally {
+    sellerPaymentsPromise = null;
+  }
+}
+
 function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
   if (mpResult === 'connected') {
     if (!isConnected) {
       return {
-        message: 'A autorizacao voltou, mas a conta Mercado Pago ainda nao foi gravada. Tente conectar novamente e confira se a Redirect URI termina em /api/mercadopago/oauth/callback.',
+        message: 'A autorização voltou, mas a conta Mercado Pago ainda não foi gravada. Tente conectar novamente e confira se a Redirect URI termina em /api/mercadopago/oauth/callback.',
         type: 'error',
       };
     }
@@ -92,12 +265,12 @@ function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
 
   const normalizedReason = String(reason || '').trim();
   const knownReasons = {
-    missing_params: 'O Mercado Pago voltou sem os dados de autorizacao. Tente conectar novamente.',
-    invalid_state: 'A tentativa de conexao expirou ou foi aberta em outra sessao. Tente novamente.',
-    oauth_failed: 'Nao foi possivel concluir a conexao com o Mercado Pago.',
-    invalid_grant: 'O codigo do Mercado Pago expirou. Inicie a conexao novamente.',
-    invalid_redirect_uri: 'A Redirect URL do Mercado Pago nao bate com a URL configurada no Netlify.',
-    missing_code_verifier: 'A tabela OAuth ainda nao tem a coluna de seguranca PKCE. Rode scripts/mercadopago-pkce-migration.sql no Supabase.',
+    missing_params: 'O Mercado Pago voltou sem os dados de autorização. Tente conectar novamente.',
+    invalid_state: 'A tentativa de conexão expirou ou foi aberta em outra sessão. Tente novamente.',
+    oauth_failed: 'Não foi possível concluir a conexão com o Mercado Pago.',
+    invalid_grant: 'O código do Mercado Pago expirou. Inicie a conexão novamente.',
+    invalid_redirect_uri: 'A Redirect URL do Mercado Pago não bate com a URL configurada no Netlify.',
+    missing_code_verifier: 'A tabela OAuth ainda não tem a coluna de segurança PKCE. Rode scripts/mercadopago-pkce-migration.sql no Supabase.',
   };
 
   if (knownReasons[normalizedReason]) {
@@ -105,10 +278,10 @@ function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
   }
 
   if (normalizedReason) {
-    return { message: `Mercado Pago nao conectou: ${normalizedReason}`, type: 'error' };
+    return { message: `Mercado Pago não conectou: ${normalizedReason}`, type: 'error' };
   }
 
-  return { message: 'Nao foi possivel conectar o Mercado Pago.', type: 'error' };
+  return { message: 'Não foi possível conectar o Mercado Pago.', type: 'error' };
 }
 
 function renderMercadoPagoRedirectState(url, redirectUri) {
@@ -120,12 +293,125 @@ function renderMercadoPagoRedirectState(url, redirectUri) {
           <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
         </div>
         <h3>Redirecionando para o Mercado Pago</h3>
-        <p>Vamos abrir a autorizacao em uma pagina segura do Mercado Pago. Depois de aprovar, voce volta automaticamente para a Linka.</p>
+        <p>Vamos abrir a autorização em uma página segura do Mercado Pago. Depois de aprovar, você volta automaticamente para a Linka.</p>
         <a class="btn btn-mp btn-block btn-lg" id="manual-open-mp" href="${escapeHTML(url)}">Continuar no Mercado Pago</a>
-        <p class="mp-connect-helper">Se a pagina nao abrir, use o botao acima. Redirect URL configurada: <code>${escapeHTML(redirectUri || '')}</code></p>
+        <p class="mp-connect-helper">Se a página não abrir, use o botão acima. Redirect URL configurada: <code>${escapeHTML(redirectUri || '')}</code></p>
       </div>
     </div>
   `;
+}
+
+function renderMercadoPagoMark() {
+  return `<span class="mp-logo-mark" aria-hidden="true">MP</span>`;
+}
+
+function formatMpDate(value) {
+  if (!value) return 'Não informado';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Não informado';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function renderMercadoPagoStatusPill() {
+  const account = mpConnection.account || {};
+  const liveMode = account.liveMode === true;
+  return `
+    <button class="mp-status-pill mp-status-pill--connected" id="mp-connected-info" type="button" aria-label="Ver detalhes da conexão Mercado Pago">
+      ${renderMercadoPagoMark()}
+      <span class="mp-status-copy">
+        <strong>Mercado Pago</strong>
+        <small>${liveMode ? 'Producao conectada' : 'Conta conectada'}</small>
+      </span>
+      ${icons.chevronRight || ''}
+    </button>
+  `;
+}
+
+function showMercadoPagoConnectModal(container) {
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="mp-modal">
+      <div class="modal-content mp-connect-modal">
+        <div class="modal-handle"></div>
+        <div class="mp-connect-logo" aria-hidden="true">
+          ${renderMercadoPagoMark()}
+        </div>
+        <h3>Conectar Mercado Pago</h3>
+        <p>Ao conectar sua conta, você recebe pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissão</strong>; 100% do valor do pedido vai para o vendedor.</p>
+        ${mpConnection.setupError || mpConnection.oauthConfigured === false ? `
+          <div class="mp-connect-warning">${icons.alertTriangle} ${escapeHTML(mpConnection.setupError || 'A integração OAuth ainda não foi carregada neste ambiente. Verifique as variáveis do Netlify se o botão falhar.')}</div>
+        ` : ''}
+        <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
+        <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>
+      </div>
+    </div>
+  `;
+  modalRoot.querySelector('#mp-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
+  modalRoot.querySelector('#cancel-mp')?.addEventListener('click', () => modalRoot.innerHTML = '');
+  modalRoot.querySelector('#do-connect-mp')?.addEventListener('click', async () => {
+    const btn = modalRoot.querySelector('#do-connect-mp');
+    btn.disabled = true;
+    btn.textContent = 'Abrindo Mercado Pago...';
+    try {
+      const url = await startMercadoPagoOAuth();
+      sessionStorage.setItem('mp_oauth_started_at', String(Date.now()));
+      modalRoot.innerHTML = renderMercadoPagoRedirectState(url, mpConnection.redirectUri);
+      modalRoot.querySelector('#manual-open-mp')?.addEventListener('click', () => {
+        sessionStorage.setItem('mp_oauth_manual_open', 'true');
+      });
+      setTimeout(() => {
+        window.location.assign(url);
+      }, 700);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Conectar minha conta';
+      showToast(err.message || 'Não foi possível iniciar a conexão.', 'error');
+    }
+  });
+}
+
+function showMercadoPagoInfoModal(container) {
+  const account = mpConnection.account || {};
+  const modalRoot = document.getElementById('modal-root');
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="mp-info-modal">
+      <div class="modal-content mp-connect-modal mp-info-modal">
+        <div class="modal-handle"></div>
+        <div class="mp-connect-logo" aria-hidden="true">
+          ${renderMercadoPagoMark()}
+        </div>
+        <h3>Mercado Pago conectado</h3>
+        <p>Os pagamentos aprovados dos seus produtos vão direto para esta conta. A Linka não cobra comissão sobre a venda.</p>
+        <div class="mp-connection-grid">
+          <div class="mp-connection-row"><span>Status</span><strong>Pronto para receber</strong></div>
+          <div class="mp-connection-row"><span>Comissao Linka</span><strong>0%</strong></div>
+          <div class="mp-connection-row"><span>Modo</span><strong>${account.liveMode ? 'Producao' : 'Conta autorizada'}</strong></div>
+          <div class="mp-connection-row"><span>Conta Mercado Pago</span><strong>${escapeHTML(account.collectorId || 'Autorizada via OAuth')}</strong></div>
+          <div class="mp-connection-row"><span>Conectado em</span><strong>${escapeHTML(formatMpDate(account.connectedAt))}</strong></div>
+          <div class="mp-connection-row"><span>Renovacao segura</span><strong>${escapeHTML(formatMpDate(account.expiresAt))}</strong></div>
+        </div>
+        <button class="btn btn-mp btn-block" id="refresh-mp-status">Atualizar status</button>
+        <button class="btn btn-secondary btn-block" id="reconnect-mp" style="margin-top:var(--space-3);">Reconectar conta</button>
+      </div>
+    </div>
+  `;
+  modalRoot.querySelector('#mp-info-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
+  modalRoot.querySelector('#refresh-mp-status')?.addEventListener('click', async () => {
+    invalidateSellerCache({ shell: true, data: false });
+    modalRoot.innerHTML = '';
+    await renderSellerPage(container, { force: true });
+    showToast('Status do Mercado Pago atualizado.', 'success');
+  });
+  modalRoot.querySelector('#reconnect-mp')?.addEventListener('click', () => {
+    modalRoot.innerHTML = '';
+    showMercadoPagoConnectModal(container);
+  });
 }
 
 async function syncInstitutionForUser() {
@@ -151,32 +437,37 @@ async function syncSellerCategories() {
 }
 
 export function renderSeller(container, subpage) {
-  if (subpage === 'create') sellerView = 'create';
-  else if (subpage === 'coupons') sellerView = 'coupons';
-  else if (subpage === 'payments') sellerView = 'payments';
-  else sellerView = 'dashboard';
+  if (subpage === 'create') {
+    sellerView = 'create';
+    sellerNavFocus = 'ads';
+  } else if (subpage === 'coupons') {
+    sellerView = 'coupons';
+    sellerNavFocus = 'coupons';
+  } else if (subpage === 'payments') {
+    sellerView = 'payments';
+    sellerNavFocus = 'payments';
+  } else {
+    sellerView = 'dashboard';
+    sellerNavFocus = 'dashboard';
+  }
   renderSellerPage(container);
 }
 
-async function renderSellerPage(container) {
+async function renderSellerPage(container, { force = false } = {}) {
   const user = getUser();
-  await Promise.allSettled([
-    syncInstitutionForUser(),
-    syncSellerCategories(),
-  ]);
-  try {
-    mpConnection = await getMercadoPagoStatus();
-  } catch (err) {
-    mpConnection = {
-      connected: sessionStorage.getItem('mp_connected') === 'true',
-      oauthConfigured: false,
-      setupError: err.message || 'Nao foi possivel consultar Mercado Pago.',
-    };
-  }
-  const isMPConnected = Boolean(mpConnection.connected);
   const mpParams = new URLSearchParams((window.location.hash.split('?')[1] || ''));
   const mpResult = mpParams.get('mp');
   const mpReason = mpParams.get('reason');
+  await loadSellerShellData(user, { force: force || Boolean(mpResult) });
+  const needsMainData = ['dashboard', 'edit', 'coupons'].includes(sellerView);
+  if (needsMainData) {
+    await loadSellerMainData(user, { force });
+  }
+  if (sellerView === 'payments') {
+    await loadSellerPaymentsData(user, { force });
+  }
+
+  const isMPConnected = Boolean(mpConnection.connected);
   const mpNoticeKey = `${mpResult || ''}:${mpReason || ''}`;
   if (mpResult && mpNoticeKey !== lastMpNotice) {
     lastMpNotice = mpNoticeKey;
@@ -184,26 +475,10 @@ async function renderSellerPage(container) {
     showToast(notice.message, notice.type);
   }
 
-  const useMocks = shouldUseSellerMocks();
-
-  // Load ads from Supabase. Mock data is only allowed without a real session.
-  try {
-    loadedAds = await getSellerProducts(user.id);
-    if (!loadedAds || loadedAds.length === 0) loadedAds = useMocks ? sellerAds : [];
-  } catch { loadedAds = useMocks ? sellerAds : []; }
-
-  // Load coupons
-  try {
-    loadedCoupons = await fetchSellerCoupons(user.id);
-    if (!loadedCoupons || loadedCoupons.length === 0) loadedCoupons = useMocks ? sellerCoupons : [];
-  } catch { loadedCoupons = useMocks ? sellerCoupons : []; }
-
-  enrichAdsWithCouponStats();
-
   container.innerHTML = `
     <div class="page seller-page">
-      <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
-        <div style="display:flex; align-items:center; gap: 12px;">
+      <header class="app-header seller-main-header">
+        <div class="seller-identity">
           <div class="user-avatar" style="width: 40px; height: 40px;">${escapeHTML(user.avatar || 'U')}</div>
           <div>
             <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff;">${escapeHTML(user.fullName || user.name)}</div>
@@ -212,11 +487,7 @@ async function renderSellerPage(container) {
         </div>
         <div class="seller-header-actions">
           <button class="btn btn-secondary btn-sm" id="open-buyer-mode" style="padding: 6px 12px; font-size: 12px;">${icons.home} Comprar</button>
-          ${isMPConnected ? `
-            <div class="mp-status-icon" title="Mercado Pago Conectado">
-              ${icons.checkCircle}
-            </div>
-          ` : `
+          ${isMPConnected ? renderMercadoPagoStatusPill() : `
             <button class="btn btn-mp btn-sm connect-mp-trigger" style="padding: 6px 12px; font-size: 12px;">${icons.wallet} Conectar</button>
           `}
         </div>
@@ -226,19 +497,19 @@ async function renderSellerPage(container) {
         ${sellerView === 'create' ? renderCreateForm() : sellerView === 'edit' ? renderEditProductForm() : sellerView === 'coupons' ? renderSellerCoupons() : sellerView === 'payments' ? await renderSellerPayments() : renderDashboard()}
       </div>
       <nav class="bottom-nav">
-        <div class="bottom-nav-item ${sellerView === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
+        <div class="bottom-nav-item ${sellerNavFocus === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.home}<span>Dashboard</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'ads' ? 'active' : ''}" data-nav="ads" role="button" tabindex="0" style="cursor:pointer;">
+        <div class="bottom-nav-item ${sellerNavFocus === 'ads' ? 'active' : ''}" data-nav="ads" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.package}<span>Anúncios</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'payments' ? 'active' : ''}" data-nav="payments" role="button" tabindex="0" style="cursor:pointer;">
+        <div class="bottom-nav-item ${sellerNavFocus === 'payments' ? 'active' : ''}" data-nav="payments" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.wallet}<span>Vendas</span>
           <div class="nav-indicator"></div>
         </div>
-        <div class="bottom-nav-item ${sellerView === 'coupons' ? 'active' : ''}" data-nav="coupons" role="button" tabindex="0" style="cursor:pointer;">
+        <div class="bottom-nav-item ${sellerNavFocus === 'coupons' ? 'active' : ''}" data-nav="coupons" role="button" tabindex="0" style="cursor:pointer;">
           ${icons.ticket}<span>Cupons</span>
           <div class="nav-indicator"></div>
         </div>
@@ -246,6 +517,40 @@ async function renderSellerPage(container) {
     </div>
   `;
   bindSellerEvents(container);
+  if (sellerScrollTarget) {
+    const target = sellerScrollTarget;
+    sellerScrollTarget = null;
+    requestAnimationFrame(() => scrollToSellerSection(container, target));
+  }
+}
+
+function setSellerNavFocus(container, focus) {
+  sellerNavFocus = focus;
+  container.querySelectorAll('.seller-page .bottom-nav-item').forEach((item) => {
+    item.classList.toggle('active', item.dataset.nav === focus);
+  });
+}
+
+function scrollToSellerSection(container, target) {
+  const selectors = {
+    ads: '#seller-ads-section',
+    performance: '.performance-section',
+  };
+  const element = container.querySelector(selectors[target] || target);
+  if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderSellerStatCard({ icon, value, label, action, hint }) {
+  return `
+    <button class="stat-card glass-card seller-stat-card" type="button" data-seller-action="${escapeHTML(action)}" aria-label="${escapeHTML(label)}">
+      <div class="stat-icon">${icon}</div>
+      <div class="stat-info">
+        <div class="stat-value">${escapeHTML(String(value))}</div>
+        <div class="stat-label">${escapeHTML(label)}</div>
+        ${hint ? `<div class="stat-hint">${escapeHTML(hint)}</div>` : ''}
+      </div>
+    </button>
+  `;
 }
 
 function renderDashboard() {
@@ -274,34 +579,10 @@ function renderDashboard() {
 
   return `
     <div class="seller-stats-grid">
-      <div class="stat-card glass-card">
-        <div class="stat-icon">${icons.package}</div>
-        <div class="stat-info">
-          <div class="stat-value">${computedStats.activeAds}</div>
-          <div class="stat-label">Anúncios</div>
-        </div>
-      </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon">${icons.ticket}</div>
-        <div class="stat-info">
-          <div class="stat-value">${computedStats.couponsGenerated}</div>
-          <div class="stat-label">Cupons</div>
-        </div>
-      </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon">${icons.checkCircle}</div>
-        <div class="stat-info">
-          <div class="stat-value">${convRate}</div>
-          <div class="stat-label">Conversão</div>
-        </div>
-      </div>
-      <div class="stat-card glass-card">
-        <div class="stat-icon">${icons.eye}</div>
-        <div class="stat-info">
-          <div class="stat-value">${computedStats.totalClicks}</div>
-          <div class="stat-label">Cliques</div>
-        </div>
-      </div>
+      ${renderSellerStatCard({ icon: icons.package, value: computedStats.activeAds, label: 'Anúncios', action: 'ads', hint: 'Ver produtos' })}
+      ${renderSellerStatCard({ icon: icons.ticket, value: computedStats.couponsGenerated, label: 'Cupons', action: 'coupons', hint: 'Abrir cupons' })}
+      ${renderSellerStatCard({ icon: icons.checkCircle, value: convRate, label: 'Conversão', action: 'payments', hint: 'Ver vendas' })}
+      ${renderSellerStatCard({ icon: icons.eye, value: computedStats.totalClicks, label: 'Cliques', action: 'ads', hint: 'Desempenho' })}
     </div>
 
     ${setupBlock}
@@ -328,7 +609,7 @@ function renderDashboard() {
     <div class="performance-section">
       <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Desempenho</h3>
       <div class="chart-container">
-        <h4>Cupons gerados nos ultimos 7 dias</h4>
+        <h4>Cupons gerados nos últimos 7 dias</h4>
         <canvas id="seller-chart" height="200"></canvas>
       </div>
     </div>
@@ -368,7 +649,7 @@ function renderSellerOnboarding(ads, isMPConnected) {
         <div>
           <span class="seller-setup-kicker">Quase pronto</span>
           <h3>Seu produto ja foi criado</h3>
-          <p>Agora falta a aprovacao para ele aparecer na vitrine dos compradores. Quando estiver ativo, o pagamento cai direto no seu Mercado Pago.</p>
+          <p>Agora falta a aprovação para ele aparecer na vitrine dos compradores. Quando estiver ativo, o pagamento cai direto no seu Mercado Pago.</p>
         </div>
       </section>
     `;
@@ -377,18 +658,18 @@ function renderSellerOnboarding(ads, isMPConnected) {
   return `
     <section class="seller-setup-card">
       <div>
-        <span class="seller-setup-kicker">${hasCurrentAds ? 'Configuracao de venda' : 'Primeiro acesso de vendedor'}</span>
+        <span class="seller-setup-kicker">${hasCurrentAds ? 'Configuração de venda' : 'Primeiro acesso de vendedor'}</span>
         <h3>${hasCurrentAds ? 'Conecte o Mercado Pago para receber' : 'Configure sua loja em dois passos'}</h3>
         <p>${hasPending
-          ? 'Voce ja tem anuncio em analise. Conecte sua conta Mercado Pago para estar pronto quando ele for aprovado.'
+          ? 'Você já tem anúncio em análise. Conecte sua conta Mercado Pago para estar pronto quando ele for aprovado.'
           : hasAds
-            ? 'Voce nao tem produto em venda agora. Cadastre uma nova oferta ou renove um produto expirado quando fizer sentido.'
-            : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovacao por aqui.'}</p>
+            ? 'Você não tem produto em venda agora. Cadastre uma nova oferta ou renove um produto expirado quando fizer sentido.'
+            : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovação por aqui.'}</p>
       </div>
       <div class="seller-setup-steps">
-        <div class="${isMPConnected ? 'done' : ''}"><span>1</span> Mercado Pago ${isMPConnected ? 'conectado' : 'pendente'}</div>
-        <div class="${hasCurrentAds ? 'done' : ''}"><span>2</span> Produto ${hasCurrentAds ? 'cadastrado' : 'nao cadastrado'}</div>
-        <div class="${hasActive ? 'done' : ''}"><span>3</span> Vitrine ${hasActive ? 'ativa' : 'aguardando aprovacao'}</div>
+        <button type="button" class="${isMPConnected ? 'done' : ''}" data-seller-action="${isMPConnected ? 'mp-info' : 'ads'}"><span>1</span> Mercado Pago ${isMPConnected ? 'conectado' : 'pendente'}</button>
+        <button type="button" class="${hasCurrentAds ? 'done' : ''}" data-seller-action="ads"><span>2</span> Produto ${hasCurrentAds ? 'cadastrado' : 'não cadastrado'}</button>
+        <button type="button" class="${hasActive ? 'done' : ''}" data-seller-action="ads"><span>3</span> Vitrine ${hasActive ? 'ativa' : 'aguardando aprovação'}</button>
       </div>
       <div class="seller-setup-actions">
         ${!isMPConnected ? `<button class="btn btn-mp connect-mp-trigger">${icons.wallet} Conectar Mercado Pago</button>` : ''}
@@ -406,8 +687,8 @@ function renderAdsByStatus() {
       <div class="empty-state seller-first-empty">
         ${icons.package}
         <h3>Nenhum produto cadastrado</h3>
-        <p>Cadastre uma oferta para ela entrar em aprovacao e aparecer na vitrine depois de liberada.</p>
-        <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar primeiro anuncio</button>
+        <p>Cadastre uma oferta para ela entrar em aprovação e aparecer na vitrine depois de liberada.</p>
+        <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar primeiro anúncio</button>
       </div>
     `;
   }
@@ -431,7 +712,7 @@ function renderSellerAdCard(ad) {
   const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
   return `
     <div class="seller-ad-card glass-card">
-      <div class="seller-ad-card-inner" data-open-ad-id="${ad.id}" role="button" tabindex="0" aria-label="Gerenciar anuncio ${escapeHTML(ad.title)}">
+      <div class="seller-ad-card-inner" data-open-ad-id="${ad.id}" role="button" tabindex="0" aria-label="Gerenciar anúncio ${escapeHTML(ad.title)}">
         <div class="seller-ad-thumb">${getProductImage(ad.images?.[0], 120, 120, ad.category)}</div>
         <div class="seller-ad-info">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -557,7 +838,7 @@ function renderEditProductForm() {
     return `
       <div class="empty-state" style="padding:var(--space-6);">
         ${icons.package}
-        <h3>Anuncio nao encontrado</h3>
+        <h3>Anúncio não encontrado</h3>
         <p>Volte para a lista e tente novamente.</p>
         <button class="btn btn-primary" id="back-to-dashboard">Voltar</button>
       </div>
@@ -652,7 +933,7 @@ function validateProductForm(values) {
   if (!values.title || values.title.length < 3) return 'Informe um titulo claro para o produto.';
   if (!values.description || values.description.length < 10) return 'Descreva o produto com pelo menos 10 caracteres.';
   if (!values.categoryId) return 'Selecione uma categoria.';
-  if (values.originalPrice <= 0) return 'Informe o preco original.';
+  if (values.originalPrice <= 0) return 'Informe o preço original.';
   if (values.discount < 10 || values.discount > 50) return 'O desconto precisa ficar entre 10% e 50%.';
   if (!values.whatsapp) return 'Informe o WhatsApp para contato.';
   return null;
@@ -677,12 +958,14 @@ async function collectProductImageUrls(container, selectedPhotoFiles) {
 }
 
 function renderSellerCoupons() {
+  const coupons = loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
   return `
     <div style="padding:var(--space-4) var(--space-5);">
       <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Cupons Recebidos</h2>
+      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:-10px;">Cupons reais gerados pelos compradores aparecem aqui para você validar no atendimento.</p>
     </div>
     <div class="seller-coupons-list" style="padding:0 var(--space-5);">
-      ${(loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).map(c => `
+      ${coupons.length ? coupons.map(c => `
         <div class="coupon-item">
           <div class="coupon-item-header">
             <span class="coupon-item-code">${escapeHTML(c.code)}</span>
@@ -698,43 +981,23 @@ function renderSellerCoupons() {
             </button>
           ` : ''}
         </div>
-      `).join('')}
+      `).join('') : `
+        <div class="empty-state seller-first-empty">
+          ${icons.ticket}
+          <h3>Nenhum cupom gerado ainda</h3>
+          <p>Quando um comprador pegar um cupom de um produto seu, ele aparece aqui com status e comprador vinculado.</p>
+          <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar anúncio</button>
+        </div>
+      `}
     </div>
   `;
 }
 
 async function renderSellerPayments() {
   const user = getUser();
-  let stats = {
-    totalReceived: 0,
-    totalGross: 0,
-    totalFees: 0,
-    totalPayments: 0,
-    paidCount: 0,
-    pendingCount: 0,
-    commissionRate: 0,
-    conversionRate: 0,
-  };
-  let allPayments = [];
-  try {
-    stats = await getPaymentStats(user.id || currentUser.id);
-    allPayments = await getSellerPayments(user.id || currentUser.id);
-  } catch (err) {
-    console.warn('renderSellerPayments failed:', err.message);
-    if (shouldUseSellerMocks()) {
-      stats = {
-        totalReceived: sellerStats.activeAds,
-        totalGross: sellerStats.couponsGenerated,
-        totalFees: 0,
-        totalPayments: sellerStats.couponsGenerated,
-        paidCount: sellerStats.couponsUsed,
-        pendingCount: 0,
-        commissionRate: 0,
-        conversionRate: 66,
-      };
-    }
-    allPayments = [];
-  }
+  await loadSellerPaymentsData(user);
+  const stats = loadedPaymentStats || calculatePaymentStats([]);
+  const allPayments = loadedPayments || [];
   const filtered = paymentsFilter === 'all' ? allPayments : allPayments.filter(p => p.status === paymentsFilter);
   const statusLabels = { paid: 'Pago', pending: 'Pendente', expired: 'Expirado' };
   const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
@@ -819,19 +1082,45 @@ async function renderSellerPayments() {
 
 function bindSellerEvents(container) {
   // New ad button
-  container.querySelector('#new-ad-btn')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
-  container.querySelector('.create-ad-cta')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
+  container.querySelector('#new-ad-btn')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
+  container.querySelector('.create-ad-cta')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
   container.querySelectorAll('.new-ad-trigger').forEach((btn) => {
-    btn.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; renderSellerPage(container); });
+    btn.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
   });
-  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'dashboard'; renderSellerPage(container); });
+  container.querySelector('#back-to-dashboard')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'dashboard'; sellerNavFocus = 'dashboard'; renderSellerPage(container); });
   container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
     window.location.hash = '#/buyer';
+  });
+  container.querySelector('#mp-connected-info')?.addEventListener('click', () => {
+    showMercadoPagoInfoModal(container);
+  });
+  container.querySelectorAll('[data-seller-action]').forEach((control) => {
+    control.addEventListener('click', () => {
+      const action = control.dataset.sellerAction;
+      if (action === 'ads') {
+        sellerView = 'dashboard';
+        sellerNavFocus = 'ads';
+        sellerScrollTarget = 'ads';
+        renderSellerPage(container);
+      } else if (action === 'coupons') {
+        sellerView = 'coupons';
+        sellerNavFocus = 'coupons';
+        renderSellerPage(container);
+      } else if (action === 'payments') {
+        sellerView = 'payments';
+        paymentsFilter = 'all';
+        sellerNavFocus = 'payments';
+        renderSellerPage(container);
+      } else if (action === 'mp-info') {
+        showMercadoPagoInfoModal(container);
+      }
+    });
   });
 
   const openProductManager = (adId) => {
     selectedAdId = adId;
     sellerView = 'edit';
+    sellerNavFocus = 'ads';
     renderSellerPage(container);
   };
 
@@ -863,52 +1152,13 @@ function bindSellerEvents(container) {
   });
 
   // Mercado Pago connect button
-  container.querySelectorAll('.connect-mp-trigger').forEach((trigger) => trigger.addEventListener('click', () => {
-    const modalRoot = document.getElementById('modal-root');
-    modalRoot.innerHTML = `
-      <div class="modal-backdrop" id="mp-modal">
-        <div class="modal-content mp-connect-modal">
-          <div class="modal-handle"></div>
-          <div class="mp-connect-logo" aria-hidden="true">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>
-          </div>
-          <h3>Conectar Mercado Pago</h3>
-          <p>Ao conectar sua conta, voce recebe pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissao</strong>; 100% do valor do pedido vai para o vendedor.</p>
-          ${mpConnection.setupError || mpConnection.oauthConfigured === false ? `
-            <div class="mp-connect-warning">${icons.alertTriangle} ${escapeHTML(mpConnection.setupError || 'A integracao OAuth ainda nao foi carregada neste ambiente. Verifique as variaveis do Netlify se o botao falhar.')}</div>
-          ` : ''}
-          <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
-          <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>
-        </div>
-      </div>
-    `;
-    modalRoot.querySelector('#mp-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-    modalRoot.querySelector('#cancel-mp').addEventListener('click', () => modalRoot.innerHTML = '');
-    modalRoot.querySelector('#do-connect-mp').addEventListener('click', async () => {
-      const btn = modalRoot.querySelector('#do-connect-mp');
-      btn.disabled = true;
-      btn.textContent = 'Abrindo Mercado Pago...';
-      try {
-        const url = await startMercadoPagoOAuth();
-        sessionStorage.setItem('mp_oauth_started_at', String(Date.now()));
-        modalRoot.innerHTML = renderMercadoPagoRedirectState(url, mpConnection.redirectUri);
-        modalRoot.querySelector('#manual-open-mp')?.addEventListener('click', () => {
-          sessionStorage.setItem('mp_oauth_manual_open', 'true');
-        });
-        setTimeout(() => {
-          window.location.assign(url);
-        }, 700);
-      } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Conectar minha conta';
-        showToast(err.message || 'Nao foi possivel iniciar a conexao.', 'error');
-      }
-    });
-  }));
+  container.querySelectorAll('.connect-mp-trigger').forEach((trigger) => {
+    trigger.addEventListener('click', () => showMercadoPagoConnectModal(container));
+  });
 
   // Tabs
   container.querySelectorAll('[data-tab]').forEach(tab => {
-    tab.addEventListener('click', () => { activeTab = tab.dataset.tab; renderSellerPage(container); });
+    tab.addEventListener('click', () => { activeTab = tab.dataset.tab; sellerNavFocus = 'ads'; renderSellerPage(container); });
   });
 
   // Payment filter chips
@@ -1051,9 +1301,11 @@ function bindSellerEvents(container) {
 
       if (result.success) {
         showToast('Anúncio enviado para aprovação!', 'success');
+        invalidateSellerCache({ data: true, payments: true });
         sellerView = 'dashboard';
+        sellerNavFocus = 'ads';
         activeTab = 'pending';
-        renderSellerPage(container);
+        renderSellerPage(container, { force: true });
       } else {
         showToast(result.error || 'Erro ao criar anúncio. Tente novamente.', 'error');
         btn.textContent = origText;
@@ -1090,18 +1342,20 @@ function bindSellerEvents(container) {
       });
 
       if (result.success) {
-        showToast('Anuncio atualizado e enviado para aprovacao.', 'success');
+        showToast('Anúncio atualizado e enviado para aprovação.', 'success');
+        invalidateSellerCache({ data: true, payments: true });
         selectedAdId = null;
         sellerView = 'dashboard';
+        sellerNavFocus = 'ads';
         activeTab = 'pending';
-        renderSellerPage(container);
+        renderSellerPage(container, { force: true });
       } else {
-        showToast(result.error || 'Nao foi possivel salvar o produto.', 'error');
+        showToast(result.error || 'Não foi possível salvar o produto.', 'error');
         btn.textContent = origText;
         btn.disabled = false;
       }
     } catch (err) {
-      showToast(err.message || 'Nao foi possivel salvar o produto.', 'error');
+      showToast(err.message || 'Não foi possível salvar o produto.', 'error');
       btn.textContent = origText;
       btn.disabled = false;
     }
@@ -1137,7 +1391,8 @@ function bindSellerEvents(container) {
         if (result?.success) {
           modalRoot.innerHTML = '';
           showToast(`Cupom ${code} marcado como usado!`, 'success');
-          renderSellerPage(container);
+          invalidateSellerCache({ data: true, payments: true });
+          renderSellerPage(container, { force: true });
         } else {
           showToast(result?.error || 'Não foi possível atualizar o cupom.', 'error');
         }
@@ -1155,7 +1410,9 @@ function bindSellerEvents(container) {
         const result = await renewProduct(adId);
         if (result?.success) {
           showToast('Anúncio renovado e enviado para aprovação!', 'success');
-          renderSellerPage(container);
+          invalidateSellerCache({ data: true });
+          sellerNavFocus = 'ads';
+          renderSellerPage(container, { force: true });
         } else {
           showToast(result?.error || 'Não foi possível renovar o anúncio.', 'error');
           btn.textContent = 'Renovar';
@@ -1179,23 +1436,26 @@ function bindSellerEvents(container) {
       if (!item) return;
       const nav = item.dataset.nav;
       if (nav === 'dashboard') {
-        sellerView = 'dashboard'; activeTab = 'active'; renderSellerPage(container);
+        sellerView = 'dashboard';
+        sellerNavFocus = 'dashboard';
+        activeTab = 'active';
+        renderSellerPage(container);
       } else if (nav === 'ads') {
+        setSellerNavFocus(container, 'ads');
         if (sellerView === 'dashboard') {
           const adsSection = container.querySelector('#seller-ads-section');
           if (adsSection) adsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
-          sellerView = 'dashboard'; activeTab = 'active';
+          sellerView = 'dashboard';
+          activeTab = 'active';
+          sellerNavFocus = 'ads';
+          sellerScrollTarget = 'ads';
           renderSellerPage(container);
-          setTimeout(() => {
-            const adsSection = container.querySelector('#seller-ads-section');
-            if (adsSection) adsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 200);
         }
       } else if (nav === 'coupons') {
-        sellerView = 'coupons'; renderSellerPage(container);
+        sellerView = 'coupons'; sellerNavFocus = 'coupons'; renderSellerPage(container);
       } else if (nav === 'payments') {
-        sellerView = 'payments'; paymentsFilter = 'all'; renderSellerPage(container);
+        sellerView = 'payments'; sellerNavFocus = 'payments'; paymentsFilter = 'all'; renderSellerPage(container);
       }
     });
   }
@@ -1204,7 +1464,7 @@ function bindSellerEvents(container) {
 function showDeleteProductModal(adId, container) {
   const ad = (loadedAds || (shouldUseSellerMocks() ? sellerAds : [])).find(item => String(item.id) === String(adId));
   if (!ad) {
-    showToast('Produto nao encontrado.', 'error');
+    showToast('Produto não encontrado.', 'error');
     return;
   }
 
@@ -1239,14 +1499,16 @@ function showDeleteProductModal(adId, container) {
     if (result?.success) {
       modalRoot.innerHTML = '';
       showToast('Produto removido da vitrine.', 'success');
+      invalidateSellerCache({ data: true, payments: true });
       selectedAdId = null;
       sellerView = 'dashboard';
+      sellerNavFocus = 'ads';
       activeTab = 'expired';
-      renderSellerPage(container);
+      renderSellerPage(container, { force: true });
     } else {
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Excluir';
-      showToast(result?.error || 'Nao foi possivel remover o produto.', 'error');
+      showToast(result?.error || 'Não foi possível remover o produto.', 'error');
     }
   });
 }

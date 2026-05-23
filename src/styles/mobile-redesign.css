@@ -2738,6 +2738,317 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   top: calc(env(safe-area-inset-top, 0px) + 22px) !important;
 }
 
+/* Seller polish: faster-feeling operational panel with real clickable surfaces */
+.seller-page {
+  width: 100% !important;
+  padding-bottom: 130px !important;
+}
+
+.seller-page .app-header.seller-main-header {
+  position: sticky !important;
+  top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  left: auto !important;
+  right: auto !important;
+  transform: none !important;
+  width: min(760px, calc(100% - 32px)) !important;
+  max-width: 760px !important;
+  height: auto !important;
+  min-height: 72px !important;
+  margin: 16px auto 18px !important;
+  padding: 12px 14px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+  z-index: 70 !important;
+}
+
+.seller-identity {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.seller-page .app-body {
+  width: min(760px, calc(100% - 32px)) !important;
+  max-width: 760px !important;
+  padding-top: 0 !important;
+  padding-bottom: 124px !important;
+}
+
+.seller-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.mp-status-pill {
+  min-height: 44px;
+  max-width: 220px;
+  border: 1px solid color-mix(in srgb, #00b1ea 42%, var(--mobile-line)) !important;
+  border-radius: 16px;
+  padding: 6px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, #00b1ea 10%, var(--mobile-surface)) !important;
+  color: var(--mobile-ink);
+  box-shadow: 0 10px 24px rgba(0, 177, 234, 0.16);
+  cursor: pointer;
+  font-family: var(--font-family);
+  text-align: left;
+}
+
+.mp-status-pill:hover,
+.seller-stat-card:hover {
+  transform: translateY(-1px);
+}
+
+.mp-status-pill:focus-visible,
+.seller-stat-card:focus-visible,
+.seller-setup-steps button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--mobile-blue) 34%, transparent);
+  outline-offset: 3px;
+}
+
+.mp-logo-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, #00b1ea, #2f6df6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.mp-connect-logo .mp-logo-mark {
+  width: 64px;
+  height: 64px;
+  font-size: 18px;
+}
+
+.mp-status-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.mp-status-copy strong,
+.mp-status-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-status-copy strong {
+  font-size: 12px;
+  line-height: 1.1;
+  color: var(--mobile-ink);
+}
+
+.mp-status-copy small {
+  font-size: 10px;
+  color: var(--mobile-muted);
+  font-weight: 800;
+}
+
+.mp-status-pill svg {
+  width: 14px;
+  height: 14px;
+  color: var(--mobile-blue);
+  flex: 0 0 auto;
+}
+
+.mp-connection-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  text-align: left;
+}
+
+.mp-connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 14px;
+  background: var(--mobile-surface-soft);
+  font-size: 12px;
+}
+
+.mp-connection-row span {
+  color: var(--mobile-muted);
+  font-weight: 800;
+}
+
+.mp-connection-row strong {
+  color: var(--mobile-ink);
+  font-weight: 900;
+  text-align: right;
+  word-break: break-word;
+}
+
+.seller-stat-card {
+  border: 1px solid var(--mobile-line) !important;
+  width: 100%;
+  min-height: 124px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  color: var(--mobile-ink) !important;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.seller-stat-card:hover {
+  border-color: color-mix(in srgb, var(--mobile-blue) 42%, var(--mobile-line)) !important;
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--mobile-blue) 16%, transparent) !important;
+}
+
+.seller-stat-card .stat-hint {
+  margin-top: 4px;
+  color: var(--mobile-blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.seller-setup-card {
+  display: grid;
+  gap: 14px;
+  background: color-mix(in srgb, var(--mobile-blue) 8%, var(--mobile-card-bg)) !important;
+  border-color: color-mix(in srgb, var(--mobile-blue) 26%, var(--mobile-line)) !important;
+}
+
+.seller-setup-steps {
+  gap: 9px !important;
+}
+
+.seller-setup-steps button {
+  border: 1px solid var(--mobile-line);
+  border-radius: 14px;
+  min-height: 42px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--mobile-surface);
+  color: var(--mobile-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.seller-setup-steps button.done {
+  color: var(--mobile-blue) !important;
+  border-color: color-mix(in srgb, var(--mobile-blue) 30%, var(--mobile-line));
+  background: color-mix(in srgb, var(--mobile-blue) 9%, var(--mobile-surface));
+}
+
+.seller-setup-actions {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.seller-coupons-list .empty-state {
+  margin-bottom: 20px;
+}
+
+@media (min-width: 760px) {
+  .seller-stats-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .seller-setup-card,
+  .seller-cta-inline,
+  .seller-tabs-container,
+  .seller-ads-list,
+  .seller-coupons-list,
+  .performance-section,
+  .create-ad-form,
+  .commission-info-bar,
+  .payment-list-container,
+  .payments-filter {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .seller-setup-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .seller-page .bottom-nav {
+    width: min(620px, calc(100vw - 40px)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .seller-page {
+    max-width: min(820px, calc(100% - 56px)) !important;
+    margin: 0 auto !important;
+    border-left: 1px solid color-mix(in srgb, var(--mobile-line) 60%, transparent) !important;
+    border-right: 1px solid color-mix(in srgb, var(--mobile-line) 60%, transparent) !important;
+    box-shadow: 0 28px 80px color-mix(in srgb, var(--mobile-blue) 13%, transparent) !important;
+  }
+
+  body:has(.seller-page) .theme-toggle-fab {
+    right: max(20px, calc((100vw - min(820px, calc(100vw - 56px))) / 2 + 20px)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .seller-page .app-header.seller-main-header {
+    width: min(100%, calc(100vw - 20px)) !important;
+    margin: 10px auto 14px !important;
+    padding: 12px !important;
+  }
+
+  .seller-header-actions #open-buyer-mode {
+    width: 44px;
+    min-width: 44px;
+    padding: 0 !important;
+    font-size: 0 !important;
+    gap: 0 !important;
+  }
+
+  .seller-header-actions #open-buyer-mode svg {
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+  }
+
+  .mp-status-pill {
+    width: 44px;
+    min-width: 44px;
+    padding: 6px;
+    justify-content: center;
+  }
+
+  .mp-status-copy,
+  .mp-status-pill > svg {
+    display: none;
+  }
+
+  .seller-page .app-body {
+    width: min(100%, calc(100vw - 20px)) !important;
+  }
+}
+
 .install-prompt-shell {
   position: fixed;
   inset: auto 14px calc(env(safe-area-inset-bottom, 0px) + 92px) 14px;
