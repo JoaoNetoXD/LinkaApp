@@ -92,7 +92,7 @@ async function openSellerFlow() {
 
   const result = await becomeSeller();
   if (!result.success) {
-    showToast(result.error === 'AUTH_REQUIRED' ? 'Entre para vender.' : result.error || 'Nao foi possivel ativar o modo vendedor.', 'error');
+    showToast(result.error === 'AUTH_REQUIRED' ? 'Entre para vender.' : result.error || 'Não foi possível ativar o modo vendedor.', 'error');
     if (result.error === 'AUTH_REQUIRED') window.location.hash = '#/auth?role=seller';
     return;
   }
@@ -224,7 +224,7 @@ async function saveCurrentProfileFields({ name, whatsapp }) {
     .maybeSingle();
   if (error) throw error;
   if (!data) {
-    throw new Error('Perfil nao encontrado ou sem permissao para salvar. Entre novamente e tente de novo.');
+    throw new Error('Perfil não encontrado ou sem permissão para salvar. Entre novamente e tente de novo.');
   }
   await refreshCurrentProfile();
 }
@@ -361,10 +361,10 @@ function renderEmptyProductsState() {
   return `
     <div class="market-empty-state">
       <div class="market-empty-icon">${icons.package}</div>
-      <h3>Nenhuma oferta disponivel ainda</h3>
+      <h3>Nenhuma oferta disponível ainda</h3>
       <p>${isSeller
-        ? 'Voce esta no modo compra. Abra seu painel de vendedor para cadastrar e acompanhar seus produtos.'
-        : 'Se voce quer vender, ative o modo vendedor e cadastre o primeiro produto da instituicao.'}</p>
+        ? 'Você está no modo compra. Abra seu painel de vendedor para cadastrar e acompanhar seus produtos.'
+        : 'Se você quer vender, ative o modo vendedor e cadastre o primeiro produto da instituição.'}</p>
       <div class="market-empty-actions">
         <button class="btn-primary" id="btnEmptySellerFlow">${isSeller ? 'Abrir painel de vendas' : 'Quero vender no Linka'}</button>
         ${!isAuthenticated() ? `<button class="btn-details" id="btnEmptyLogin">Entrar para comprar</button>` : ''}
@@ -556,7 +556,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   // Notification button
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
     if (!isAuthenticated()) {
-      showToast('Entre para ver suas notificacoes.', 'info');
+      showToast('Entre para ver suas notificações.', 'info');
       window.location.hash = '#/auth';
       return;
     }
@@ -665,12 +665,12 @@ function renderProductSkeletons() {
 
 function getPaymentUnavailableMessage(message = '') {
   if (message.includes('seller-mp-migration') || message.includes('Banco de pagamentos')) {
-    return 'Pagamento ainda nao configurado no banco. O administrador precisa rodar a migration de pagamentos no Supabase.';
+    return 'Pagamento ainda não configurado no banco. O administrador precisa rodar a migration de pagamentos no Supabase.';
   }
   if (message.includes('Mercado Pago') || message.includes('vendedor')) {
     return 'Este vendedor ainda precisa conectar o Mercado Pago antes de receber pagamentos.';
   }
-  return message || 'Pagamento indisponivel para este produto agora.';
+  return message || 'Pagamento indisponível para este produto agora.';
 }
 
 function showPaymentUnavailableModal(product, container, message) {
@@ -679,13 +679,13 @@ function showPaymentUnavailableModal(product, container, message) {
     <div class="payment-modal-overlay" id="paymentSelectionModal">
       <div class="payment-modal-content">
         <div class="payment-modal-header">
-          <h3>Pagamento indisponivel</h3>
+          <h3>Pagamento indisponível</h3>
           <button class="icon-btn close-modal-btn">${icons.plus}</button>
         </div>
         <div class="payment-modal-body">
           <p class="payment-modal-desc">${escapeHTML(getPaymentUnavailableMessage(message))}</p>
           ${product?.seller?.whatsapp ? `
-            <a class="btn-payment-option" href="https://wa.me/${encodeURIComponent(product.seller.whatsapp)}?text=Oi! Quero comprar ${encodeURIComponent(product.title)}, mas o pagamento ainda nao esta disponivel." target="_blank" rel="noopener">
+            <a class="btn-payment-option" href="https://wa.me/${encodeURIComponent(product.seller.whatsapp)}?text=Oi! Quero comprar ${encodeURIComponent(product.title)}, mas o pagamento ainda não está disponível." target="_blank" rel="noopener">
               ${icons.whatsapp}
               <span>Falar com vendedor</span>
               <small>Avise para conectar o Mercado Pago</small>
@@ -714,7 +714,7 @@ function showLoginRequiredModal(product, container) {
           <button class="icon-btn close-modal-btn">${icons.plus}</button>
         </div>
         <div class="payment-modal-body">
-          <p class="payment-modal-desc">Para gerar Pix, pagar com cartao e receber seu cupom, acesse ou crie sua conta Linka.</p>
+          <p class="payment-modal-desc">Para gerar Pix, pagar com cartão e receber seu cupom, acesse ou crie sua conta Linka.</p>
           <div class="login-required-product">
             <strong>${escapeHTML(product.title)}</strong>
             <span>${formatCurrency(product.discountPrice)}</span>
@@ -852,16 +852,17 @@ async function renderCoupons(container) {
 
   container.innerHTML = `
     <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header">
+      <header class="buyer-header minimal-header page-simple-header">
         <h1>Meus Cupons</h1>
       </header>
       
       <div class="coupons-list">
         ${userCoupons.length === 0 ? `
-          <div class="empty-state coupons-empty-state" style="text-align:center;padding:60px 20px;">
-            ${icons.ticket}<p style="margin-top:12px;">${isLoggedIn ? 'Voce ainda nao tem cupons.' : 'Entre para ver seus cupons.'}</p>
-            <p style="font-size:12px;">${isLoggedIn ? 'Compre um produto para gerar um cupom.' : 'Seus cupons reais ficam vinculados a sua conta.'}</p>
-            ${!isLoggedIn ? `<button class="btn-primary" id="btnCouponsLogin" style="margin-top:16px;">Entrar agora</button>` : ''}
+          <div class="empty-state coupons-empty-state">
+            ${icons.ticket}
+            <h2>${isLoggedIn ? 'Nenhum cupom ainda' : 'Entre para ver seus cupons'}</h2>
+            <p>${isLoggedIn ? 'Ao concluir uma compra, o cupom aparece aqui automaticamente.' : 'Seus cupons reais ficam vinculados à sua conta.'}</p>
+            ${!isLoggedIn ? `<button class="btn-primary" id="btnCouponsLogin">Entrar na conta</button>` : ''}
           </div>
         ` : userCoupons.map(c => `
           <div class="coupon-card ${c.status}">
@@ -961,9 +962,9 @@ function renderProfileLegacy(container) {
           <div class="profile-mode-card">
             <div>
               <strong>${isSeller ? 'Painel de vendas ativo' : 'Modo comprador ativo'}</strong>
-              <span>${isSeller ? 'Voce pode comprar e tambem gerenciar produtos.' : 'Ative o modo vendedor para cadastrar produtos.'}</span>
+              <span>${isSeller ? 'Você pode comprar e também gerenciar produtos.' : 'Ative o modo vendedor para cadastrar produtos.'}</span>
             </div>
-            <button class="btn-primary" id="btnProfileSellerFlow">${isSeller ? 'Abrir vendas' : 'Comecar a vender'}</button>
+            <button class="btn-primary" id="btnProfileSellerFlow">${isSeller ? 'Abrir vendas' : 'Começar a vender'}</button>
           </div>
         `}
 
@@ -980,7 +981,7 @@ function renderProfileLegacy(container) {
         <button class="btn-primary" style="width:100%;margin-top:16px;" id="btnSaveProfile">Salvar Dados</button>
 
         ${isLoggedIn ? `
-          <button class="btn-outline" style="width:100%;margin-top:12px;border-color:#E24B4A;color:#E24B4A;padding:12px;border-radius:10px;cursor:pointer;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:600;" id="btnLogout">Sair da Conta</button>
+          <button class="btn-outline" style="width:100%;margin-top:12px;border-color:#E24B4A;color:#E24B4A;padding:12px;border-radius:10px;cursor:pointer;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:600;" id="btnLogout">Sair da conta</button>
         ` : ''}
       </div>
     </div>
@@ -1073,7 +1074,7 @@ function getProfileRoleMeta(role) {
   return {
     label: 'Comprador',
     status: 'Conta de compras ativa',
-    description: 'Explore ofertas, salve cupons e ative vendas quando quiser vender.',
+    description: 'Explore ofertas, resgate cupons e ative vendas quando quiser vender.',
   };
 }
 
@@ -1102,7 +1103,7 @@ function renderProfileActions(role) {
         <button type="button" class="profile-action-card profile-action-card--accent" id="btnProfileSellerFlow">
           <span class="profile-action-icon">${icons.plus}</span>
           <span>
-            <strong>Comecar a vender</strong>
+            <strong>Começar a vender</strong>
             <small>Ativar painel de vendedor</small>
           </span>
         </button>
@@ -1113,7 +1114,7 @@ function renderProfileActions(role) {
           <span class="profile-action-icon">${icons.shield}</span>
           <span>
             <strong>Admin</strong>
-            <small>Moderacao e relatorios</small>
+            <small>Moderação e relatórios</small>
           </span>
         </button>
       ` : ''}
@@ -1128,16 +1129,16 @@ function renderProfileThemePanel(currentTheme) {
       <div class="profile-panel-heading">
         <div class="profile-panel-icon">${icons.settings}</div>
         <div>
-          <h2>Aparencia</h2>
+          <h2>Aparência</h2>
           <p>Escolha o tema que fica melhor para ler e usar no celular.</p>
         </div>
       </div>
       <button type="button" class="profile-theme-toggle" id="btnProfileThemeToggle" aria-label="Alternar tema do aplicativo">
         <span class="profile-theme-state">
-          <strong>${isDark ? 'Tema black ativo' : 'Tema claro ativo'}</strong>
-          <small>${isDark ? 'Toque para voltar ao claro' : 'Toque para usar o black'}</small>
+          <strong>${isDark ? 'Tema escuro ativo' : 'Tema claro ativo'}</strong>
+          <small>${isDark ? 'Toque para voltar ao claro' : 'Toque para usar o tema escuro'}</small>
         </span>
-        <span class="profile-theme-pill">${isDark ? 'Black' : 'Claro'}</span>
+        <span class="profile-theme-pill">${isDark ? 'Escuro' : 'Claro'}</span>
       </button>
     </section>
   `;
@@ -1148,15 +1149,15 @@ function renderProfile(container) {
   const isLoggedIn = isAuthenticated();
   const role = getAccountRole();
   const roleMeta = getProfileRoleMeta(role);
-  const displayName = user.fullName || user.name || 'Usuario';
+  const displayName = user.fullName || user.name || 'Usuário';
   const email = user.email || '';
   const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
-  const whatsappStatus = user.whatsapp ? 'Configurado' : 'Nao informado';
+  const whatsappStatus = user.whatsapp ? 'Configurado' : 'Não informado';
   const currentTheme = getCurrentTheme();
 
   container.innerHTML = `
     <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header profile-header">
+      <header class="buyer-header minimal-header profile-header page-simple-header">
         <div>
           <span class="profile-kicker">Conta Linka</span>
           <h1>Perfil</h1>
@@ -1169,10 +1170,10 @@ function renderProfile(container) {
           <section class="profile-panel profile-login-panel">
             <div class="profile-panel-icon">${icons.user}</div>
             <div>
-              <h2>Entre para personalizar sua experiencia</h2>
-              <p>Com uma conta voce salva dados, pega cupons, compra e ativa o modo vendedor.</p>
+              <h2>Entre para personalizar sua experiência</h2>
+              <p>Com uma conta, você salva seus dados, resgata cupons, compra e ativa o modo vendedor.</p>
             </div>
-            <button type="button" class="btn-primary" id="btnGoLogin">Fazer login</button>
+            <button type="button" class="btn-primary" id="btnGoLogin">Entrar na conta</button>
           </section>
 
           ${renderProfileThemePanel(currentTheme)}
@@ -1199,8 +1200,8 @@ function renderProfile(container) {
             </div>
             <div class="profile-metrics-grid">
               <div>
-                <span>Instituicao</span>
-                <strong>${escapeHTML(activeInstitution.name || 'Instituicao')}</strong>
+                <span>Instituição</span>
+                <strong>${escapeHTML(activeInstitution.name || 'Instituição')}</strong>
               </div>
               <div>
                 <span>WhatsApp</span>
@@ -1208,7 +1209,7 @@ function renderProfile(container) {
               </div>
               <div>
                 <span>Conta</span>
-                <strong>${user.verified ? 'Verificada' : 'Padrao'}</strong>
+                <strong>${user.verified ? 'Verificada' : 'Padrão'}</strong>
               </div>
             </div>
           </section>
@@ -1217,7 +1218,7 @@ function renderProfile(container) {
             <div class="profile-panel-heading">
               <div class="profile-panel-icon">${icons.grid}</div>
               <div>
-                <h2>Acessos rapidos</h2>
+                <h2>Acessos rápidos</h2>
                 <p>Entre direto no fluxo certo para sua conta.</p>
               </div>
             </div>
@@ -1231,7 +1232,7 @@ function renderProfile(container) {
               <div class="profile-panel-icon">${icons.settings}</div>
               <div>
                 <h2>Dados do perfil</h2>
-                <p>Essas informacoes aparecem em compras, cupons e contatos.</p>
+                <p>Essas informações aparecem em compras, cupons e contatos.</p>
               </div>
             </div>
 
@@ -1252,7 +1253,7 @@ function renderProfile(container) {
 
           <section class="profile-panel profile-session-panel">
             <div>
-              <h2>Sessao</h2>
+              <h2>Sessão</h2>
               <p>Saia desta conta neste navegador.</p>
             </div>
             <button type="button" class="profile-logout-btn" id="btnLogout">Sair da conta</button>
@@ -1264,7 +1265,7 @@ function renderProfile(container) {
     <nav class="bottom-nav">
       <div class="bottom-nav-item" data-nav="home">
         ${icons.home}
-        <span>Inicio</span>
+        <span>Início</span>
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item" data-nav="cats">
@@ -1300,7 +1301,7 @@ function renderProfile(container) {
       }
       showToast('Perfil atualizado com sucesso!', 'success');
     } catch (err) {
-      showToast(err.message || 'Nao foi possivel atualizar o perfil.', 'error');
+      showToast(err.message || 'Não foi possível atualizar o perfil.', 'error');
     }
     btn.innerHTML = `${icons.check} Salvar dados`;
     btn.disabled = false;
@@ -1441,7 +1442,7 @@ async function initPixFlow(product, container) {
     if (pixContainer) {
       pixContainer.innerHTML = `
         <div class="pix-error-state">
-          <p class="pix-error-title">Nao foi possivel gerar o Pix</p>
+          <p class="pix-error-title">Não foi possível gerar o Pix</p>
           <p class="pix-error-message">${escapeHTML(getPaymentUnavailableMessage(err.message))}</p>
           <button class="btn-primary" id="btnBackAfterPixError" style="padding:10px 18px;">Voltar para ofertas</button>
         </div>
@@ -1724,24 +1725,25 @@ async function renderNotifications(container) {
   if (!userId) {
     container.innerHTML = `
       <div class="buyer-wrapper">
-        <header class="buyer-header minimal-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <header class="buyer-header minimal-header page-simple-header" style="display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:12px;">
             <button class="icon-btn" id="btnBackFromNotif" style="color:inherit;">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
             </button>
-            <h1>Notificacoes</h1>
+            <h1>Notificações</h1>
           </div>
         </header>
-        <div style="padding:8px 16px 100px;">
-          <div class="empty-state" style="text-align:center;padding:60px 20px;">
-            ${icons.bell}<p style="margin-top:12px;">Entre para ver suas notificacoes.</p>
-            <p style="font-size:12px;">Alertas de compra, cupons e vendas ficam salvos na sua conta.</p>
-            <button class="btn-primary" id="btnNotifLogin" style="margin-top:16px;">Entrar agora</button>
+        <div class="notifications-list">
+          <div class="empty-state notifications-empty-state">
+            ${icons.bell}
+            <h2>Entre para ver suas notificações</h2>
+            <p>Alertas de compra, cupons e vendas ficam salvos na sua conta.</p>
+            <button class="btn-primary" id="btnNotifLogin">Entrar na conta</button>
           </div>
         </div>
       </div>
       <nav class="bottom-nav">
-        <div class="bottom-nav-item" data-nav="home">${icons.home}<span>Inicio</span><div class="nav-indicator"></div></div>
+        <div class="bottom-nav-item" data-nav="home">${icons.home}<span>Início</span><div class="nav-indicator"></div></div>
         <div class="bottom-nav-item" data-nav="cats">${icons.grid}<span>Categorias</span><div class="nav-indicator"></div></div>
         <div class="bottom-nav-item" data-nav="coupons">${icons.ticket}<span>Cupons</span><div class="nav-indicator"></div></div>
         <div class="bottom-nav-item" data-nav="profile">${icons.user}<span>Perfil</span><div class="nav-indicator"></div></div>
@@ -1763,7 +1765,7 @@ async function renderNotifications(container) {
 
   container.innerHTML = `
     <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header" style="display:flex;align-items:center;justify-content:space-between;">
+      <header class="buyer-header minimal-header page-simple-header" style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:12px;">
           <button class="icon-btn" id="btnBackFromNotif" style="color:#FFF;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
@@ -1772,7 +1774,7 @@ async function renderNotifications(container) {
         </div>
         <button class="btn-ghost" id="btnMarkAllRead" style="font-size:12px;color:#00E5A0;">Marcar tudo lido</button>
       </header>
-      <div style="padding:8px 16px 100px;">
+      <div class="notifications-list">
         ${notifs.length === 0 ? `
           <div style="text-align:center;padding:60px 20px;color:#6B7280;">
             ${icons.bell}<p style="margin-top:12px;">Nenhuma notificação.</p>

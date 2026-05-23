@@ -37,7 +37,7 @@ function setLoading(button, isLoading, text) {
 export function renderAuth(container) {
   syncIntentFromUrl();
   const subtitle = isLoginMode
-    ? 'Entre e volte para o seu fluxo correto.'
+    ? 'Entre para continuar usando o Linka.'
     : selectedRole === 'seller'
       ? 'Crie sua conta de vendedor e publique seu primeiro produto.'
       : 'Crie sua conta para comprar com cupom e acompanhar pedidos.';
@@ -47,7 +47,7 @@ export function renderAuth(container) {
       <div class="auth-header">
         <div class="auth-logo">Link<span>a</span></div>
         <p class="auth-subtitle">${subtitle}</p>
-        <button type="button" class="auth-back-home" id="btnBackHome">${icons.home || ''} Voltar para home</button>
+        <button type="button" class="auth-back-home" id="btnBackHome">${icons.home || ''} Voltar ao início</button>
       </div>
 
       <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso">
@@ -65,7 +65,7 @@ export function renderAuth(container) {
           </div>
 
           <div class="auth-form-group">
-            <label>Como voce vai usar o Linka?</label>
+            <label>Como você vai usar o Linka?</label>
             <div class="auth-role-grid">
               <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer">
                 <strong>Comprar</strong>
@@ -88,12 +88,12 @@ export function renderAuth(container) {
 
         <div class="auth-form-group">
           <label for="authEmail">E-mail</label>
-          <input type="email" id="authEmail" class="auth-input" placeholder="voce@email.com" autocomplete="email" />
+          <input type="email" id="authEmail" class="auth-input" placeholder="seu@email.com" autocomplete="email" />
         </div>
 
         <div class="auth-form-group">
           <label for="authPassword">Senha</label>
-          <input type="password" id="authPassword" class="auth-input" placeholder="Minimo 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
+          <input type="password" id="authPassword" class="auth-input" placeholder="Mínimo 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
         </div>
 
         <button id="btnSubmitAuth" class="auth-btn" type="submit">
@@ -103,8 +103,8 @@ export function renderAuth(container) {
 
       <div class="auth-switch">
         ${isLoginMode
-          ? `Ainda nao tem conta? <span id="btnSwitchMode">Cadastre-se</span>`
-          : `Ja tem conta? <span id="btnSwitchMode">Fazer login</span>`
+          ? `Ainda não tem conta? <span id="btnSwitchMode">Cadastre-se</span>`
+          : `Já tem conta? <span id="btnSwitchMode">Fazer login</span>`
         }
       </div>
     </div>
@@ -187,7 +187,7 @@ export function renderAuth(container) {
         return;
       }
 
-      showAuthMessage(res.error || 'Nao foi possivel entrar. Verifique os dados.');
+      showAuthMessage(res.error || 'Não foi possível entrar. Verifique os dados.');
       setLoading(btn, false, defaultText);
       return;
     }
@@ -201,20 +201,20 @@ export function renderAuth(container) {
     }
 
     if (selectedRole === 'seller' && !whatsapp) {
-      showAuthMessage('Informe um WhatsApp para seus compradores falarem com voce.');
+      showAuthMessage('Informe um WhatsApp para seus compradores falarem com você.');
       setLoading(btn, false, defaultText);
       return;
     }
 
     const res = await signUpUser(email, password, name, selectedRole, { whatsapp });
     if (!res.success) {
-      showAuthMessage(res.error || 'Nao foi possivel criar a conta.');
+      showAuthMessage(res.error || 'Não foi possível criar a conta.');
       setLoading(btn, false, defaultText);
       return;
     }
 
     if (res.needsEmailConfirmation) {
-      showAuthMessage('Conta criada. Confirme seu e-mail e depois faca login.', 'success');
+      showAuthMessage('Conta criada. Confirme seu e-mail e depois faça login.', 'success');
       setLoading(btn, false, defaultText);
       return;
     }
