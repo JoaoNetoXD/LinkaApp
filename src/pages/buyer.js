@@ -131,6 +131,7 @@ const buyerCouponsCache = new Map();
 let observer = null;
 let lastSyncedCheckoutRef = null;
 const PENDING_CHECKOUT_REF_KEY = 'linka_pending_checkout_ref';
+const INST_BANNER_SESSION_KEY = 'linka_inst_banner_hidden';
 
 function getMarketCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
@@ -153,6 +154,18 @@ function getCheckoutRefFromHash() {
   const urlRef = getPaymentRefFromParams(hashParams) || getPaymentRefFromParams(searchParams);
   if (urlRef) return urlRef;
   return isAuthenticated() ? sessionStorage.getItem(PENDING_CHECKOUT_REF_KEY) : null;
+}
+
+function shouldShowInstitutionBanner() {
+  return !sessionStorage.getItem(INST_BANNER_SESSION_KEY);
+}
+
+function hideInstitutionBanner(container) {
+  sessionStorage.setItem(INST_BANNER_SESSION_KEY, '1');
+  const banner = container.querySelector('.inst-banner');
+  if (!banner) return;
+  banner.classList.add('inst-banner-hiding');
+  setTimeout(() => banner.remove(), 260);
 }
 
 function cleanupCheckoutReturnParams({ clearPending = true } = {}) {
@@ -560,14 +573,16 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         </div>
       </header>
 
-      <!-- INSTITUTION BANNER -->
-      <div class="inst-banner" style="margin-top: 16px;">
-        <div class="banner-icon">${icons.shield}</div>
-        <div class="banner-text">
-          <strong>Ofertas verificadas pela sua instituição</strong>
-          <span>Pegue o cupom e fale direto pelo WhatsApp</span>
+      ${shouldShowInstitutionBanner() ? `
+        <div class="inst-banner" style="margin-top: 16px;">
+          <div class="banner-icon">${icons.shield}</div>
+          <div class="banner-text">
+            <strong>Ofertas verificadas</strong>
+            <span>Você compra com vendedores da sua instituição. O aviso sai sozinho em alguns segundos.</span>
+          </div>
+          <button class="inst-banner-close" id="btnHideInstBanner" type="button" aria-label="Ocultar aviso">${icons.x}</button>
         </div>
-      </div>
+      ` : ''}
 
       <div class="list-header">
         <div class="section-divider"></div>
@@ -686,6 +701,14 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
   container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
+  });
+
+  const instBannerTimer = container.querySelector('.inst-banner')
+    ? setTimeout(() => hideInstitutionBanner(container), 8500)
+    : null;
+  container.querySelector('#btnHideInstBanner')?.addEventListener('click', () => {
+    if (instBannerTimer) clearTimeout(instBannerTimer);
+    hideInstitutionBanner(container);
   });
 
   // Load notification badge count

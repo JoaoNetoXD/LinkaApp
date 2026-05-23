@@ -216,6 +216,83 @@ export function formatCurrency(value) {
   return `R$ ${num.toFixed(2).replace('.', ',')}`;
 }
 
+const INSTALL_PROMPT_SEEN_KEY = 'linka_install_prompt_seen_v1';
+let deferredInstallPrompt = null;
+
+function isMobileInstallSurface() {
+  const userAgent = navigator.userAgent || '';
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+  const isTouchSmallScreen = navigator.maxTouchPoints > 1 && window.matchMedia?.('(max-width: 900px)').matches;
+  return isMobileUA || isTouchSmallScreen;
+}
+
+function isRunningStandalone() {
+  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIosBrowser() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
+
+function canShowInstallPrompt() {
+  return isMobileInstallSurface()
+    && !isRunningStandalone()
+    && !localStorage.getItem(INSTALL_PROMPT_SEEN_KEY)
+    && !document.querySelector('.install-prompt-shell');
+}
+
+function markInstallPromptSeen() {
+  localStorage.setItem(INSTALL_PROMPT_SEEN_KEY, new Date().toISOString());
+}
+
+function closeInstallPrompt() {
+  const prompt = document.querySelector('.install-prompt-shell');
+  if (!prompt) return;
+  prompt.classList.add('closing');
+  setTimeout(() => prompt.remove(), 220);
+}
+
+function showInstallPrompt(mode = 'native') {
+  if (!canShowInstallPrompt()) return;
+  markInstallPromptSeen();
+
+  const isNative = mode === 'native' && deferredInstallPrompt;
+  const shell = document.createElement('div');
+  shell.className = 'install-prompt-shell';
+  shell.innerHTML = `
+    <section class="install-prompt-card" role="dialog" aria-live="polite" aria-label="Instalar Linka">
+      <button class="install-prompt-close" type="button" aria-label="Fechar convite">×</button>
+      <div class="install-prompt-icon">${icons.package}</div>
+      <div class="install-prompt-copy">
+        <strong>Instale o Linka no celular</strong>
+        <span>${isNative
+          ? 'Acesse suas ofertas como app, com abertura mais rápida e menos distrações.'
+          : 'No iPhone, toque em Compartilhar e depois em “Adicionar à Tela de Início”.'}</span>
+      </div>
+      <div class="install-prompt-actions">
+        <button class="install-prompt-primary" type="button">${isNative ? 'Instalar app' : 'Entendi'}</button>
+        <button class="install-prompt-secondary" type="button">Agora não</button>
+      </div>
+    </section>
+  `;
+
+  shell.querySelector('.install-prompt-close')?.addEventListener('click', closeInstallPrompt);
+  shell.querySelector('.install-prompt-secondary')?.addEventListener('click', closeInstallPrompt);
+  shell.querySelector('.install-prompt-primary')?.addEventListener('click', async () => {
+    if (!isNative) {
+      closeInstallPrompt();
+      return;
+    }
+    const installEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    closeInstallPrompt();
+    await installEvent.prompt();
+    await installEvent.userChoice.catch(() => null);
+  });
+
+  document.body.appendChild(shell);
+}
+
 // Global auth state
 export let globalSession = null;
 export let globalProfile = null;
@@ -338,6 +415,28 @@ onAuthStateChange(async (event, session) => {
 
 // Add event listener for hash changes to support SPA navigation
 window.addEventListener('hashchange', handleRoute);
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  if (!isMobileInstallSurface()) return;
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  window.setTimeout(() => showInstallPrompt('native'), 1400);
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  markInstallPromptSeen();
+  closeInstallPrompt();
+  showToast('Linka instalado com sucesso!', 'success');
+});
+
+window.addEventListener('load', () => {
+  window.setTimeout(() => {
+    if (isIosBrowser() && canShowInstallPrompt()) {
+      showInstallPrompt('ios');
+    }
+  }, 2400);
+});
 
 // Init
 mountThemeToggle();
