@@ -12,6 +12,53 @@ function normalizeRole(role) {
   return role === 'seller' || role === 'admin' ? role : 'buyer';
 }
 
+function translateAuthError(message = '') {
+  const normalized = String(message || '').toLowerCase();
+  if (!normalized) return 'Nao foi possivel concluir a autenticacao.';
+
+  const knownMessages = [
+    {
+      match: ['invalid login credentials', 'invalid credentials'],
+      text: 'E-mail ou senha incorretos. Confira os dados e tente novamente.',
+    },
+    {
+      match: ['email not confirmed', 'email confirmation'],
+      text: 'Confirme seu e-mail antes de entrar.',
+    },
+    {
+      match: ['user already registered', 'already registered', 'already exists'],
+      text: 'Ja existe uma conta com este e-mail. Faca login ou use outro e-mail.',
+    },
+    {
+      match: ['password should be at least', 'weak password'],
+      text: 'A senha precisa ter pelo menos 6 caracteres.',
+    },
+    {
+      match: ['unable to validate email address', 'invalid email'],
+      text: 'Informe um e-mail valido.',
+    },
+    {
+      match: ['signup is disabled', 'signups not allowed'],
+      text: 'O cadastro esta desativado neste projeto. Verifique as configuracoes do Supabase.',
+    },
+    {
+      match: ['email rate limit exceeded', 'rate limit', 'security purposes'],
+      text: 'Muitas tentativas em pouco tempo. Aguarde alguns instantes e tente novamente.',
+    },
+    {
+      match: ['database error saving new user', 'database error'],
+      text: 'Nao foi possivel salvar seu perfil agora. Tente novamente em instantes.',
+    },
+    {
+      match: ['network', 'failed to fetch', 'fetch'],
+      text: 'Nao foi possivel conectar ao servidor. Verifique sua conexao e tente novamente.',
+    },
+  ];
+
+  const found = knownMessages.find((item) => item.match.some((part) => normalized.includes(part)));
+  return found?.text || 'Nao foi possivel concluir a autenticacao. Revise os dados e tente novamente.';
+}
+
 export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}) {
   if (!user?.id) return null;
 
@@ -73,7 +120,7 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
     };
   } catch (err) {
     console.error('Sign up error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: translateAuthError(err.message) };
   }
 }
 
@@ -103,7 +150,7 @@ export async function signInUser(email, password) {
     };
   } catch (err) {
     console.error('Sign in error:', err.message);
-    return { success: false, error: err.message };
+    return { success: false, error: translateAuthError(err.message) };
   }
 }
 

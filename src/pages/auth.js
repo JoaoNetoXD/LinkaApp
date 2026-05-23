@@ -47,6 +47,7 @@ export function renderAuth(container) {
       <div class="auth-header">
         <div class="auth-logo">Link<span>a</span></div>
         <p class="auth-subtitle">${subtitle}</p>
+        <button type="button" class="auth-back-home" id="btnBackHome">${icons.home || ''} Voltar para home</button>
       </div>
 
       <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso">
@@ -54,7 +55,7 @@ export function renderAuth(container) {
         <button type="button" class="${!isLoginMode ? 'active' : ''}" id="authModeSignup">Criar conta</button>
       </div>
 
-      <div class="auth-form">
+      <form class="auth-form" id="authForm">
         <div id="authError" class="auth-error"></div>
 
         ${!isLoginMode ? `
@@ -95,10 +96,10 @@ export function renderAuth(container) {
           <input type="password" id="authPassword" class="auth-input" placeholder="Minimo 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
         </div>
 
-        <button id="btnSubmitAuth" class="auth-btn">
+        <button id="btnSubmitAuth" class="auth-btn" type="submit">
           ${isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Criar conta de vendedor' : 'Criar conta de comprador'}
         </button>
-      </div>
+      </form>
 
       <div class="auth-switch">
         ${isLoginMode
@@ -131,7 +132,36 @@ export function renderAuth(container) {
     });
   });
 
-  document.getElementById('btnSubmitAuth').addEventListener('click', async () => {
+  document.getElementById('btnBackHome')?.addEventListener('click', () => {
+    window.location.hash = '#/';
+  });
+
+  let enterSubmitQueued = false;
+  const submitAuthFromEnter = (event) => {
+    const isEnterKey = event.key === 'Enter'
+      || event.key === 'NumpadEnter'
+      || event.code === 'Enter'
+      || event.code === 'NumpadEnter'
+      || event.keyCode === 13;
+
+    if (!isEnterKey || event.isComposing) return;
+    event.preventDefault();
+    if (enterSubmitQueued || document.getElementById('btnSubmitAuth')?.disabled) return;
+    enterSubmitQueued = true;
+    document.getElementById('authForm')?.requestSubmit();
+    window.setTimeout(() => {
+      enterSubmitQueued = false;
+    }, 300);
+  };
+
+  document.querySelectorAll('#authEmail, #authPassword, #authName, #authWhatsapp').forEach((input) => {
+    ['keydown', 'keypress', 'keyup'].forEach((eventName) => {
+      input.addEventListener(eventName, submitAuthFromEnter);
+    });
+  });
+
+  document.getElementById('authForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
     const btn = document.getElementById('btnSubmitAuth');

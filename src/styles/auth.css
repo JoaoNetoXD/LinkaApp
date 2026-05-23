@@ -52,6 +52,38 @@ body:has(.auth-wrapper) {
   margin: 0 auto;
 }
 
+.auth-back-home {
+  margin: 16px auto 0;
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #26324a;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.74);
+  color: #DCE6F7;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.auth-back-home:hover,
+.auth-back-home:focus-visible {
+  outline: none;
+  border-color: #00E5A0;
+  background: rgba(0, 229, 160, 0.1);
+  transform: translateY(-1px);
+}
+
+.auth-back-home svg {
+  width: 16px;
+  height: 16px;
+}
+
 .auth-mode-switch {
   display: grid;
   grid-template-columns: 1fr 1fr;
