@@ -87,6 +87,22 @@ let sellerPaymentsLoadedAt = 0;
 let sellerPaymentsPromise = null;
 let sellerPaymentsUserKey = null;
 
+function hasFreshSellerPayments(user = getUser()) {
+  const userKey = getSellerUserKey(user);
+  return sellerPaymentsUserKey === userKey
+    && Date.now() - sellerPaymentsLoadedAt < SELLER_PAYMENTS_TTL_MS
+    && Array.isArray(loadedPayments)
+    && loadedPaymentStats;
+}
+
+function warmSellerPaymentsData(user, container, { force = false } = {}) {
+  if (!force && hasFreshSellerPayments(user)) return;
+  if (!force && sellerPaymentsPromise) return;
+  loadSellerPaymentsData(user, { force }).then(() => {
+    if (sellerView === 'payments') renderSellerPage(container);
+  });
+}
+
 function getSellerCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
   return includeAll ? rows : rows.filter((category) => category.id !== 'all');
@@ -512,9 +528,7 @@ async function renderSellerPage(container, { force = false } = {}) {
   if (needsMainData) {
     await loadSellerMainData(user, { force });
   }
-  if (sellerView === 'payments') {
-    await loadSellerPaymentsData(user, { force });
-  }
+  if (sellerView === 'payments') warmSellerPaymentsData(user, container, { force });
 
   const isMPConnected = Boolean(mpConnection.connected);
   const mpNoticeKey = `${mpResult || ''}:${mpReason || ''}`;
@@ -554,7 +568,7 @@ async function renderSellerPage(container, { force = false } = {}) {
                 : sellerView === 'coupons'
                   ? renderSellerCoupons()
                   : sellerView === 'payments'
-                    ? await renderSellerPayments()
+                    ? renderSellerPayments(container)
                     : renderDashboard()}
       </div>
       <nav class="bottom-nav">
@@ -1202,12 +1216,12 @@ function renderSellerCoupons() {
   `;
 }
 
-async function renderSellerPayments() {
+function renderSellerPayments() {
   const user = getUser();
-  await loadSellerPaymentsData(user);
   const stats = loadedPaymentStats || calculatePaymentStats([]);
   const allPayments = loadedPayments || [];
   const filtered = paymentsFilter === 'all' ? allPayments : allPayments.filter(p => p.status === paymentsFilter);
+  const isLoadingPayments = Boolean(sellerPaymentsPromise) && !hasFreshSellerPayments(user);
   const statusLabels = { paid: 'Pago', pending: 'Pendente', expired: 'Expirado' };
   const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
   const filters = [
@@ -1267,7 +1281,13 @@ async function renderSellerPayments() {
     </div>
 
     <div class="payment-list-container seller-payment-list-container">
-      ${filtered.length > 0 ? filtered.map(p => `
+      ${isLoadingPayments ? `
+        <div class="seller-payments-loading">
+          <div class="loading-spinner"></div>
+          <strong>Carregando vendas reais...</strong>
+          <span>Buscando pagamentos no Supabase sem travar a navegação.</span>
+        </div>
+      ` : filtered.length > 0 ? filtered.map(p => `
         <button class="payment-list-item payment-list-button" type="button" data-payment-id="${escapeHTML(p.paymentRowId || p.id)}" aria-label="Ver detalhes do pagamento de ${escapeHTML(p.productTitle)}">
           <div class="payment-list-item-header">
             <div class="payment-list-buyer">

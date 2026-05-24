@@ -1563,7 +1563,12 @@ body:has(.payment-screen) {
 }
 
 .mp-connect-logo {
-  background: linear-gradient(135deg, #00b1ea, #2f6df6) !important;
+  width: 210px !important;
+  height: 82px !important;
+  border-radius: 999px !important;
+  padding: 8px 14px !important;
+  background: linear-gradient(135deg, #16c7f5 0%, #1587f2 100%) !important;
+  box-shadow: 0 22px 48px rgba(0, 177, 234, 0.28) !important;
 }
 
 .mp-connect-warning {
@@ -3312,8 +3317,8 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-connect-logo .mp-logo-mark {
-  width: 190px;
-  height: 74px;
+  width: 100%;
+  height: 100%;
   padding: 0;
 }
 
@@ -3898,6 +3903,31 @@ button.seller-detail-card:focus-visible {
   color: var(--mobile-ink);
   text-align: center;
   padding: 24px;
+}
+
+.seller-payments-loading {
+  min-height: 220px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  background: var(--mobile-card-bg);
+  color: var(--mobile-ink);
+  text-align: center;
+  padding: 24px;
+}
+
+.seller-payments-loading strong {
+  color: var(--mobile-ink);
+  font-size: 16px;
+}
+
+.seller-payments-loading span {
+  color: var(--mobile-muted);
+  font-size: 13px;
+  max-width: 280px;
 }
 
 .seller-payment-detail-modal {
