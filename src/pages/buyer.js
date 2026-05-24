@@ -105,7 +105,7 @@ async function openSellerFlow() {
 
 let activeCategory = 'all';
 let searchQuery = '';
-let currentView = 'home'; // home | detail | coupons | payment | notifications
+let currentView = 'home'; // home | categories | detail | coupons | payment | notifications
 let currentPayment = null;
 let selectedProduct = null;
 let selectedProductImageIndex = 0;
@@ -335,18 +335,7 @@ function focusCategoriesSection(container) {
 
 function openBuyerCategories(container) {
   buyerNavFocus = 'cats';
-  focusCategoriesAfterRender = true;
-
-  if (currentView === 'home' && container.querySelector('.category-scroll')) {
-    focusCategoriesSection(container);
-    const catsItem = container.querySelector('[data-nav="cats"]');
-    container.querySelectorAll('.bottom-nav-item').forEach(item => item.classList.toggle('active', item === catsItem));
-    catsItem?.classList.add('nav-flash');
-    setTimeout(() => catsItem?.classList.remove('nav-flash'), 800);
-    return;
-  }
-
-  currentView = 'home';
+  currentView = 'categories';
   renderBuyerPage(container);
 }
 
@@ -369,6 +358,9 @@ export function renderBuyer(container, subpage) {
   if (subpage === 'coupons') {
     currentView = 'coupons';
     buyerNavFocus = 'coupons';
+  } else if (subpage === 'categories') {
+    currentView = 'categories';
+    buyerNavFocus = 'cats';
   } else if (subpage === 'profile') {
     currentView = 'profile';
     buyerNavFocus = 'profile';
@@ -451,6 +443,9 @@ async function renderBuyerPage(container) {
     }
   } else if (currentView === 'detail') {
     renderProductDetail(container);
+    resetAppScroll(container);
+  } else if (currentView === 'categories') {
+    await renderCategories(container);
     resetAppScroll(container);
   } else if (currentView === 'coupons') {
     await renderCoupons(container);
@@ -785,6 +780,149 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         event.preventDefault();
         open();
       }
+    });
+  });
+}
+
+async function renderCategories(container) {
+  const products = await loadBuyerProducts({ categoryId: 'all', search: '' });
+  const allProducts = Array.isArray(products) ? products : [];
+  const categories = getMarketCategories(false);
+  const totalOffers = allProducts.length;
+  const stats = categories.map((category) => {
+    const categoryProducts = allProducts.filter(product => product.category === category.id);
+    const bestDeal = categoryProducts.reduce((best, product) => {
+      if (!best) return product;
+      return Number(product.discount || 0) > Number(best.discount || 0) ? product : best;
+    }, null);
+    return {
+      ...category,
+      count: categoryProducts.length,
+      bestDeal,
+      sample: categoryProducts[0],
+    };
+  });
+  const featured = [...stats].sort((a, b) => b.count - a.count).slice(0, 3);
+
+  container.innerHTML = `
+    <div class="page buyer-page buyer-wrapper buyer-categories-page">
+      <header class="buyer-header buyer-categories-header">
+        <div class="buyer-header-top">
+          <div class="buyer-greeting">
+            <span class="buyer-kicker">Explorar</span>
+            <h1>Categorias</h1>
+            <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
+          </div>
+          <button class="buyer-mode-btn" id="btnBackBuyerHome" type="button">
+            ${icons.home}
+            <span>Início</span>
+          </button>
+        </div>
+        <button class="category-search-shortcut" id="btnFocusSearchFromCategories" type="button">
+          ${icons.search}
+          <span>Buscar oferta específica</span>
+        </button>
+      </header>
+
+      <section class="category-spotlight">
+        <div>
+          <span class="buyer-kicker">Vitrine ativa</span>
+          <h2>${totalOffers} ofertas verificadas</h2>
+          <p>Escolha uma área para ver apenas produtos e serviços daquela categoria.</p>
+        </div>
+        <button type="button" class="category-spotlight-action" data-open-category="all">Ver tudo</button>
+      </section>
+
+      <section class="category-section">
+        <div class="category-section-heading">
+          <h2>Mais movimentadas</h2>
+          <span>Toque para filtrar</span>
+        </div>
+        <div class="category-featured-row">
+          ${featured.map(category => `
+            <button class="category-featured-card" type="button" data-open-category="${escapeHTML(category.id)}">
+              <span class="category-featured-icon">${icons[category.id] || icons.others}</span>
+              <strong>${escapeHTML(category.name)}</strong>
+              <small>${category.count} ${category.count === 1 ? 'oferta' : 'ofertas'}</small>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+
+      <section class="category-section">
+        <div class="category-section-heading">
+          <h2>Todas as categorias</h2>
+          <span>Estilo iFood, direto ao ponto</span>
+        </div>
+        <div class="category-app-grid">
+          ${stats.map(category => `
+            <button class="category-app-card ${category.count === 0 ? 'empty' : ''}" type="button" data-open-category="${escapeHTML(category.id)}">
+              <div class="category-app-image">
+                ${category.sample
+                  ? getProductImage(category.sample.images?.[0], 240, 130, category.id)
+                  : `<div class="category-app-placeholder">${icons[category.id] || icons.others}</div>`}
+                ${category.bestDeal ? `<span class="category-deal-pill">Até -${Number(category.bestDeal.discount || 0)}%</span>` : ''}
+              </div>
+              <div class="category-app-copy">
+                <span class="category-app-icon">${icons[category.id] || icons.others}</span>
+                <div>
+                  <strong>${escapeHTML(category.name)}</strong>
+                  <small>${category.count ? `${category.count} ofertas ativas` : 'Sem ofertas agora'}</small>
+                </div>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item" data-nav="home">
+        ${icons.home}
+        <span>Início</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item active" data-nav="cats">
+        ${icons.grid}
+        <span>Categorias</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="coupons">
+        ${icons.ticket}
+        <span>Cupons</span>
+        <div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item" data-nav="profile">
+        ${icons.user}
+        <span>Perfil</span>
+        <div class="nav-indicator"></div>
+      </div>
+    </nav>
+  `;
+
+  container.querySelector('#btnBackBuyerHome')?.addEventListener('click', () => {
+    buyerNavFocus = 'home';
+    currentView = 'home';
+    renderBuyerPage(container);
+  });
+
+  container.querySelector('#btnFocusSearchFromCategories')?.addEventListener('click', () => {
+    buyerNavFocus = 'home';
+    currentView = 'home';
+    renderBuyerPage(container).then(() => {
+      const input = container.querySelector('#searchInput');
+      input?.focus();
+      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  container.querySelectorAll('[data-open-category]').forEach(button => {
+    button.addEventListener('click', () => {
+      activeCategory = button.dataset.openCategory || 'all';
+      searchQuery = '';
+      buyerNavFocus = activeCategory === 'all' ? 'home' : 'cats';
+      currentView = 'home';
+      renderBuyerPage(container);
     });
   });
 }
