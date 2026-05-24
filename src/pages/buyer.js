@@ -648,7 +648,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
               <div class="card-verified-pill">
                 ${icons.shield}
-                <span>Verificado pela instituição</span>
+                <span>Aprovado pela Linka</span>
               </div>
 
               <div class="card-actions">
@@ -1868,8 +1868,7 @@ function renderProductDetail(container) {
     const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
     const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
     selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
-    const institutionName = activeInstitution?.fullName || activeInstitution?.name || 'sua instituicao';
-    const sellerSubtitle = [p.seller?.course, p.seller?.semester].filter(Boolean).join(' - ') || `Vendedor da ${activeInstitution?.name || 'instituicao'}`;
+    const sellerSubtitle = [p.seller?.course, p.seller?.semester].filter(Boolean).join(' - ') || 'Vendedor no Linka';
     const whatsappDigits = String(p.seller?.whatsapp || '').replace(/\D/g, '');
     const productPublishedAt = p.createdAt
       ? new Date(p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
@@ -1920,7 +1919,7 @@ function renderProductDetail(container) {
             <div class="detail-title-row">
               <div>
                 <h2>${escapeHTML(p.title)}</h2>
-                <p>${escapeHTML(p.description || 'Aproveite esta oferta verificada pela sua instituicao.')}</p>
+                <p>${escapeHTML(p.description || 'Oferta revisada pela Linka e pronta para compra.')}</p>
               </div>
             </div>
 
@@ -1937,7 +1936,7 @@ function renderProductDetail(container) {
               </div>
               <div class="detail-info-pill detail-verified-pill">
                 ${icons.shield}
-                <span>Verificado pela instituição</span>
+                <span>Anúncio aprovado pela Linka</span>
               </div>
             </div>
           </section>
@@ -1954,11 +1953,11 @@ function renderProductDetail(container) {
             <div class="seller-detail-facts">
               <div>
                 ${icons.shield}
-                <span>Anúncio aprovado pela ${escapeHTML(activeInstitution?.name || 'instituição')}</span>
+                <span>Anúncio aprovado pela Linka</span>
               </div>
               <div>
                 ${icons.whatsapp}
-                <span>${whatsappDigits ? 'Contato direto pelo WhatsApp' : 'Contato liberado apos compra'}</span>
+                <span>${whatsappDigits ? 'Fale direto com o vendedor' : 'Contato do vendedor indisponível'}</span>
               </div>
               <div>
                 ${icons.tag}
@@ -1966,17 +1965,9 @@ function renderProductDetail(container) {
               </div>
             </div>
 
-            <div class="institution-proof-card">
-              <div class="institution-proof-icon">${icons.checkCircle}</div>
-              <div>
-                <strong>Selo institucional</strong>
-                <span>Oferta revisada para compradores da ${escapeHTML(institutionName)}.</span>
-              </div>
-            </div>
-
             ${whatsappDigits ? `
               <a href="https://wa.me/${encodeURIComponent(whatsappDigits)}?text=Oi! Vi seu anuncio '${encodeURIComponent(p.title)}' no Linka." target="_blank" rel="noopener" class="btn-whatsapp seller-whatsapp-button">
-                ${icons.whatsapp} Conversar no WhatsApp
+                ${icons.whatsapp} Chamar vendedor no WhatsApp
               </a>
             ` : ''}
           </section>
