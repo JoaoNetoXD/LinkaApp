@@ -770,7 +770,7 @@ async function loadProductForSellerMutation(admin, productId) {
   assertUuid(productId, 'Produto');
   const { data, error } = await admin
     .from('products')
-    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,institution_id,deleted_at')
+    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,coupon_valid_hours,institution_id,deleted_at')
     .eq('id', productId)
     .maybeSingle();
 
@@ -847,6 +847,14 @@ function normalizeSellerProductUpdate(body, product) {
     updates.images = images;
   }
 
+  if (has('couponValidHours') || has('coupon_valid_hours')) {
+    const couponValidHours = Number.parseInt(body.couponValidHours ?? body.coupon_valid_hours, 10);
+    if (!Number.isInteger(couponValidHours) || couponValidHours < 1 || couponValidHours > 720) {
+      throw makeHttpError('A validade do cupom precisa ficar entre 1 hora e 30 dias.', 400, 'INVALID_COUPON_VALIDITY');
+    }
+    updates.coupon_valid_hours = couponValidHours;
+  }
+
   updates.status = 'pending';
   updates.rejection_reason = null;
   updates.expires_at = null;
@@ -872,6 +880,26 @@ function generateCouponCode() {
   return `LK${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
+async function resolveCouponValidityHours(client, paymentRow) {
+  const snapshotHours = Number.parseInt(paymentRow?.product_snapshot?.coupon_valid_hours ?? paymentRow?.product_snapshot?.couponValidHours, 10);
+  if (Number.isInteger(snapshotHours) && snapshotHours >= 1 && snapshotHours <= 720) {
+    return snapshotHours;
+  }
+
+  const { data, error } = await client
+    .from('products')
+    .select('coupon_valid_hours')
+    .eq('id', paymentRow.product_id)
+    .maybeSingle();
+
+  if (error) throw error;
+  const productHours = Number.parseInt(data?.coupon_valid_hours, 10);
+  if (Number.isInteger(productHours) && productHours >= 1 && productHours <= 720) {
+    return productHours;
+  }
+  return 24;
+}
+
 async function issueCouponFromPaymentRow(client, paymentRow) {
   if (!client || !paymentRow) return null;
 
@@ -890,7 +918,8 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
     return existingCoupon;
   }
 
-  const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const validHours = await resolveCouponValidityHours(client, paymentRow);
+  const validUntil = new Date(Date.now() + validHours * 60 * 60 * 1000).toISOString();
 
   let coupon = null;
   let lastError = null;

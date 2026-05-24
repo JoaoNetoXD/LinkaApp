@@ -926,6 +926,17 @@ function renderCreateForm() {
         <span class="final-price" id="final-price">R$ 0,00</span>
       </div>
       <div class="input-group">
+        <label>Validade do cupom após pagamento</label>
+        <select class="input-field" id="ad-coupon-valid-hours">
+          <option value="24">24 horas</option>
+          <option value="48">48 horas</option>
+          <option value="72">3 dias</option>
+          <option value="168">7 dias</option>
+          <option value="720">30 dias</option>
+        </select>
+        <div class="input-hint">O comprador só recebe o cupom depois do pagamento confirmado.</div>
+      </div>
+      <div class="input-group">
         <label>Fotos do produto (até 3)</label>
         <div class="photo-upload">
           ${renderPhotoSlot(1)}
@@ -1039,6 +1050,13 @@ function renderEditProductForm() {
         <span class="final-price" id="final-price">${formatCurrency(ad.discountPrice || 0)}</span>
       </div>
       <div class="input-group">
+        <label>Validade do cupom após pagamento</label>
+        <select class="input-field" id="ad-coupon-valid-hours">
+          ${[24, 48, 72, 168, 720].map((hours) => `<option value="${hours}" ${Number(ad.couponValidHours || 24) === hours ? 'selected' : ''}>${formatCouponValidity(hours)}</option>`).join('')}
+        </select>
+        <div class="input-hint">Essa validade passa a valer para novos pagamentos deste anúncio.</div>
+      </div>
+      <div class="input-group">
         <label>Fotos do produto (até 3)</label>
         <div class="photo-upload">
           ${renderPhotoSlot(1, ad.images?.[0] || '')}
@@ -1070,6 +1088,7 @@ function readProductFormValues(container) {
     categoryId: container.querySelector('#ad-category')?.value || '',
     originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
     discount: parseInt(container.querySelector('#ad-discount')?.value, 10) || 0,
+    couponValidHours: parseInt(container.querySelector('#ad-coupon-valid-hours')?.value, 10) || 24,
     whatsapp: container.querySelector('#ad-whatsapp')?.value.trim() || '',
   };
 }
@@ -1080,8 +1099,16 @@ function validateProductForm(values) {
   if (!values.categoryId) return 'Selecione uma categoria.';
   if (values.originalPrice <= 0) return 'Informe o preço original.';
   if (values.discount < 10 || values.discount > 50) return 'O desconto precisa ficar entre 10% e 50%.';
+  if (!Number.isInteger(values.couponValidHours) || values.couponValidHours < 1 || values.couponValidHours > 720) return 'Escolha uma validade de cupom entre 1 hora e 30 dias.';
   if (!values.whatsapp) return 'Informe o WhatsApp para contato.';
   return null;
+}
+
+function formatCouponValidity(hours) {
+  const value = Number(hours || 24);
+  if (value < 24) return `${value} hora${value === 1 ? '' : 's'}`;
+  const days = Math.round(value / 24);
+  return `${days} dia${days === 1 ? '' : 's'}`;
 }
 
 async function collectProductImageUrls(container, selectedPhotoFiles) {
@@ -1119,10 +1146,11 @@ function renderSellerCoupons() {
             </span>
           </div>
           <div class="coupon-item-product">${escapeHTML(c.product)}</div>
-          <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · ${escapeHTML(c.createdAt)}</div>
-          ${c.status === 'active' || c.status === 'pending' ? `
+          <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · Gerado em ${escapeHTML(c.createdAt)}</div>
+          <div class="coupon-item-meta">Validade: ${escapeHTML(c.validUntil || 'não informada')}${c.status === 'used' && c.usedAt ? ` · Usado em ${escapeHTML(c.usedAt)}` : ''}</div>
+          ${c.status === 'active' ? `
             <button class="btn btn-success btn-sm btn-block mark-used-btn" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
-              ${icons.check} Marcar como usado
+              ${icons.check} Validar uso manualmente
             </button>
           ` : ''}
         </div>
@@ -1130,7 +1158,7 @@ function renderSellerCoupons() {
         <div class="empty-state seller-first-empty">
           ${icons.ticket}
           <h3>Nenhum cupom gerado ainda</h3>
-          <p>Quando um comprador pegar um cupom de um produto seu, ele aparece aqui com status e comprador vinculado.</p>
+          <p>Quando um pagamento for confirmado, o cupom aparece aqui para você acompanhar a validade e validar o uso manualmente.</p>
           <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar anúncio</button>
         </div>
       `}
@@ -1469,6 +1497,7 @@ function bindSellerEvents(container) {
         categoryId: values.categoryId,
         originalPrice: values.originalPrice,
         discount: values.discount,
+        couponValidHours: values.couponValidHours,
         images: imageUrls,
         whatsapp: values.whatsapp,
       });
@@ -1544,8 +1573,8 @@ function bindSellerEvents(container) {
         <div class="modal-backdrop" id="confirm-modal">
           <div class="modal-content" style="text-align:center;">
             <div class="modal-handle"></div>
-            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-3);">Confirmar uso do cupom?</h3>
-            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);">Confirmar que o cupom <strong>${escapeHTML(code)}</strong> foi utilizado?</p>
+            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-3);">Validar uso do cupom?</h3>
+            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);">Confirme somente depois de entregar o produto/serviço do cupom <strong>${escapeHTML(code)}</strong>.</p>
             <div style="display:flex;gap:var(--space-3);">
               <button class="btn btn-secondary" style="flex:1;" id="cancel-confirm">Cancelar</button>
               <button class="btn btn-success" style="flex:1;" id="do-confirm">Confirmar uso</button>

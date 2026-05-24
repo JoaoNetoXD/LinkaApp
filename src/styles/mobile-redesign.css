@@ -807,6 +807,93 @@ body:has(.payment-screen) {
   padding: 0 16px 128px !important;
 }
 
+.product-lightbox-backdrop {
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 18px !important;
+  background: rgba(2, 8, 18, 0.78) !important;
+}
+
+.product-lightbox-panel {
+  width: min(94vw, 760px);
+  max-height: min(92vh, 820px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: #fff;
+  animation: modalPop 180ms ease both;
+}
+
+.product-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.product-lightbox-header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.product-lightbox-close {
+  color: #fff !important;
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+.product-lightbox-frame {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #05070c;
+  height: min(76vh, 680px);
+  min-height: 280px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.product-lightbox-frame img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  background: #05070c !important;
+}
+
+.product-lightbox-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.72) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  font-size: 24px !important;
+}
+
+.product-lightbox-arrow.is-prev { left: 12px; }
+.product-lightbox-arrow.is-next { right: 12px; }
+
+.product-lightbox-count {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.78);
+  color: #fff;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.98) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
 .detail-gallery-shell {
   position: relative;
   overflow: hidden;

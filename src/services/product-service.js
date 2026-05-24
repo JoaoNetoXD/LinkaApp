@@ -140,8 +140,9 @@ async function getCategoryDefaults(categoryId) {
   }
 }
 
-export async function createProduct({ sellerId, title, description, categoryId, originalPrice, discount, images = [], whatsapp, institutionId = null }) {
+export async function createProduct({ sellerId, title, description, categoryId, originalPrice, discount, images = [], whatsapp, institutionId = null, couponValidHours = 24 }) {
   const discountPrice = Math.round(originalPrice * (1 - discount / 100) * 100) / 100;
+  const normalizedCouponValidHours = Math.min(Math.max(Number.parseInt(couponValidHours, 10) || 24, 1), 720);
 
   try {
     const categoryDefaults = await getCategoryDefaults(categoryId);
@@ -165,6 +166,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
       slots_total: Number(categoryDefaults.max_slots || 5),
       slots_used: 0,
       clicks: 0,
+      coupon_valid_hours: normalizedCouponValidHours,
     };
 
     if (institutionId) {
@@ -187,6 +189,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
         title, description,
         category: categoryId,
         originalPrice, discount, discountPrice,
+        couponValidHours: normalizedCouponValidHours,
         images, status: 'pending',
         slots: { used: 0, total: 5 },
         clicks: 0, couponsGenerated: 0, couponsUsed: 0,
@@ -214,6 +217,9 @@ export async function updateProduct(productId, updates) {
       dbUpdates.discount_price = Math.round(updates.originalPrice * (1 - updates.discount / 100) * 100) / 100;
     }
     if (updates.images) dbUpdates.images = updates.images;
+    if (updates.couponValidHours) {
+      dbUpdates.coupon_valid_hours = Math.min(Math.max(Number.parseInt(updates.couponValidHours, 10) || 24, 1), 720);
+    }
     if (updates.status) dbUpdates.status = updates.status;
     if (updates.rejectionReason) dbUpdates.rejection_reason = updates.rejectionReason;
 
@@ -517,6 +523,7 @@ function transformProduct(dbProduct) {
     originalPrice: parseFloat(dbProduct.original_price),
     discount: dbProduct.discount,
     discountPrice: parseFloat(dbProduct.discount_price),
+    couponValidHours: Math.min(Math.max(Number.parseInt(dbProduct.coupon_valid_hours, 10) || 24, 1), 720),
     seller: dbProduct.seller ? {
       id: dbProduct.seller.id,
       name: dbProduct.seller.name,

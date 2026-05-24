@@ -77,7 +77,11 @@ export async function getSellerCoupons(sellerId) {
 export async function markCouponUsed(couponId) {
   try {
     const { data, error } = await supabase.from('coupons')
-      .update({ status: 'used' }).eq('id', couponId).select().single();
+      .update({ status: 'used', used_at: new Date().toISOString() })
+      .eq('id', couponId)
+      .eq('status', 'active')
+      .select()
+      .single();
     if (error) throw error;
     return { success: true, coupon: data };
   } catch (err) {
@@ -139,28 +143,41 @@ export async function expireOldCoupons() {
 }
 
 function transformCoupon(c) {
+  const status = normalizeCouponStatus(c);
   return {
     id: c.id, code: c.code, productId: c.product_id,
     product: c.product?.title || 'Produto',
     seller: c.seller?.name || 'Vendedor',
     sellerWhatsapp: c.seller?.whatsapp,
-    status: c.status,
+    status,
     createdAt: formatDate(c.created_at),
     createdAtRaw: c.created_at,
     validUntil: formatDate(c.valid_until),
+    usedAt: formatDate(c.used_at),
+    usedAtRaw: c.used_at,
   };
 }
 
 function transformSellerCoupon(c) {
+  const status = normalizeCouponStatus(c);
   return {
     id: c.id, code: c.code, productId: c.product_id,
     product: c.product?.title || 'Produto',
     buyer: c.buyer?.name || 'Comprador',
-    status: c.status,
+    status,
     createdAt: formatDate(c.created_at),
     createdAtRaw: c.created_at,
     validUntil: formatDate(c.valid_until),
+    usedAt: formatDate(c.used_at),
+    usedAtRaw: c.used_at,
   };
+}
+
+function normalizeCouponStatus(c) {
+  if (c?.status === 'active' && c.valid_until && new Date(c.valid_until) < new Date()) {
+    return 'expired';
+  }
+  return c?.status || 'active';
 }
 
 function formatDate(d) {

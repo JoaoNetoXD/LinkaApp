@@ -1823,18 +1823,18 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
   const modalRoot = document.getElementById('modal-root');
   const render = () => {
     modalRoot.innerHTML = `
-      <div class="modal-backdrop visible" id="product-image-lightbox" style="background:rgba(0,0,0,.88);">
-        <div style="width:min(94vw,720px);max-height:92vh;display:flex;flex-direction:column;gap:12px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;color:#fff;">
+      <div class="modal-backdrop visible product-lightbox-backdrop" id="product-image-lightbox">
+        <div class="product-lightbox-panel">
+          <div class="product-lightbox-header">
             <strong>${escapeHTML(product.title)}</strong>
-            <button class="icon-btn" id="closeLightbox" type="button" style="color:#fff;">${icons.plus}</button>
+            <button class="icon-btn product-lightbox-close" id="closeLightbox" type="button" aria-label="Fechar">${icons.x}</button>
           </div>
-          <div id="lightboxImageFrame" style="position:relative;border-radius:16px;overflow:hidden;background:#050508;min-height:280px;max-height:78vh;">
+          <div id="lightboxImageFrame" class="product-lightbox-frame">
             ${getProductImage(images[index], 900, 720, product.category)}
             ${images.length > 1 ? `
-              <button class="icon-btn" id="lightboxPrev" type="button" aria-label="Foto anterior" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">‹</button>
-              <button class="icon-btn" id="lightboxNext" type="button" aria-label="Proxima foto" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">›</button>
-              <div style="position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;padding:5px 12px;border-radius:999px;font-size:12px;">${index + 1}/${images.length}</div>
+              <button class="icon-btn product-lightbox-arrow is-prev" id="lightboxPrev" type="button" aria-label="Foto anterior">‹</button>
+              <button class="icon-btn product-lightbox-arrow is-next" id="lightboxNext" type="button" aria-label="Próxima foto">›</button>
+              <div class="product-lightbox-count">${index + 1}/${images.length}</div>
             ` : ''}
           </div>
         </div>
