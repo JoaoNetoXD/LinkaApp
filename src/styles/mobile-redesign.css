@@ -3269,9 +3269,9 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-status-pill {
-  min-height: 44px;
-  min-width: 238px;
-  max-width: 304px;
+  min-height: 52px;
+  min-width: 278px;
+  max-width: 342px;
   border: 1.5px solid color-mix(in srgb, #00b1ea 68%, var(--mobile-line)) !important;
   border-radius: 16px;
   padding: 8px 13px;
@@ -3314,15 +3314,20 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-status-pill .mp-logo-mark {
-  width: 104px;
-  height: 38px;
-  padding: 5px 11px;
+  width: 132px;
+  height: 42px;
+  padding: 6px 15px;
   border-radius: 999px;
   background: linear-gradient(135deg, #1ecbf5 0%, #178df2 100%);
   border: 1px solid rgba(143, 225, 255, 0.92);
   box-shadow:
     0 12px 24px rgba(0, 177, 234, 0.24),
     inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.mp-status-pill .mp-logo-mark img,
+.mp-status-pill .mp-logo-mark svg {
+  transform: scale(1.18);
 }
 
 .mp-logo-mark img,
@@ -3341,6 +3346,11 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   background: transparent;
   border: 0;
   box-shadow: none;
+}
+
+.mp-connect-logo .mp-logo-mark img,
+.mp-connect-logo .mp-logo-mark svg {
+  transform: none;
 }
 
 .mp-status-copy {
@@ -3493,22 +3503,41 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   margin-bottom: 20px;
 }
 
+.seller-coupon-hero {
+  display: grid !important;
+  grid-template-columns: minmax(190px, 1fr) minmax(260px, 1.1fr) minmax(240px, 0.9fr);
+  align-items: stretch !important;
+  gap: 16px !important;
+}
+
+.seller-coupon-copy {
+  min-width: 0;
+}
+
+.seller-coupon-copy p {
+  max-width: 34ch;
+}
+
 .seller-coupon-validator {
-  display: grid;
+  display: grid !important;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  margin-top: 16px;
+  margin: 0 !important;
+  align-self: center;
 }
 
 .seller-coupon-validator .input-field {
+  width: 100%;
+  min-width: 0;
   min-height: 48px;
 }
 
 .seller-coupon-summary {
-  display: grid;
+  display: grid !important;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  margin-top: 14px;
+  margin: 0 !important;
+  min-width: 0;
 }
 
 .seller-coupon-summary div {
@@ -3529,7 +3558,7 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 
 .seller-coupon-summary span {
   color: var(--mobile-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -4202,6 +4231,21 @@ button.seller-detail-card:focus-visible {
   }
 }
 
+@media (max-width: 900px) {
+  .seller-coupon-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .seller-coupon-copy p {
+    max-width: none;
+  }
+
+  .seller-coupon-validator,
+  .seller-coupon-summary {
+    width: 100%;
+  }
+}
+
 @media (min-width: 1024px) {
   .seller-page {
     max-width: min(900px, calc(100% - 56px)) !important;
@@ -4279,6 +4323,17 @@ button.seller-detail-card:focus-visible {
     width: 58px;
     height: 30px;
     padding: 3px 5px;
+  }
+
+  .mp-status-pill .mp-logo-mark {
+    width: 58px;
+    height: 30px;
+    padding: 3px 5px;
+  }
+
+  .mp-status-pill .mp-logo-mark img,
+  .mp-status-pill .mp-logo-mark svg {
+    transform: scale(1.08);
   }
 
   .mp-status-copy,

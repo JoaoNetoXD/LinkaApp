@@ -1196,12 +1196,14 @@ function renderSellerCoupons() {
     ['expired', 'Expirados'],
   ];
   return `
-    <div class="seller-view-header">
-      <span class="seller-setup-kicker">Validação manual</span>
-      <h2>Cupons recebidos</h2>
-      <p>Use esta área no atendimento: cupom ativo pode ser validado uma única vez, depois fica bloqueado como usado.</p>
+    <div class="seller-view-header seller-coupon-hero">
+      <div class="seller-coupon-copy">
+        <span class="seller-setup-kicker">Validação manual</span>
+        <h2>Cupons recebidos</h2>
+        <p>Use esta área no atendimento: cupom ativo pode ser validado uma única vez, depois fica bloqueado como usado.</p>
+      </div>
       <form class="seller-coupon-validator" id="coupon-validator-form">
-        <input class="input-field" id="coupon-validator-code" type="text" placeholder="Digite ou cole o código do cupom" autocomplete="off" />
+        <input class="input-field" id="coupon-validator-code" type="text" placeholder="Código do cupom" autocomplete="off" />
         <button class="btn btn-primary" type="submit">${icons.check} Verificar</button>
       </form>
       <div class="seller-coupon-summary">
