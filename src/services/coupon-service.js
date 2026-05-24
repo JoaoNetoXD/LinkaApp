@@ -76,13 +76,31 @@ export async function getSellerCoupons(sellerId) {
 /** Mark a coupon as used (seller action) */
 export async function markCouponUsed(couponId) {
   try {
+    const { data: currentCoupon, error: currentError } = await supabase.from('coupons')
+      .select('id, status, valid_until, used_at')
+      .eq('id', couponId)
+      .single();
+
+    if (currentError || !currentCoupon) {
+      return { success: false, error: 'Cupom não encontrado.' };
+    }
+    if (currentCoupon.status === 'used' || currentCoupon.used_at) {
+      return { success: false, error: 'Este cupom já foi utilizado.' };
+    }
+    if (currentCoupon.status === 'expired' || (currentCoupon.valid_until && new Date(currentCoupon.valid_until) < new Date())) {
+      return { success: false, error: 'Este cupom está expirado.' };
+    }
+
     const { data, error } = await supabase.from('coupons')
       .update({ status: 'used', used_at: new Date().toISOString() })
       .eq('id', couponId)
       .eq('status', 'active')
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') return { success: false, error: 'Este cupom não está mais ativo.' };
+      throw error;
+    }
     return { success: true, coupon: data };
   } catch (err) {
     if (USE_MOCKS) {
@@ -146,6 +164,7 @@ function transformCoupon(c) {
   const status = normalizeCouponStatus(c);
   return {
     id: c.id, code: c.code, productId: c.product_id,
+    sellerId: c.seller_id,
     product: c.product?.title || 'Produto',
     seller: c.seller?.name || 'Vendedor',
     sellerWhatsapp: c.seller?.whatsapp,
@@ -162,6 +181,7 @@ function transformSellerCoupon(c) {
   const status = normalizeCouponStatus(c);
   return {
     id: c.id, code: c.code, productId: c.product_id,
+    sellerId: c.seller_id,
     product: c.product?.title || 'Produto',
     buyer: c.buyer?.name || 'Comprador',
     status,

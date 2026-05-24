@@ -3274,11 +3274,11 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   max-width: 304px;
   border: 1.5px solid color-mix(in srgb, #00b1ea 68%, var(--mobile-line)) !important;
   border-radius: 16px;
-  padding: 7px 12px;
+  padding: 8px 13px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: color-mix(in srgb, #00b1ea 10%, var(--mobile-surface)) !important;
+  background: color-mix(in srgb, #00b1ea 12%, var(--mobile-surface)) !important;
   color: var(--mobile-ink);
   box-shadow:
     0 10px 24px rgba(0, 177, 234, 0.16),
@@ -3313,6 +3313,18 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   box-shadow: none;
 }
 
+.mp-status-pill .mp-logo-mark {
+  width: 104px;
+  height: 38px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #1ecbf5 0%, #178df2 100%);
+  border: 1px solid rgba(143, 225, 255, 0.92);
+  box-shadow:
+    0 12px 24px rgba(0, 177, 234, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
 .mp-logo-mark img,
 .mp-logo-mark svg {
   width: 100%;
@@ -3326,6 +3338,9 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   width: 100%;
   height: 100%;
   padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .mp-status-copy {
@@ -3478,6 +3493,119 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   margin-bottom: 20px;
 }
 
+.seller-coupon-validator {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.seller-coupon-validator .input-field {
+  min-height: 48px;
+}
+
+.seller-coupon-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.seller-coupon-summary div {
+  min-height: 76px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 18px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--mobile-surface) 78%, transparent);
+}
+
+.seller-coupon-summary strong {
+  display: block;
+  color: var(--mobile-ink);
+  font-size: 24px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.seller-coupon-summary span {
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.seller-coupon-filters {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 16px 14px;
+  scrollbar-width: none;
+}
+
+.seller-coupon-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.seller-coupon-filters button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 999px;
+  background: var(--mobile-surface);
+  color: var(--mobile-ink);
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.seller-coupon-filters button.active {
+  background: linear-gradient(135deg, var(--mobile-blue-soft), var(--mobile-blue));
+  border-color: transparent;
+  color: #fff;
+}
+
+.seller-coupon-filters span {
+  margin-left: 6px;
+  opacity: 0.82;
+}
+
+.seller-coupon-card {
+  border-radius: 22px !important;
+  background: color-mix(in srgb, var(--mobile-card-bg) 94%, transparent) !important;
+}
+
+.coupon-validation-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--mobile-blue) 8%, transparent);
+  color: var(--mobile-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.coupon-validation-modal h3 {
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.coupon-validation-modal p {
+  color: var(--mobile-muted);
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+
+.coupon-validation-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--mobile-blue);
+  background: color-mix(in srgb, var(--mobile-blue) 14%, transparent);
+}
+
 .seller-dashboard-card,
 .seller-view-header,
 .seller-status-note,
@@ -3488,6 +3616,13 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   border-radius: 24px;
   background: color-mix(in srgb, var(--mobile-card-bg) 92%, transparent);
   box-shadow: var(--mobile-shadow-soft);
+}
+
+@media (max-width: 520px) {
+  .seller-coupon-validator,
+  .seller-coupon-summary {
+    grid-template-columns: 1fr;
+  }
 }
 
 .seller-dashboard-card {

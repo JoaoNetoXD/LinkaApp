@@ -2,7 +2,7 @@
 import { sellerAds, sellerCoupons, categories as mockCategories, currentUser, institution, sellerStats } from '../data/mock.js';
 import { getSellerPayments, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
-import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../services/coupon-service.js';
+import { getSellerCoupons as fetchSellerCoupons, markCouponUsed, validateCoupon } from '../services/coupon-service.js';
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
@@ -62,6 +62,7 @@ function getUser() {
 
 let sellerView = 'dashboard'; // dashboard | ads | insights | create | edit | coupons | payments
 let paymentsFilter = 'all';
+let couponStatusFilter = 'all';
 let activeTab = 'active';
 let loadedAds = null;
 let loadedCoupons = null;
@@ -1181,14 +1182,44 @@ async function collectProductImageUrls(container, selectedPhotoFiles) {
 
 function renderSellerCoupons() {
   const coupons = loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
+  const counts = {
+    all: coupons.length,
+    active: coupons.filter(c => c.status === 'active').length,
+    used: coupons.filter(c => c.status === 'used').length,
+    expired: coupons.filter(c => c.status === 'expired').length,
+  };
+  const filteredCoupons = couponStatusFilter === 'all' ? coupons : coupons.filter(c => c.status === couponStatusFilter);
+  const filterItems = [
+    ['all', 'Todos'],
+    ['active', 'Ativos'],
+    ['used', 'Usados'],
+    ['expired', 'Expirados'],
+  ];
   return `
-    <div style="padding:var(--space-4) var(--space-5);">
-      <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-4);">Cupons Recebidos</h2>
-      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:-10px;">Cupons reais gerados pelos compradores aparecem aqui para você validar no atendimento.</p>
+    <div class="seller-view-header">
+      <span class="seller-setup-kicker">Validação manual</span>
+      <h2>Cupons recebidos</h2>
+      <p>Use esta área no atendimento: cupom ativo pode ser validado uma única vez, depois fica bloqueado como usado.</p>
+      <form class="seller-coupon-validator" id="coupon-validator-form">
+        <input class="input-field" id="coupon-validator-code" type="text" placeholder="Digite ou cole o código do cupom" autocomplete="off" />
+        <button class="btn btn-primary" type="submit">${icons.check} Verificar</button>
+      </form>
+      <div class="seller-coupon-summary">
+        <div><strong>${counts.active}</strong><span>Ativos</span></div>
+        <div><strong>${counts.used}</strong><span>Usados</span></div>
+        <div><strong>${counts.expired}</strong><span>Expirados</span></div>
+      </div>
     </div>
-    <div class="seller-coupons-list" style="padding:0 var(--space-5);">
-      ${coupons.length ? coupons.map(c => `
-        <div class="coupon-item">
+    <div class="seller-coupon-filters">
+      ${filterItems.map(([value, label]) => `
+        <button type="button" class="${couponStatusFilter === value ? 'active' : ''}" data-coupon-filter="${value}">
+          ${label} <span>${counts[value]}</span>
+        </button>
+      `).join('')}
+    </div>
+    <div class="seller-coupons-list">
+      ${filteredCoupons.length ? filteredCoupons.map(c => `
+        <div class="coupon-item seller-coupon-card ${c.status}">
           <div class="coupon-item-header">
             <span class="coupon-item-code">${escapeHTML(c.code)}</span>
             <span class="badge ${c.status === 'active' || c.status === 'pending' ? 'badge-warning' : c.status === 'used' ? 'badge-success' : 'badge-neutral'}">
@@ -1198,8 +1229,15 @@ function renderSellerCoupons() {
           <div class="coupon-item-product">${escapeHTML(c.product)}</div>
           <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · Gerado em ${escapeHTML(c.createdAt)}</div>
           <div class="coupon-item-meta">Validade: ${escapeHTML(c.validUntil || 'não informada')}${c.status === 'used' && c.usedAt ? ` · Usado em ${escapeHTML(c.usedAt)}` : ''}</div>
+          <div class="coupon-validation-note">
+            ${c.status === 'active'
+              ? 'Pronto para validar no atendimento. Depois de confirmado, este código não poderá ser usado novamente.'
+              : c.status === 'used'
+                ? 'Cupom já utilizado e bloqueado contra reuso.'
+                : 'Cupom expirado. Não valide este código.'}
+          </div>
           ${c.status === 'active' ? `
-            <button class="btn btn-success btn-sm btn-block mark-used-btn" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
+            <button class="btn btn-success btn-sm btn-block mark-used-btn" data-id="${escapeHTML(c.id)}" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
               ${icons.check} Validar uso manualmente
             </button>
           ` : ''}
@@ -1207,9 +1245,9 @@ function renderSellerCoupons() {
       `).join('') : `
         <div class="empty-state seller-first-empty">
           ${icons.ticket}
-          <h3>Nenhum cupom gerado ainda</h3>
-          <p>Quando um pagamento for confirmado, o cupom aparece aqui para você acompanhar a validade e validar o uso manualmente.</p>
-          <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar anúncio</button>
+          <h3>${coupons.length ? 'Nenhum cupom neste filtro' : 'Nenhum cupom gerado ainda'}</h3>
+          <p>${coupons.length ? 'Troque o filtro para consultar outros status.' : 'Quando um pagamento for confirmado, o cupom aparece aqui para você acompanhar a validade e validar o uso manualmente.'}</p>
+          ${coupons.length ? '' : `<button class="btn btn-primary new-ad-trigger">${icons.plus} Criar anúncio</button>`}
         </div>
       `}
     </div>
@@ -1484,6 +1522,46 @@ function bindSellerEvents(container) {
     chip.addEventListener('click', () => { paymentsFilter = chip.dataset.pfilter; renderSellerPage(container); });
   });
 
+  container.querySelectorAll('[data-coupon-filter]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      couponStatusFilter = chip.dataset.couponFilter;
+      renderSellerPage(container);
+    });
+  });
+
+  container.querySelector('#coupon-validator-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = container.querySelector('#coupon-validator-code');
+    const code = input?.value?.trim().toUpperCase();
+    if (!code) {
+      showToast('Digite o código do cupom.', 'error');
+      input?.focus();
+      return;
+    }
+    const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
+    const previousLabel = submitBtn?.innerHTML;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Verificando...';
+    }
+    const result = await validateCoupon(code);
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = previousLabel;
+    }
+    if (!result.valid) {
+      showToast(result.error || 'Cupom inválido.', 'error');
+      return;
+    }
+    const coupon = (loadedCoupons || []).find(item => String(item.code).toUpperCase() === code) || result.coupon;
+    const couponSellerId = String(coupon?.seller_id || coupon?.sellerId || coupon?.seller?.id || '');
+    if (!coupon || (couponSellerId && couponSellerId !== String(getUser().id))) {
+      showToast('Este cupom não pertence à sua loja.', 'error');
+      return;
+    }
+    showCouponValidationModal(coupon, container);
+  });
+
   container.querySelectorAll('[data-payment-id]').forEach((item) => {
     item.addEventListener('click', () => showSellerPaymentDetailModal(item.dataset.paymentId));
   });
@@ -1687,39 +1765,14 @@ function bindSellerEvents(container) {
   // Mark coupon as used
   container.querySelectorAll('.mark-used-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const couponId = btn.dataset.id;
       const code = btn.dataset.code;
-      const modalRoot = document.getElementById('modal-root');
-      modalRoot.innerHTML = `
-        <div class="modal-backdrop" id="confirm-modal">
-          <div class="modal-content" style="text-align:center;">
-            <div class="modal-handle"></div>
-            <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-3);">Validar uso do cupom?</h3>
-            <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-5);">Confirme somente depois de entregar o produto/serviço do cupom <strong>${escapeHTML(code)}</strong>.</p>
-            <div style="display:flex;gap:var(--space-3);">
-              <button class="btn btn-secondary" style="flex:1;" id="cancel-confirm">Cancelar</button>
-              <button class="btn btn-success" style="flex:1;" id="do-confirm">Confirmar uso</button>
-            </div>
-          </div>
-        </div>
-      `;
-      modalRoot.querySelector('#confirm-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-      modalRoot.querySelector('#cancel-confirm').addEventListener('click', () => modalRoot.innerHTML = '');
-      modalRoot.querySelector('#do-confirm').addEventListener('click', async () => {
-        const coupon = (loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).find(c => c.code === code);
-        if (!coupon?.id) {
-          showToast('Cupom não encontrado.', 'error');
-          return;
-        }
-        const result = await markCouponUsed(coupon.id);
-        if (result?.success) {
-          modalRoot.innerHTML = '';
-          showToast(`Cupom ${code} marcado como usado!`, 'success');
-          invalidateSellerCache({ data: true, payments: true });
-          renderSellerPage(container, { force: true });
-        } else {
-          showToast(result?.error || 'Não foi possível atualizar o cupom.', 'error');
-        }
-      });
+      const coupon = (loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).find(c => String(c.id) === String(couponId) || c.code === code);
+      if (!coupon) {
+        showToast('Cupom não encontrado.', 'error');
+        return;
+      }
+      showCouponValidationModal(coupon, container);
     });
   });
 
@@ -1777,6 +1830,61 @@ function bindSellerEvents(container) {
       }
     });
   }
+}
+
+function showCouponValidationModal(coupon, container) {
+  const code = coupon.code;
+  const modalRoot = document.getElementById('modal-root');
+  if (coupon.status === 'used') {
+    showToast('Este cupom já foi utilizado.', 'error');
+    return;
+  }
+  if (coupon.status === 'expired') {
+    showToast('Este cupom está expirado.', 'error');
+    return;
+  }
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop" id="confirm-modal">
+      <div class="modal-content coupon-validation-modal" style="text-align:center;">
+        <div class="modal-handle"></div>
+        <div class="coupon-validation-icon">${icons.ticket}</div>
+        <h3>Validar uso do cupom?</h3>
+        <p>Confirme somente depois de entregar o produto ou serviço. O cupom <strong>${escapeHTML(code)}</strong> será bloqueado para novo uso.</p>
+        <div class="coupon-modal-details">
+          <div><span>Produto</span><strong>${escapeHTML(coupon.product || 'Produto')}</strong></div>
+          <div><span>Comprador</span><strong>${escapeHTML(coupon.buyer || 'Comprador')}</strong></div>
+          <div><span>Validade</span><strong>${escapeHTML(coupon.validUntil || 'Não informada')}</strong></div>
+        </div>
+        <div style="display:flex;gap:var(--space-3);">
+          <button class="btn btn-secondary" style="flex:1;" id="cancel-confirm">Cancelar</button>
+          <button class="btn btn-success" style="flex:1;" id="do-confirm">Confirmar uso</button>
+        </div>
+      </div>
+    </div>
+  `;
+  modalRoot.querySelector('#confirm-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
+  modalRoot.querySelector('#cancel-confirm').addEventListener('click', () => modalRoot.innerHTML = '');
+  modalRoot.querySelector('#do-confirm').addEventListener('click', async () => {
+    if (!coupon?.id) {
+      showToast('Cupom não encontrado.', 'error');
+      return;
+    }
+    const confirmBtn = modalRoot.querySelector('#do-confirm');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Validando...';
+    const result = await markCouponUsed(coupon.id);
+    if (result?.success) {
+      modalRoot.innerHTML = '';
+      showToast(`Cupom ${code} marcado como usado.`, 'success');
+      invalidateSellerCache({ data: true, payments: true });
+      couponStatusFilter = 'used';
+      renderSellerPage(container, { force: true });
+    } else {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Confirmar uso';
+      showToast(result?.error || 'Não foi possível atualizar o cupom.', 'error');
+    }
+  });
 }
 
 function showDeleteProductModal(adId, container) {

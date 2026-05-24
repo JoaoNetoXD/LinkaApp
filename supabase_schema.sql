@@ -421,6 +421,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+REVOKE ALL ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) TO service_role;
+
 -- Emite cupom quando o pagamento é confirmado
 CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id UUID)
 RETURNS coupons AS $$
@@ -510,6 +513,9 @@ BEGIN
   RETURN v_coupon;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE ALL ON FUNCTION public.issue_coupon_for_payment(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO service_role;
 
 
 -- ====================================================================
@@ -700,6 +706,35 @@ BEGIN
   WHERE status = 'active' AND valid_until IS NOT NULL AND valid_until < NOW();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Bloqueia reutilização ou validação tardia de cupons
+CREATE OR REPLACE FUNCTION public.prevent_coupon_reuse()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.status = 'used' THEN
+    IF OLD.status = 'used' OR OLD.used_at IS NOT NULL THEN
+      RAISE EXCEPTION 'Este cupom ja foi utilizado';
+    END IF;
+
+    IF OLD.status = 'expired' OR (OLD.valid_until IS NOT NULL AND OLD.valid_until < NOW()) THEN
+      RAISE EXCEPTION 'Este cupom esta expirado';
+    END IF;
+
+    NEW.used_at := COALESCE(NEW.used_at, NOW());
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS prevent_coupon_reuse_before_update ON public.coupons;
+CREATE TRIGGER prevent_coupon_reuse_before_update
+BEFORE UPDATE ON public.coupons
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_coupon_reuse();
 
 
 -- ====================================================================
