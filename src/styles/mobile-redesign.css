@@ -819,6 +819,14 @@ body:has(.payment-screen) {
   background: color-mix(in srgb, var(--mobile-blue) 10%, var(--mobile-surface));
 }
 
+.category-app-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 10, 24, 0.08), rgba(4, 10, 24, 0.34));
+  pointer-events: none;
+}
+
 .category-app-image img {
   width: 100%;
   height: 100%;
@@ -835,6 +843,27 @@ body:has(.payment-screen) {
 .category-app-placeholder svg {
   width: 34px;
   height: 34px;
+}
+
+.category-cover-icon {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  background: rgba(12, 24, 47, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.category-cover-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .category-deal-pill {
@@ -877,6 +906,13 @@ body:has(.payment-screen) {
   color: var(--mobile-muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.category-app-copy p {
+  margin: 6px 0 0;
+  color: var(--mobile-muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* Profile and coupons */
@@ -3474,6 +3510,201 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   min-width: 164px !important;
   margin-top: 18px !important;
   padding: 0 24px !important;
+}
+
+.buyer-real-coupon {
+  position: relative !important;
+  overflow: hidden !important;
+  display: block !important;
+  min-height: 0 !important;
+  margin: 0 0 16px !important;
+  padding: 0 !important;
+  border-radius: 24px !important;
+  border: 1px solid var(--mobile-line) !important;
+  background: var(--mobile-card-bg) !important;
+  box-shadow: var(--mobile-shadow-soft) !important;
+  cursor: pointer !important;
+  outline: none !important;
+}
+
+.buyer-real-coupon:focus-visible {
+  border-color: var(--mobile-blue) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mobile-blue) 24%, transparent) !important;
+}
+
+.buyer-real-coupon .coupon-status-bar {
+  position: absolute !important;
+  inset: 0 auto 0 0 !important;
+  width: 5px !important;
+  border-radius: 24px 0 0 24px !important;
+}
+
+.buyer-real-coupon.active .coupon-status-bar { background: var(--mobile-mint) !important; }
+.buyer-real-coupon.used .coupon-status-bar { background: var(--mobile-muted) !important; }
+.buyer-real-coupon.expired .coupon-status-bar { background: var(--mobile-coral) !important; }
+
+.buyer-real-coupon .coupon-body {
+  padding: 18px 18px 18px 22px !important;
+}
+
+.buyer-real-coupon .coupon-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-bottom: 14px !important;
+}
+
+.buyer-real-coupon .coupon-header h3 {
+  margin: 0 !important;
+  color: var(--mobile-ink) !important;
+  font-size: 16px !important;
+  line-height: 1.25 !important;
+}
+
+.buyer-real-coupon .coupon-code-area {
+  min-height: 92px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+  padding: 14px !important;
+  border: 1px dashed color-mix(in srgb, var(--mobile-blue) 45%, var(--mobile-line)) !important;
+  border-radius: 18px !important;
+  background: color-mix(in srgb, var(--mobile-blue) 8%, transparent) !important;
+}
+
+.buyer-real-coupon .coupon-code {
+  display: grid !important;
+  gap: 5px !important;
+}
+
+.buyer-real-coupon .coupon-code span {
+  color: var(--mobile-muted) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  text-transform: uppercase !important;
+}
+
+.buyer-real-coupon .coupon-code strong {
+  color: var(--mobile-ink) !important;
+  font-size: clamp(24px, 6vw, 34px) !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+}
+
+.buyer-real-coupon .copy-btn {
+  flex: 0 0 48px !important;
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  background: color-mix(in srgb, var(--mobile-blue) 12%, var(--mobile-card-bg)) !important;
+  border: 1px solid var(--mobile-line) !important;
+  color: var(--mobile-blue) !important;
+}
+
+.buyer-real-coupon .coupon-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin-top: 14px !important;
+}
+
+.buyer-coupon-modal {
+  width: min(460px, calc(100vw - 28px)) !important;
+  padding: 28px 22px 22px !important;
+  border-radius: 26px !important;
+  background: var(--mobile-card-bg) !important;
+  color: var(--mobile-ink) !important;
+  border: 1px solid var(--mobile-line) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34) !important;
+}
+
+.coupon-detail-status {
+  display: inline-flex;
+  margin-bottom: 12px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.coupon-detail-status.active { background: color-mix(in srgb, var(--mobile-mint) 18%, transparent); color: var(--mobile-mint); }
+.coupon-detail-status.used { background: color-mix(in srgb, var(--mobile-muted) 18%, transparent); color: var(--mobile-muted); }
+.coupon-detail-status.expired { background: color-mix(in srgb, var(--mobile-coral) 18%, transparent); color: var(--mobile-coral); }
+
+.buyer-coupon-modal h2 {
+  margin: 0 32px 6px 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.buyer-coupon-modal p {
+  margin: 0 0 16px;
+  color: var(--mobile-muted);
+  line-height: 1.45;
+}
+
+.coupon-detail-ticket {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px dashed color-mix(in srgb, var(--mobile-blue) 45%, var(--mobile-line));
+  background: color-mix(in srgb, var(--mobile-blue) 9%, transparent);
+}
+
+.coupon-detail-ticket span,
+.coupon-detail-grid span {
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.coupon-detail-ticket strong {
+  color: var(--mobile-ink);
+  font-size: clamp(30px, 8vw, 42px);
+  line-height: 1;
+}
+
+.coupon-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.coupon-detail-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--mobile-blue) 6%, transparent);
+  border: 1px solid var(--mobile-line);
+}
+
+.coupon-detail-grid strong {
+  color: var(--mobile-ink);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.coupon-detail-note {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  color: var(--mobile-muted);
+  background: color-mix(in srgb, var(--mobile-mint) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mobile-mint) 22%, var(--mobile-line));
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.coupon-detail-whatsapp {
+  width: 100%;
+  margin-top: 14px;
 }
 
 .profile-theme-toggle {

@@ -3,7 +3,7 @@
  * Handles coupon generation, validation, and management.
  */
 import { supabase } from '../lib/supabase.js';
-import { coupons as mockBuyerCoupons, sellerCoupons as mockSellerCoupons } from '../data/mock.js';
+import { sellerCoupons as mockSellerCoupons } from '../data/mock.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -48,10 +48,7 @@ export async function getBuyerCoupons(buyerId) {
     if (error) throw error;
     return (data || []).map(transformCoupon);
   } catch (err) {
-    if (USE_MOCKS) {
-      console.warn('getBuyerCoupons: using mock data.', err.message);
-      return mockBuyerCoupons;
-    }
+    console.warn('getBuyerCoupons: unavailable.', err.message);
     return [];
   }
 }

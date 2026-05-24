@@ -1,5 +1,5 @@
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
-import { products as mockProducts, categories as mockCategories, coupons, currentUser, institution } from '../data/mock.js';
+import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons } from '../services/coupon-service.js';
@@ -21,6 +21,26 @@ const guestUser = {
   whatsapp: '',
   verified: false,
 };
+
+const CATEGORY_COVERS = {
+  food: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=720&q=80',
+  fashion: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=720&q=80',
+  services: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=720&q=80',
+  digital: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=720&q=80',
+  others: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=720&q=80',
+};
+
+const CATEGORY_DESCRIPTIONS = {
+  food: 'Lanches, bebidas e produtos prontos para retirar.',
+  fashion: 'Roupas, acessorios e itens de uso pessoal.',
+  services: 'Aulas, reparos, atendimentos e ajuda presencial.',
+  digital: 'Design, arquivos, aulas online e servicos criativos.',
+  others: 'Ofertas variadas verificadas pela instituicao.',
+};
+
+function getCategoryCover(categoryId) {
+  return CATEGORY_COVERS[categoryId] || CATEGORY_COVERS.others;
+}
 
 function getInitials(name, fallback = 'U') {
   const initials = String(name || '')
@@ -313,7 +333,7 @@ async function loadUnreadCount(userId) {
 }
 
 async function loadBuyerCoupons(userId) {
-  if (!userId) return USE_MOCKS ? coupons : [];
+  if (!userId) return [];
   const cached = buyerCouponsCache.get(userId);
   if (cached && Date.now() - cached.loadedAt < BUYER_COUPONS_TTL_MS) {
     return cached.coupons;
@@ -802,8 +822,6 @@ async function renderCategories(container) {
       sample: categoryProducts[0],
     };
   });
-  const featured = [...stats].sort((a, b) => b.count - a.count).slice(0, 3);
-
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper buyer-categories-page">
       <header class="buyer-header buyer-categories-header">
@@ -835,32 +853,14 @@ async function renderCategories(container) {
 
       <section class="category-section">
         <div class="category-section-heading">
-          <h2>Mais movimentadas</h2>
-          <span>Toque para filtrar</span>
-        </div>
-        <div class="category-featured-row">
-          ${featured.map(category => `
-            <button class="category-featured-card" type="button" data-open-category="${escapeHTML(category.id)}">
-              <span class="category-featured-icon">${icons[category.id] || icons.others}</span>
-              <strong>${escapeHTML(category.name)}</strong>
-              <small>${category.count} ${category.count === 1 ? 'oferta' : 'ofertas'}</small>
-            </button>
-          `).join('')}
-        </div>
-      </section>
-
-      <section class="category-section">
-        <div class="category-section-heading">
           <h2>Todas as categorias</h2>
-          <span>Estilo iFood, direto ao ponto</span>
         </div>
         <div class="category-app-grid">
           ${stats.map(category => `
             <button class="category-app-card ${category.count === 0 ? 'empty' : ''}" type="button" data-open-category="${escapeHTML(category.id)}">
               <div class="category-app-image">
-                ${category.sample
-                  ? getProductImage(category.sample.images?.[0], 240, 130, category.id)
-                  : `<div class="category-app-placeholder">${icons[category.id] || icons.others}</div>`}
+                <img src="${escapeHTML(getCategoryCover(category.id))}" alt="${escapeHTML(category.name)}" loading="lazy" decoding="async">
+                <span class="category-cover-icon">${icons[category.id] || icons.others}</span>
                 ${category.bestDeal ? `<span class="category-deal-pill">Até -${Number(category.bestDeal.discount || 0)}%</span>` : ''}
               </div>
               <div class="category-app-copy">
@@ -868,6 +868,7 @@ async function renderCategories(container) {
                 <div>
                   <strong>${escapeHTML(category.name)}</strong>
                   <small>${category.count ? `${category.count} ofertas ativas` : 'Sem ofertas agora'}</small>
+                  <p>${escapeHTML(CATEGORY_DESCRIPTIONS[category.id] || CATEGORY_DESCRIPTIONS.others)}</p>
                 </div>
               </div>
             </button>
@@ -1129,15 +1130,73 @@ async function showPaymentSelectionModal(product, container) {
   });
 }
 
+function getBuyerCouponStatusMeta(status) {
+  if (status === 'used') return { label: 'Usado', className: 'used', hint: 'Este codigo ja foi validado pelo vendedor.' };
+  if (status === 'expired') return { label: 'Expirado', className: 'expired', hint: 'O prazo de uso deste cupom terminou.' };
+  return { label: 'Ativo', className: 'active', hint: 'Mostre este codigo ao vendedor no atendimento.' };
+}
+
+async function copyBuyerCouponCode(code) {
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    showToast(`Codigo ${code} copiado!`, 'success');
+  } catch {
+    showToast('Nao foi possivel copiar o codigo.', 'error');
+  }
+}
+
+function showBuyerCouponDetail(coupon) {
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot || !coupon) return;
+  const meta = getBuyerCouponStatusMeta(coupon.status);
+  const whatsappUrl = coupon.status === 'active' && coupon.sellerWhatsapp
+    ? `https://wa.me/${encodeURIComponent(coupon.sellerWhatsapp)}?text=Oi! Tenho o cupom ${encodeURIComponent(coupon.code)} para ${encodeURIComponent(coupon.product)}.`
+    : '';
+
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop buyer-coupon-modal-backdrop" id="buyerCouponModal">
+      <div class="modal-content buyer-coupon-modal" role="dialog" aria-modal="true" aria-labelledby="buyerCouponTitle">
+        <button class="modal-close-btn buyer-coupon-close" type="button" aria-label="Fechar">x</button>
+        <span class="coupon-detail-status ${meta.className}">${meta.label}</span>
+        <h2 id="buyerCouponTitle">${escapeHTML(coupon.product)}</h2>
+        <p>${escapeHTML(meta.hint)}</p>
+        <div class="coupon-detail-ticket">
+          <span>Codigo do cupom</span>
+          <strong>${escapeHTML(coupon.code)}</strong>
+          <button class="btn-secondary" type="button" data-copy-coupon-detail="${escapeHTML(coupon.code)}">${icons.copy} Copiar codigo</button>
+        </div>
+        <div class="coupon-detail-grid">
+          <div><span>Vendedor</span><strong>${escapeHTML(coupon.seller || 'Vendedor')}</strong></div>
+          <div><span>Gerado em</span><strong>${escapeHTML(coupon.createdAt || '-')}</strong></div>
+          <div><span>Valido ate</span><strong>${escapeHTML(coupon.validUntil || '-')}</strong></div>
+          <div><span>Usado em</span><strong>${escapeHTML(coupon.usedAt || '-')}</strong></div>
+        </div>
+        <div class="coupon-detail-note">
+          O cupom e unico. Depois que o vendedor marcar como usado, ele fica bloqueado para novas validacoes.
+        </div>
+        ${whatsappUrl ? `<a class="btn-whatsapp coupon-detail-whatsapp" href="${whatsappUrl}" target="_blank" rel="noopener">${icons.whatsapp} Conversar no WhatsApp</a>` : ''}
+      </div>
+    </div>
+  `;
+
+  const close = () => { modalRoot.innerHTML = ''; };
+  modalRoot.querySelector('.buyer-coupon-close')?.addEventListener('click', close);
+  modalRoot.querySelector('#buyerCouponModal')?.addEventListener('click', (event) => {
+    if (event.target.id === 'buyerCouponModal') close();
+  });
+  modalRoot.querySelector('[data-copy-coupon-detail]')?.addEventListener('click', (event) => {
+    copyBuyerCouponCode(event.currentTarget.dataset.copyCouponDetail);
+  });
+}
+
 async function renderCoupons(container) {
-  // Load coupons from Supabase (or use local mock only in DEV)
   let userCoupons = [];
   const isLoggedIn = isAuthenticated();
   try {
-    userCoupons = await loadBuyerCoupons(isLoggedIn ? globalSession.user.id : null);
-    if (!userCoupons || userCoupons.length === 0) userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
+    userCoupons = isLoggedIn ? await loadBuyerCoupons(globalSession.user.id) : [];
   } catch {
-    userCoupons = USE_MOCKS && !isLoggedIn ? coupons : [];
+    userCoupons = [];
   }
 
   container.innerHTML = `
@@ -1154,17 +1213,22 @@ async function renderCoupons(container) {
             <p>${isLoggedIn ? 'Ao concluir uma compra, o cupom aparece aqui automaticamente.' : 'Seus cupons reais ficam vinculados à sua conta.'}</p>
             ${!isLoggedIn ? `<button class="btn-primary" id="btnCouponsLogin">Entrar na conta</button>` : ''}
           </div>
-        ` : userCoupons.map(c => `
-          <div class="coupon-card ${c.status}">
+        ` : userCoupons.map(c => {
+          const meta = getBuyerCouponStatusMeta(c.status);
+          return `
+          <article class="coupon-card buyer-real-coupon ${meta.className}" role="button" tabindex="0" data-coupon-detail="${escapeHTML(c.id)}">
             <div class="coupon-status-bar"></div>
             <div class="coupon-body">
               <div class="coupon-header">
                 <h3>${escapeHTML(c.product)}</h3>
-                <span class="status-badge ${c.status}">${c.status === 'active' ? 'Ativo' : c.status === 'used' ? 'Usado' : 'Expirado'}</span>
+                <span class="status-badge ${meta.className}">${meta.label}</span>
               </div>
               <div class="coupon-code-area">
-                <div class="coupon-code">${escapeHTML(c.code)}</div>
-                <button class="icon-btn copy-btn" data-code="${c.code}">${icons.copy}</button>
+                <div class="coupon-code">
+                  <span>Codigo real</span>
+                  <strong>${escapeHTML(c.code)}</strong>
+                </div>
+                <button class="icon-btn copy-btn" data-code="${escapeHTML(c.code)}" aria-label="Copiar cupom">${icons.copy}</button>
               </div>
               <div class="coupon-footer">
                 <div class="seller-info">
@@ -1174,8 +1238,9 @@ async function renderCoupons(container) {
               </div>
               ${c.validUntil ? `<div style="font-size:11px;color:#4B5563;margin-top:8px;">Válido até: ${escapeHTML(c.validUntil)}</div>` : ''}
             </div>
-          </div>
-        `).join('')}
+          </article>
+        `;
+        }).join('')}
       </div>
     </div>
     
@@ -1216,6 +1281,29 @@ async function renderCoupons(container) {
         navigator.clipboard.writeText(code).then(() => {
           showToast(`Código ${code} copiado!`, 'success');
         });
+      }
+    });
+  });
+  container.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.stopImmediatePropagation();
+      copyBuyerCouponCode(btn.dataset.code);
+    }, true);
+  });
+
+  container.querySelectorAll('[data-coupon-detail]').forEach(card => {
+    const open = () => {
+      const coupon = userCoupons.find(item => String(item.id) === String(card.dataset.couponDetail));
+      showBuyerCouponDetail(coupon);
+    };
+    card.addEventListener('click', (event) => {
+      if (event.target.closest('a, button')) return;
+      open();
+    });
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        open();
       }
     });
   });
