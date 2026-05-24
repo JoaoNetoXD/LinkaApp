@@ -44,6 +44,7 @@ export async function getActiveProducts({ categoryId = 'all', search = '', insti
         seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
       `)
       .eq('status', 'active')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (categoryId && categoryId !== 'all') {
@@ -83,6 +84,7 @@ export async function getProductById(productId) {
         seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
       `)
       .eq('id', productId)
+      .is('deleted_at', null)
       .single();
 
     if (error) throw error;
@@ -105,6 +107,7 @@ export async function getSellerProducts(sellerId) {
       .from('products')
       .select('*')
       .eq('seller_id', sellerId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -327,6 +330,7 @@ export async function getPendingProducts(institutionId = null) {
         seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
       `)
       .eq('status', 'pending')
+      .is('deleted_at', null)
       .order('created_at', { ascending: true });
 
     if (institutionId) {
@@ -428,6 +432,7 @@ export async function getAllProducts(institutionId = null) {
         *,
         seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
       `)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (institutionId) {
@@ -454,6 +459,7 @@ export async function getCategoryStats(institutionId = null) {
     let query = supabase
       .from('products')
       .select('category_id, status')
+      .is('deleted_at', null)
       .in('status', ['active', 'queue', 'pending']);
 
     if (institutionId) {
@@ -534,6 +540,7 @@ function transformProduct(dbProduct) {
     status: dbProduct.status,
     rejectionReason: dbProduct.rejection_reason,
     institutionId: dbProduct.institution_id,
+    deletedAt: dbProduct.deleted_at,
     createdAt: dbProduct.created_at,
     waitTime: formatWaitTime(dbProduct.created_at),
   };

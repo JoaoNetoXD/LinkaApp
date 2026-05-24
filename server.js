@@ -637,6 +637,7 @@ async function loadProduct(client, productId) {
       )
     `)
     .eq('id', productId)
+    .is('deleted_at', null)
     .single();
 
   if (error || !data) throw new Error('Produto nao encontrado');
@@ -724,13 +725,16 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
   const admin = requireSupabaseAdmin();
   const { data: product, error } = await admin
     .from('products')
-    .select('id,title,status,seller_id,slots_total,slots_used')
+    .select('id,title,status,seller_id,slots_total,slots_used,deleted_at')
     .eq('id', productId)
     .maybeSingle();
 
   if (error) throw error;
   if (!product) {
     return { ready: false, code: 'PRODUCT_NOT_FOUND', message: 'Produto nao encontrado.' };
+  }
+  if (product.deleted_at) {
+    return { ready: false, code: 'PRODUCT_DELETED', message: 'Produto removido pelo vendedor.' };
   }
   if (requireActive && product.status !== 'active') {
     return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'Produto ainda nao esta ativo para venda.' };
@@ -766,7 +770,7 @@ async function loadProductForSellerMutation(admin, productId) {
   assertUuid(productId, 'Produto');
   const { data, error } = await admin
     .from('products')
-    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,institution_id')
+    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,institution_id,deleted_at')
     .eq('id', productId)
     .maybeSingle();
 
@@ -1369,12 +1373,14 @@ app.delete('/api/seller/products/:productId', async (req, res) => {
     const admin = requireSupabaseAdmin();
     const product = await loadProductForSellerMutation(admin, req.params.productId);
     assertCanManageSellerProduct(auth, product);
+    const deletedAt = new Date().toISOString();
 
     const { data, error } = await admin
       .from('products')
       .update({
         status: 'expired',
-        expires_at: new Date().toISOString(),
+        expires_at: deletedAt,
+        deleted_at: deletedAt,
         rejection_reason: null,
       })
       .eq('id', product.id)

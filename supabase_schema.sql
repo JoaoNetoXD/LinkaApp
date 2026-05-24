@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS products (
   clicks INTEGER DEFAULT 0,
   institution_id UUID REFERENCES institutions(id),
   expires_at TIMESTAMP WITH TIME ZONE,
+  deleted_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -156,6 +157,7 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
 ALTER TABLE coupons ADD COLUMN IF NOT EXISTS used_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 
 CREATE UNIQUE INDEX IF NOT EXISTS payments_mercado_pago_id_idx
   ON payments (mercado_pago_id) WHERE mercado_pago_id IS NOT NULL;
@@ -166,6 +168,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS payments_external_reference_idx
 CREATE INDEX IF NOT EXISTS seller_payment_accounts_provider_idx ON seller_payment_accounts(provider);
 CREATE INDEX IF NOT EXISTS payment_oauth_states_state_idx ON payment_oauth_states(state);
 CREATE INDEX IF NOT EXISTS payment_oauth_states_seller_idx ON payment_oauth_states(seller_id);
+CREATE INDEX IF NOT EXISTS products_seller_visible_idx
+  ON products (seller_id, status, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS products_institution_visible_idx
+  ON products (institution_id, status, created_at DESC) WHERE deleted_at IS NULL;
 
 
 -- ====================================================================

@@ -303,14 +303,7 @@ function renderMercadoPagoRedirectState(url, redirectUri) {
 function renderMercadoPagoMark() {
   return `
     <span class="mp-logo-mark" aria-hidden="true">
-      <svg viewBox="0 0 92 60" role="img" focusable="false">
-        <rect x="4" y="8" width="84" height="44" rx="22" fill="#00B1EA"/>
-        <path d="M28 29c5-5 10-7 15-7 6 0 9 3 13 7" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-        <path d="M23 34c5 5 11 8 18 8 6 0 12-2 17-7" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-        <path d="M38 30l6 5 9-10" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M57 29c4-4 8-6 13-6" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".88"/>
-        <path d="M57 35c4 3 8 5 13 5" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".88"/>
-      </svg>
+      <img src="https://upload.wikimedia.org/wikipedia/commons/9/98/Mercado_Pago.svg" alt="" loading="lazy" decoding="async">
     </span>
   `;
 }
@@ -548,7 +541,8 @@ async function renderSellerPage(container, { force = false } = {}) {
 }
 
 function getSellerAdsData() {
-  return loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
+  const source = loadedAds || (shouldUseSellerMocks() ? sellerAds : []);
+  return source.filter((ad) => !ad.deletedAt);
 }
 
 function getSellerCouponData() {
@@ -766,7 +760,7 @@ function renderSellerAdsManager() {
 
     <section class="seller-status-note">
       <strong>${icons.shield} Exclusão segura</strong>
-      <span>Ao excluir, o anúncio sai da vitrine e fica arquivado como expirado para preservar histórico de cupons e pagamentos.</span>
+      <span>Ao excluir, o anúncio some do painel e da vitrine. Cupons e pagamentos continuam preservados no histórico financeiro.</span>
     </section>
 
     ${renderSellerAdsTabs(statusCounts)}
@@ -883,7 +877,7 @@ function renderSellerAdCard(ad) {
         <div class="seller-ad-actions">
           <button class="btn btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${ad.id}">${icons.fileText}<span>Editar</span></button>
           ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" type="button" data-ad-id="${ad.id}">${icons.refresh}<span>Renovar</span></button>` : ''}
-          ${ad.status !== 'expired' ? `<button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>` : '<span class="seller-archive-note">Arquivado</span>'}
+          <button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>
         </div>
       </div>
       ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${escapeHTML(ad.rejectionReason)}</div>` : ''}
@@ -1152,16 +1146,27 @@ async function renderSellerPayments() {
   const filtered = paymentsFilter === 'all' ? allPayments : allPayments.filter(p => p.status === paymentsFilter);
   const statusLabels = { paid: 'Pago', pending: 'Pendente', expired: 'Expirado' };
   const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
+  const filters = [
+    { id: 'all', label: 'Todos', count: allPayments.length },
+    { id: 'paid', label: 'Pagos', count: allPayments.filter(p => p.status === 'paid').length },
+    { id: 'pending', label: 'Pendentes', count: allPayments.filter(p => p.status === 'pending').length },
+    { id: 'expired', label: 'Expirados', count: allPayments.filter(p => p.status === 'expired').length },
+  ];
   const formatDate = (d) => {
     if (!d) return '—';
     const dt = new Date(d);
     return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
   };
   return `
-    <div style="padding:var(--space-4) var(--space-5) var(--space-2);">
-      <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-1);">Minhas Vendas</h2>
-      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Acompanhe pagamentos Pix e cartao recebidos pelo Mercado Pago.</p>
-    </div>
+    <section class="seller-view-header seller-payments-hero">
+      <div>
+        <span class="seller-setup-kicker">Financeiro</span>
+        <h2>Minhas vendas</h2>
+        <p>Acompanhe pagamentos Pix e cartão recebidos pelo Mercado Pago, com 0% de comissão da Linka.</p>
+      </div>
+      <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Ver anúncios</button>
+    </section>
+
     <div class="payments-stats-grid">
       <div class="payment-stat-card revenue">
         <div class="payment-stat-label">Recebido (líquido)</div>
@@ -1181,7 +1186,6 @@ async function renderSellerPayments() {
       </div>
     </div>
 
-    <!-- Commission info -->
     <div class="commission-info-bar">
       <div class="commission-info-inner">
         <span class="commission-label">Comissão Linka: <strong>0%</strong></span>
@@ -1190,12 +1194,14 @@ async function renderSellerPayments() {
     </div>
 
     <div class="payments-filter">
-      <button class="chip ${paymentsFilter === 'all' ? 'active' : ''}" data-pfilter="all">Todos</button>
-      <button class="chip ${paymentsFilter === 'paid' ? 'active' : ''}" data-pfilter="paid">Pagos</button>
-      <button class="chip ${paymentsFilter === 'pending' ? 'active' : ''}" data-pfilter="pending">Pendentes</button>
-      <button class="chip ${paymentsFilter === 'expired' ? 'active' : ''}" data-pfilter="expired">Expirados</button>
+      ${filters.map((filter) => `
+        <button class="chip ${paymentsFilter === filter.id ? 'active' : ''}" data-pfilter="${filter.id}">
+          ${filter.label} <span class="tab-count">${filter.count}</span>
+        </button>
+      `).join('')}
     </div>
-    <div class="payment-list-container">
+
+    <div class="payment-list-container seller-payment-list-container">
       ${filtered.length > 0 ? filtered.map(p => `
         <div class="payment-list-item">
           <div class="payment-list-item-header">
@@ -1211,7 +1217,7 @@ async function renderSellerPayments() {
           <div class="payment-list-item-body">
             <div>
               <div class="payment-list-product">${escapeHTML(p.productTitle)}</div>
-              <div class="payment-list-coupon">Cupom: ${escapeHTML(p.couponCode || '')}</div>
+              <div class="payment-list-coupon">${p.couponCode ? `Cupom: ${escapeHTML(p.couponCode)}` : 'Sem cupom vinculado'}</div>
               ${p.status === 'paid' ? `<div class="confirmed-indicator">${icons.checkCircle} Pagamento confirmado</div>` : ''}
             </div>
             <div>
@@ -1636,9 +1642,9 @@ function showDeleteProductModal(adId, container) {
     <div class="modal-backdrop" id="delete-product-modal">
       <div class="modal-content">
         <div class="modal-handle"></div>
-        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Excluir da vitrine?</h3>
+        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Excluir anúncio?</h3>
         <p style="font-size:var(--font-size-sm);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--space-4);">
-          O produto <strong>${escapeHTML(ad.title)}</strong> deixará de aparecer para compradores. Pagamentos, cupons e histórico financeiro serão preservados.
+          O produto <strong>${escapeHTML(ad.title)}</strong> sairá do painel e deixará de aparecer para compradores. Pagamentos, cupons e histórico financeiro serão preservados.
         </p>
         <div style="display:flex;gap:var(--space-3);">
           <button class="btn btn-secondary" style="flex:1;" id="cancel-delete-product">Cancelar</button>
@@ -1661,12 +1667,12 @@ function showDeleteProductModal(adId, container) {
     const result = await deleteSellerProduct(adId);
     if (result?.success) {
       modalRoot.innerHTML = '';
-      showToast('Produto removido da vitrine.', 'success');
+      showToast('Anúncio excluído com segurança.', 'success');
       invalidateSellerCache({ data: true, payments: true });
       selectedAdId = null;
       sellerView = 'ads';
       sellerNavFocus = 'ads';
-      activeTab = 'expired';
+      activeTab = 'all';
       renderSellerPage(container, { force: true });
     } else {
       confirmBtn.disabled = false;
