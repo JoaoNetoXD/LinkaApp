@@ -37,8 +37,7 @@ function normalizeTheme(theme) {
 function getInitialTheme() {
   const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme;
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) return 'dark';
-  return 'light';
+  return 'dark';
 }
 
 export function getCurrentTheme() {
@@ -74,19 +73,7 @@ function updateThemeToggle() {
 }
 
 function mountThemeToggle() {
-  let button = document.getElementById('themeToggleFab');
-  if (!button) {
-    button = document.createElement('button');
-    button.type = 'button';
-    button.id = 'themeToggleFab';
-    button.className = 'theme-toggle-fab';
-    button.addEventListener('click', () => {
-      const theme = toggleAppTheme();
-      showToast(theme === 'dark' ? 'Tema black ativado.' : 'Tema claro ativado.', 'success');
-    });
-    document.body.appendChild(button);
-  }
-  updateThemeToggle();
+  document.getElementById('themeToggleFab')?.remove();
 }
 
 setAppTheme(getInitialTheme(), { persist: false });

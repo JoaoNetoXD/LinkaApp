@@ -1468,7 +1468,7 @@ function renderProfile(container) {
   });
   document.getElementById('btnProfileThemeToggle')?.addEventListener('click', () => {
     const theme = toggleAppTheme();
-    showToast(theme === 'dark' ? 'Tema black ativado.' : 'Tema claro ativado.', 'success');
+    showToast(theme === 'dark' ? 'Tema escuro ativado.' : 'Tema claro ativado.', 'success');
     renderProfile(container);
   });
 

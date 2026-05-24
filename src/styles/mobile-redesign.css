@@ -1568,7 +1568,10 @@ body:has(.payment-screen) {
   border-radius: 999px !important;
   padding: 8px 14px !important;
   background: linear-gradient(135deg, #16c7f5 0%, #1587f2 100%) !important;
-  box-shadow: 0 22px 48px rgba(0, 177, 234, 0.28) !important;
+  border: 1.5px solid rgba(132, 218, 255, 0.92) !important;
+  box-shadow:
+    0 22px 48px rgba(0, 177, 234, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2) !important;
 }
 
 .mp-connect-warning {
@@ -2079,6 +2082,7 @@ body:has(.payment-screen) {
 }
 
 .theme-toggle-fab {
+  display: none !important;
   position: fixed;
   right: max(14px, calc((100vw - 430px) / 2 + 14px));
   bottom: calc(max(14px, env(safe-area-inset-bottom, 0px)) + 88px);
@@ -2086,7 +2090,7 @@ body:has(.payment-screen) {
   min-width: 78px;
   height: 42px;
   padding: 0 12px 0 10px;
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -3268,7 +3272,7 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   min-height: 44px;
   min-width: 238px;
   max-width: 304px;
-  border: 1px solid color-mix(in srgb, #00b1ea 42%, var(--mobile-line)) !important;
+  border: 1.5px solid color-mix(in srgb, #00b1ea 68%, var(--mobile-line)) !important;
   border-radius: 16px;
   padding: 7px 12px;
   display: inline-flex;
@@ -3276,7 +3280,9 @@ body:has(.auth-wrapper) .theme-toggle-fab {
   gap: 8px;
   background: color-mix(in srgb, #00b1ea 10%, var(--mobile-surface)) !important;
   color: var(--mobile-ink);
-  box-shadow: 0 10px 24px rgba(0, 177, 234, 0.16);
+  box-shadow:
+    0 10px 24px rgba(0, 177, 234, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   cursor: pointer;
   font-family: var(--font-family);
   text-align: left;

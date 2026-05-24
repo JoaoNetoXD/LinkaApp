@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
@@ -671,6 +671,8 @@ function renderReports() {
 }
 
 function renderSettings() {
+  const currentTheme = getCurrentTheme();
+  const isDarkTheme = currentTheme === 'dark';
   const settings = {
     autoApproveTrustedSellers: false,
     requireMinorConsent: true,
@@ -717,6 +719,18 @@ function renderSettings() {
         <div class="setting-item">
           <div class="setting-item-info"><h4>URL do logo</h4><p>${escapeHTML(activeInstitution.logoUrl || 'Nao configurado')}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting="logoUrl" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
+        </div>
+        <div class="divider"></div>
+
+        <h4 class="settings-group-title">Aparencia do app</h4>
+        <div class="setting-item setting-item-theme">
+          <div class="setting-item-info">
+            <h4>Tema padrao neste dispositivo</h4>
+            <p>${isDarkTheme ? 'Tema escuro ativo. Recomendado para o uso mobile do Linka.' : 'Tema claro ativo neste dispositivo.'}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm admin-theme-toggle" type="button" id="btnAdminThemeToggle">
+            ${isDarkTheme ? 'Usar claro' : 'Usar escuro'}
+          </button>
         </div>
         <div class="divider"></div>
 
@@ -1414,6 +1428,12 @@ function bindAdminEvents(container) {
     } catch {
       window.location.hash = '#/auth';
     }
+  });
+
+  container.querySelector('#btnAdminThemeToggle')?.addEventListener('click', () => {
+    const theme = toggleAppTheme();
+    showToast(theme === 'dark' ? 'Tema escuro ativado.' : 'Tema claro ativado.', 'success');
+    renderAdminPage(container);
   });
 
   // Toggles
