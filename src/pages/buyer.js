@@ -631,6 +631,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
                 <span>${escapeHTML(timer.text)}</span>
               </div>
 
+              <div class="card-verified-pill">
+                ${icons.shield}
+                <span>Verificado pela instituição</span>
+              </div>
+
               <div class="card-actions">
                 <button class="btn-primary get-coupon-btn" ${isSoldOut ? 'disabled' : ''} data-id="${p.id}">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -1627,145 +1632,190 @@ function bindSwipeNavigation(element, onSwipeLeft, onSwipeRight) {
 }
 
 function renderProductDetail(container) {
-  const p = selectedProduct;
-  if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
+  {
+    const p = selectedProduct;
+    if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
 
-  const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
-  const timer = getTimerInfo(p.expiresIn || '24h 00min');
-  const slots = getSlotsInfo(p.slots?.used || 0, p.slots?.total || 5);
-  const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
-  const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
-  const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
-  selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
-  const currentImage = images[selectedProductImageIndex];
+    const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
+    const timer = getTimerInfo(p.expiresIn || '24h 00min');
+    const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
+    const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
+    const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
+    selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
+    const institutionName = activeInstitution?.fullName || activeInstitution?.name || 'sua instituicao';
+    const sellerSubtitle = [p.seller?.course, p.seller?.semester].filter(Boolean).join(' - ') || `Vendedor da ${activeInstitution?.name || 'instituicao'}`;
+    const whatsappDigits = String(p.seller?.whatsapp || '').replace(/\D/g, '');
+    const productPublishedAt = p.createdAt
+      ? new Date(p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+      : '';
 
-  container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header" style="display:flex;align-items:center;gap:12px;">
-        <button class="icon-btn" id="btnBackHome" style="color:#FFF;">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        </button>
-        <h1>Detalhes</h1>
-      </header>
+    container.innerHTML = `
+      <div class="buyer-wrapper">
+        <header class="buyer-header minimal-header detail-header">
+          <button class="icon-btn" id="btnBackHome" aria-label="Voltar para ofertas">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+          </button>
+          <h1>Detalhes</h1>
+        </header>
 
-      <div class="detail-container" style="padding:0 16px 120px;">
-        <!-- Product Gallery -->
-        <div class="detail-image" id="detailImageViewer" style="border-radius:16px;overflow:hidden;height:240px;margin-bottom:10px;position:relative;cursor:${images.length ? 'zoom-in' : 'default'};">
-          ${getProductImage(currentImage, 480, 260, p.category)}
-          <div class="cat-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
-          ${isSoldOut
-            ? '<div class="discount-badge soldout-badge">ESGOTADO</div>'
-            : `<div class="discount-badge">-${p.discount}%</div>`
-          }
-          ${images.length > 1 ? `
-            <button class="icon-btn detail-gallery-arrow" id="btnPrevPhoto" type="button" aria-label="Foto anterior" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">‹</button>
-            <button class="icon-btn detail-gallery-arrow" id="btnNextPhoto" type="button" aria-label="Proxima foto" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.58);color:#fff;">›</button>
-            <div style="position:absolute;left:50%;bottom:10px;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;padding:4px 10px;border-radius:999px;font-size:12px;">${selectedProductImageIndex + 1}/${images.length}</div>
-          ` : ''}
-        </div>
-        ${images.length > 1 ? `
-          <div class="detail-thumbnails" style="display:flex;gap:8px;overflow-x:auto;padding:2px 0 18px;margin-bottom:2px;">
-            ${images.map((image, index) => `
-              <button type="button" class="detail-thumb ${index === selectedProductImageIndex ? 'active' : ''}" data-photo-index="${index}" aria-label="Ver foto ${index + 1}" style="width:64px;height:52px;flex:0 0 auto;border-radius:10px;overflow:hidden;border:2px solid ${index === selectedProductImageIndex ? '#00E5A0' : '#1E1E2A'};background:#111118;padding:0;">
-                ${getProductImage(image, 96, 72, p.category)}
-              </button>
-            `).join('')}
-          </div>
-        ` : ''}
-
-        <!-- Title & Description -->
-        <h2 style="font-size:20px;font-weight:700;margin-bottom:8px;">${escapeHTML(p.title)}</h2>
-        <p style="font-size:14px;color:#9CA3AF;line-height:1.6;margin-bottom:20px;">${escapeHTML(p.description || 'Aproveite esta oferta imperdível.')}</p>
-
-        <!-- Price -->
-        <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px;">
-          <span style="font-size:28px;font-weight:800;color:#00E5A0;">${formatCurrency(p.discountPrice)}</span>
-          <span style="font-size:16px;color:#6B7280;text-decoration:line-through;">${formatCurrency(p.originalPrice)}</span>
-          <span style="background:rgba(0,229,160,0.15);color:#00E5A0;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700;">-${p.discount}%</span>
-        </div>
-
-        <!-- Timer & Slots -->
-        <div style="display:flex;gap:12px;margin-bottom:20px;">
-          <div class="card-timer ${timer.colorClass}" style="flex:1;padding:12px;border-radius:12px;background:#111118;border:1px solid #1E1E2A;">
-            <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-            <span>${timer.text}</span>
-          </div>
-          <div style="flex:1;padding:12px;border-radius:12px;background:#111118;border:1px solid #1E1E2A;display:flex;align-items:center;gap:8px;font-size:13px;color:#9CA3AF;">
-            ${icons.ticket} ${slots.text}
-          </div>
-        </div>
-
-        <!-- Seller Card -->
-        <div style="background:#111118;border:1px solid #1E1E2A;border-radius:16px;padding:16px;margin-bottom:20px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-            <div class="user-avatar" style="width:44px;height:44px;font-size:16px;">${escapeHTML(sellerInitials)}</div>
-            <div>
-              <div style="font-weight:600;font-size:15px;">${escapeHTML(p.seller?.name || 'Vendedor')} ${p.seller?.verified ? '<span style="color:#00E5A0;">✓</span>' : ''}</div>
-              <div style="font-size:12px;color:#6B7280;">${escapeHTML(p.seller?.course || '')} ${p.seller?.semester ? '· ' + escapeHTML(p.seller.semester) : ''}</div>
+        <div class="detail-container product-detail-v2">
+          <section class="detail-gallery-shell">
+            <div class="detail-carousel" id="detailCarousel" aria-label="Fotos do produto" tabindex="0">
+              ${(images.length ? images : ['']).map((image, index) => `
+                <button type="button" class="detail-carousel-slide" data-photo-index="${index}" aria-label="Abrir foto ${index + 1}">
+                  ${getProductImage(image, 840, 520, p.category)}
+                </button>
+              `).join('')}
             </div>
-          </div>
-          ${p.seller?.whatsapp ? `
-            <a href="https://wa.me/${encodeURIComponent(p.seller.whatsapp)}?text=Oi! Vi seu anúncio '${encodeURIComponent(p.title)}' no Linka!" target="_blank" class="btn-whatsapp" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:10px;border-radius:10px;background:#25D366;color:#FFF;font-weight:600;font-size:14px;text-decoration:none;border:none;cursor:pointer;">
-              ${icons.whatsapp} Conversar no WhatsApp
-            </a>
+            <div class="cat-badge detail-category-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
+            ${isSoldOut
+              ? '<div class="discount-badge soldout-badge detail-discount-badge">ESGOTADO</div>'
+              : `<div class="discount-badge detail-discount-badge">-${p.discount}%</div>`
+            }
+            ${images.length > 1 ? `
+              <div class="detail-gallery-dots" id="detailGalleryDots" aria-hidden="true">
+                ${images.map((_, index) => `<span class="${index === selectedProductImageIndex ? 'active' : ''}" data-gallery-dot="${index}"></span>`).join('')}
+              </div>
+              <div class="detail-gallery-hint">Arraste para ver mais fotos</div>
+            ` : ''}
+          </section>
+
+          ${images.length > 1 ? `
+            <div class="detail-thumbnails">
+              ${images.map((image, index) => `
+                <button type="button" class="detail-thumb ${index === selectedProductImageIndex ? 'active' : ''}" data-thumb-index="${index}" aria-label="Ver foto ${index + 1}">
+                  ${getProductImage(image, 96, 72, p.category)}
+                </button>
+              `).join('')}
+            </div>
           ` : ''}
-        </div>
 
-        <!-- Stats -->
-        <div style="display:flex;gap:12px;margin-bottom:24px;">
-          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
-            <div style="font-size:20px;font-weight:700;">${p.clicks || 0}</div>
-            <div style="font-size:11px;color:#6B7280;">Cliques</div>
-          </div>
-          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
-            <div style="font-size:20px;font-weight:700;">${p.couponsGenerated || 0}</div>
-            <div style="font-size:11px;color:#6B7280;">Cupons</div>
-          </div>
-          <div style="flex:1;text-align:center;background:#111118;border:1px solid #1E1E2A;border-radius:12px;padding:12px;">
-            <div style="font-size:20px;font-weight:700;">${p.couponsUsed || 0}</div>
-            <div style="font-size:11px;color:#6B7280;">Usados</div>
-          </div>
-        </div>
+          <section class="detail-main-card">
+            <div class="detail-title-row">
+              <div>
+                <h2>${escapeHTML(p.title)}</h2>
+                <p>${escapeHTML(p.description || 'Aproveite esta oferta verificada pela sua instituicao.')}</p>
+              </div>
+            </div>
 
-        <!-- Buy Button -->
-        <button class="btn-primary" style="width:100%;padding:16px;font-size:16px;font-weight:700;border-radius:14px;" id="btnBuyDetail" ${isSoldOut ? 'disabled' : ''}>
-          ${isSoldOut ? 'Esgotado' : `${icons.ticket} Comprar por ${formatCurrency(p.discountPrice)}`}
-        </button>
+            <div class="detail-price-row">
+              <span class="detail-price-current">${formatCurrency(p.discountPrice)}</span>
+              <span class="detail-price-original">${formatCurrency(p.originalPrice)}</span>
+              <span class="detail-price-discount">-${p.discount}%</span>
+            </div>
+
+            <div class="detail-trust-grid">
+              <div class="detail-info-pill card-timer ${timer.colorClass}">
+                <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
+                <span>${escapeHTML(timer.text)}</span>
+              </div>
+              <div class="detail-info-pill detail-verified-pill">
+                ${icons.shield}
+                <span>Verificado pela instituição</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="seller-detail-card-v2">
+            <div class="seller-detail-head">
+              <div class="user-avatar seller-detail-avatar">${escapeHTML(sellerInitials)}</div>
+              <div>
+                <div class="seller-detail-name">${escapeHTML(p.seller?.name || 'Vendedor')}</div>
+                <div class="seller-detail-subtitle">${escapeHTML(sellerSubtitle)}</div>
+              </div>
+            </div>
+
+            <div class="seller-detail-facts">
+              <div>
+                ${icons.shield}
+                <span>Anúncio aprovado pela ${escapeHTML(activeInstitution?.name || 'instituição')}</span>
+              </div>
+              <div>
+                ${icons.whatsapp}
+                <span>${whatsappDigits ? 'Contato direto pelo WhatsApp' : 'Contato liberado apos compra'}</span>
+              </div>
+              <div>
+                ${icons.tag}
+                <span>${escapeHTML(catName)}${productPublishedAt ? ` - publicado em ${escapeHTML(productPublishedAt)}` : ''}</span>
+              </div>
+            </div>
+
+            <div class="institution-proof-card">
+              <div class="institution-proof-icon">${icons.checkCircle}</div>
+              <div>
+                <strong>Selo institucional</strong>
+                <span>Oferta revisada para compradores da ${escapeHTML(institutionName)}.</span>
+              </div>
+            </div>
+
+            ${whatsappDigits ? `
+              <a href="https://wa.me/${encodeURIComponent(whatsappDigits)}?text=Oi! Vi seu anuncio '${encodeURIComponent(p.title)}' no Linka." target="_blank" rel="noopener" class="btn-whatsapp seller-whatsapp-button">
+                ${icons.whatsapp} Conversar no WhatsApp
+              </a>
+            ` : ''}
+          </section>
+
+          <button class="btn-primary detail-buy-button" id="btnBuyDetail" ${isSoldOut ? 'disabled' : ''}>
+            ${isSoldOut ? 'Esgotado' : `${icons.ticket} Comprar por ${formatCurrency(p.discountPrice)}`}
+          </button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
 
-  container.querySelector('#btnBackHome').addEventListener('click', () => {
-    currentView = 'home'; selectedProduct = null; renderBuyerPage(container);
-  });
+    container.querySelector('#btnBackHome').addEventListener('click', () => {
+      currentView = 'home'; selectedProduct = null; renderBuyerPage(container);
+    });
 
-  container.querySelector('#btnBuyDetail')?.addEventListener('click', () => {
-    if (!isSoldOut) showPaymentSelectionModal(p, container);
-  });
+    container.querySelector('#btnBuyDetail')?.addEventListener('click', () => {
+      if (!isSoldOut) showPaymentSelectionModal(p, container);
+    });
 
-  const setPhoto = (nextIndex) => {
-    if (!images.length) return;
-    selectedProductImageIndex = (nextIndex + images.length) % images.length;
-    renderProductDetail(container);
-  };
+    const carousel = container.querySelector('#detailCarousel');
+    const updateGalleryState = (nextIndex) => {
+      if (!images.length) return;
+      selectedProductImageIndex = Math.min(Math.max(nextIndex, 0), images.length - 1);
+      container.querySelectorAll('[data-gallery-dot]').forEach((dot, index) => {
+        dot.classList.toggle('active', index === selectedProductImageIndex);
+      });
+      container.querySelectorAll('[data-thumb-index]').forEach((thumb, index) => {
+        thumb.classList.toggle('active', index === selectedProductImageIndex);
+      });
+    };
 
-  container.querySelector('#btnPrevPhoto')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setPhoto(selectedProductImageIndex - 1);
-  });
-  container.querySelector('#btnNextPhoto')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    setPhoto(selectedProductImageIndex + 1);
-  });
-  container.querySelectorAll('[data-photo-index]').forEach(btn => {
-    btn.addEventListener('click', () => setPhoto(Number(btn.dataset.photoIndex)));
-  });
-  const imageViewer = container.querySelector('#detailImageViewer');
-  bindSwipeNavigation(imageViewer, () => setPhoto(selectedProductImageIndex + 1), () => setPhoto(selectedProductImageIndex - 1));
-  imageViewer?.addEventListener('click', () => {
-    if (!images.length) return;
-    showProductImageLightbox(container, p, images, selectedProductImageIndex);
-  });
+    let galleryScrollTimer;
+    carousel?.addEventListener('scroll', () => {
+      window.clearTimeout(galleryScrollTimer);
+      galleryScrollTimer = window.setTimeout(() => {
+        const width = carousel.clientWidth || 1;
+        updateGalleryState(Math.round(carousel.scrollLeft / width));
+      }, 80);
+    }, { passive: true });
+
+    container.querySelectorAll('[data-thumb-index]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const index = Number(btn.dataset.thumbIndex);
+        carousel?.scrollTo({ left: carousel.clientWidth * index, behavior: 'smooth' });
+        updateGalleryState(index);
+      });
+    });
+
+    container.querySelectorAll('[data-photo-index]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const index = Number(btn.dataset.photoIndex);
+        selectedProductImageIndex = Number.isFinite(index) ? index : selectedProductImageIndex;
+        if (!images.length) return;
+        showProductImageLightbox(container, p, images, selectedProductImageIndex);
+      });
+    });
+
+    if (carousel && selectedProductImageIndex > 0) {
+      requestAnimationFrame(() => {
+        carousel.scrollLeft = carousel.clientWidth * selectedProductImageIndex;
+        updateGalleryState(selectedProductImageIndex);
+      });
+    }
+    return;
+  }
 }
 
 function showProductImageLightbox(container, product, images, startIndex = 0) {
