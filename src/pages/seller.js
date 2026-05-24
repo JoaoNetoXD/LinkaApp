@@ -6,6 +6,7 @@ import { getSellerCoupons as fetchSellerCoupons, markCouponUsed } from '../servi
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
+import { resetAppScroll } from '../utils/scroll.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -322,14 +323,12 @@ function formatMpDate(value) {
 }
 
 function renderMercadoPagoStatusPill() {
-  const account = mpConnection.account || {};
-  const liveMode = account.liveMode === true;
   return `
     <button class="mp-status-pill mp-status-pill--connected" id="mp-connected-info" type="button" aria-label="Ver detalhes da conexão Mercado Pago">
       ${renderMercadoPagoMark()}
       <span class="mp-status-copy">
         <strong>Mercado Pago</strong>
-        <small>${liveMode ? 'Produção conectada' : 'Conta conectada'}</small>
+        <small>Conta conectada</small>
       </span>
       ${icons.chevronRight || ''}
     </button>
@@ -538,6 +537,7 @@ async function renderSellerPage(container, { force = false } = {}) {
     </div>
   `;
   bindSellerEvents(container);
+  resetAppScroll(container);
 }
 
 function getSellerAdsData() {

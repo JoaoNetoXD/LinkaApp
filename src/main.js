@@ -4,6 +4,7 @@ import { renderSeller } from './pages/seller.js';
 import { renderAdmin } from './pages/admin.js';
 import { renderAuth } from './pages/auth.js';
 import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
+import { resetAppScroll } from './utils/scroll.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -362,6 +363,7 @@ async function handleRoute() {
 
   if (path.startsWith('/auth') || path === 'auth') {
     renderAuth(app);
+    resetAppScroll(app);
     if (session) {
       const profile = await loadProfileForSession(session);
       if (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth')) {
@@ -379,6 +381,7 @@ async function handleRoute() {
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
     renderLanding(app);
+    resetAppScroll(app);
   } else {
     if (session) {
       const profile = await loadProfileForSession(session);

@@ -142,6 +142,12 @@
   padding: var(--space-4);
   display: flex;
   gap: var(--space-4);
+  cursor: pointer;
+}
+.moderation-card-inner:hover,
+.moderation-card-inner:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--primary-600) 7%, transparent);
 }
 .moderation-thumb {
   width: 80px;

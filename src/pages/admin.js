@@ -4,6 +4,7 @@ import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjust
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
 import { signOutUser } from '../services/auth-service.js';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
+import { resetAppScroll } from '../utils/scroll.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -135,7 +136,7 @@ async function loadAdminData({ force = false } = {}) {
 export function renderAdmin(container, subpage) {
   if (subpage) adminView = subpage;
   else adminView = 'dashboard';
-  renderAdminPage(container);
+  renderAdminPage(container).then(() => resetAppScroll(container));
 }
 
 async function renderAdminPage(container, options = {}) {
@@ -352,7 +353,7 @@ function renderModeration() {
 function renderModerationCard(ad) {
   return `
     <div class="moderation-card" data-ad-id="${ad.id}">
-      <div class="moderation-card-inner">
+      <div class="moderation-card-inner" data-admin-product-detail="${escapeHTML(ad.id)}" role="button" tabindex="0" aria-label="Abrir detalhes de ${escapeHTML(ad.title)}">
         <div class="moderation-thumb">${getProductImage(ad.images?.[0], 80, 80)}</div>
         <div class="moderation-info">
           <h4>${escapeHTML(ad.title)}</h4>
@@ -791,7 +792,8 @@ function scrollCategoryManagementIntoView(container) {
 }
 
 function showAdminProductDetails(productId, container) {
-  const product = (loadedAllProducts || []).find(item => String(item.id) === String(productId));
+  const products = [...(loadedAllProducts || []), ...(loadedPendingAds || [])];
+  const product = products.find(item => String(item.id) === String(productId));
   if (!product) {
     showToast('Produto nao encontrado nesta sessao.', 'error');
     return;
@@ -1165,6 +1167,7 @@ async function handleAdminMetric(metric, container) {
   if (metric === 'pending') {
     adminView = 'moderation';
     await renderAdminPage(container);
+    resetAppScroll(container);
     return;
   }
   if (metric === 'clicks') {
@@ -1179,6 +1182,7 @@ async function handleAdminMetric(metric, container) {
   if (metric === 'couponsGenerated' || metric === 'couponsUsed' || metric === 'conversion') {
     adminView = 'reports';
     await renderAdminPage(container);
+    resetAppScroll(container);
     return;
   }
 
@@ -1194,12 +1198,20 @@ async function handleAdminMetric(metric, container) {
 function bindAdminEvents(container) {
   // Tabs
   container.querySelectorAll('[data-admin-tab]').forEach(tab => {
-    tab.addEventListener('click', () => { adminView = tab.dataset.adminTab; renderAdminPage(container); });
+    tab.addEventListener('click', async () => {
+      adminView = tab.dataset.adminTab;
+      await renderAdminPage(container);
+      resetAppScroll(container);
+    });
   });
 
   // Bottom nav
   container.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => { adminView = item.dataset.nav; renderAdminPage(container); });
+    item.addEventListener('click', async () => {
+      adminView = item.dataset.nav;
+      await renderAdminPage(container);
+      resetAppScroll(container);
+    });
   });
 
   container.addEventListener('click', async (event) => {
@@ -1246,8 +1258,24 @@ function bindAdminEvents(container) {
       event.preventDefault();
       event.stopImmediatePropagation();
       showAdjustModal(adjustBtn.dataset.adId, container);
+      return;
+    }
+
+    const moderationDetail = event.target.closest?.('[data-admin-product-detail]');
+    if (moderationDetail) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      showAdminProductDetails(moderationDetail.dataset.adminProductDetail, container);
     }
   }, true);
+
+  container.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const moderationDetail = event.target.closest?.('[data-admin-product-detail]');
+    if (!moderationDetail) return;
+    event.preventDefault();
+    showAdminProductDetails(moderationDetail.dataset.adminProductDetail, container);
+  });
 
   container.addEventListener('click', async (event) => {
     const createCategoryBtn = event.target.closest?.('[data-category-create]');

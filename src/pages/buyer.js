@@ -8,6 +8,7 @@ import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
 import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
+import { resetAppScroll } from '../utils/scroll.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -328,7 +329,7 @@ function focusCategoriesSection(container) {
   const chips = container.querySelector('.category-scroll');
   if (!chips) return;
   chips.classList.add('category-scroll-highlight');
-  chips.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
   setTimeout(() => chips.classList.remove('category-scroll-highlight'), 1100);
 }
 
@@ -445,17 +446,24 @@ async function renderBuyerPage(container) {
     if (focusCategoriesAfterRender) {
       focusCategoriesAfterRender = false;
       requestAnimationFrame(() => focusCategoriesSection(container));
+    } else {
+      resetAppScroll(container);
     }
   } else if (currentView === 'detail') {
     renderProductDetail(container);
+    resetAppScroll(container);
   } else if (currentView === 'coupons') {
     await renderCoupons(container);
+    resetAppScroll(container);
   } else if (currentView === 'profile') {
     renderProfile(container);
+    resetAppScroll(container);
   } else if (currentView === 'payment') {
     renderPayment(container);
+    resetAppScroll(container);
   } else if (currentView === 'notifications') {
     await renderNotifications(container);
+    resetAppScroll(container);
   }
 
   bindBottomNav(container);

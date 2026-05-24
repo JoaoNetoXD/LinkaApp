@@ -2787,10 +2787,11 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 
 .mp-status-pill {
   min-height: 44px;
-  max-width: 220px;
+  min-width: 226px;
+  max-width: 286px;
   border: 1px solid color-mix(in srgb, #00b1ea 42%, var(--mobile-line)) !important;
   border-radius: 16px;
-  padding: 6px 9px;
+  padding: 7px 12px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2815,8 +2816,8 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-logo-mark {
-  width: 48px;
-  height: 28px;
+  width: 78px;
+  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2837,8 +2838,8 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-connect-logo .mp-logo-mark {
-  width: 150px;
-  height: 62px;
+  width: 172px;
+  height: 68px;
   padding: 8px 12px;
 }
 
@@ -2856,13 +2857,13 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-status-copy strong {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.1;
   color: var(--mobile-ink);
 }
 
 .mp-status-copy small {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--mobile-muted);
   font-weight: 800;
 }
@@ -3506,15 +3507,17 @@ button.seller-detail-card:focus-visible {
   }
 
   .mp-status-pill {
-    width: 48px;
-    min-width: 48px;
-    padding: 6px;
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
+    padding: 7px;
     justify-content: center;
   }
 
   .mp-logo-mark {
-    width: 36px;
-    height: 24px;
+    width: 58px;
+    height: 30px;
+    padding: 3px 5px;
   }
 
   .mp-status-copy,
