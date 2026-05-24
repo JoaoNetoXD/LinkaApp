@@ -3261,8 +3261,8 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 
 .mp-status-pill {
   min-height: 44px;
-  min-width: 226px;
-  max-width: 286px;
+  min-width: 238px;
+  max-width: 304px;
   border: 1px solid color-mix(in srgb, #00b1ea 42%, var(--mobile-line)) !important;
   border-radius: 16px;
   padding: 7px 12px;
@@ -3290,16 +3290,16 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-logo-mark {
-  width: 78px;
-  height: 34px;
+  width: 96px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  padding: 3px 5px;
+  padding: 0;
   border-radius: 999px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(0, 177, 234, 0.16);
+  background: transparent;
+  box-shadow: none;
 }
 
 .mp-logo-mark img,
@@ -3312,9 +3312,9 @@ body:has(.auth-wrapper) .theme-toggle-fab {
 }
 
 .mp-connect-logo .mp-logo-mark {
-  width: 172px;
-  height: 68px;
-  padding: 8px 12px;
+  width: 190px;
+  height: 74px;
+  padding: 0;
 }
 
 .mp-status-copy {
@@ -3832,6 +3832,23 @@ button.seller-detail-card:focus-visible {
   box-shadow: var(--mobile-shadow-soft) !important;
 }
 
+.seller-page .payment-list-button {
+  display: block !important;
+  appearance: none;
+  -webkit-appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.seller-page .payment-list-button:hover,
+.seller-page .payment-list-button:focus-visible {
+  border-color: color-mix(in srgb, var(--mobile-blue) 46%, var(--mobile-line)) !important;
+  transform: translateY(-1px);
+  outline: none;
+}
+
 .seller-page .payment-list-item-header {
   gap: 14px !important;
   margin-bottom: 14px !important;
@@ -3881,6 +3898,105 @@ button.seller-detail-card:focus-visible {
   color: var(--mobile-ink);
   text-align: center;
   padding: 24px;
+}
+
+.seller-payment-detail-modal {
+  max-width: 520px !important;
+}
+
+.payment-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.payment-detail-header h3 {
+  color: var(--mobile-ink);
+  font-size: 20px;
+  line-height: 1.18;
+  margin: 4px 0 0;
+}
+
+.payment-detail-amount {
+  border: 1px solid color-mix(in srgb, var(--mobile-blue) 30%, var(--mobile-line));
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--mobile-blue) 8%, var(--mobile-surface));
+}
+
+.payment-detail-amount span,
+.payment-detail-row span,
+.mp-fee-detail-card span {
+  color: var(--mobile-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.payment-detail-amount strong {
+  color: var(--mobile-blue);
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.payment-detail-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.payment-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--mobile-line);
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: var(--mobile-surface-soft);
+}
+
+.payment-detail-row strong {
+  color: var(--mobile-ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-align: right;
+  word-break: break-word;
+}
+
+.mp-fee-detail-card {
+  border: 1px solid color-mix(in srgb, #00b1ea 32%, var(--mobile-line));
+  border-radius: 18px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, #00b1ea 8%, var(--mobile-surface));
+  text-align: left;
+}
+
+.mp-fee-detail-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.mp-fee-detail-card strong {
+  color: var(--mobile-ink);
+  font-weight: 950;
+}
+
+.mp-fee-detail-card p {
+  color: var(--mobile-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
 }
 
 @media (min-width: 760px) {

@@ -309,6 +309,46 @@ function renderMercadoPagoMark() {
   `;
 }
 
+const MP_FEE_COPY = {
+  pix: 'Pix: 0,99%',
+  card: 'Cartão: 3,98% a 4,98%',
+  note: 'Taxas cobradas pelo Mercado Pago conforme meio e prazo de recebimento.',
+};
+
+function getPaymentMethodLabel(method) {
+  const normalized = String(method || '').toLowerCase();
+  if (normalized.includes('pix')) return 'Pix';
+  if (normalized.includes('card') || normalized.includes('credit') || normalized.includes('checkout')) return 'Cartão';
+  return method ? String(method) : 'Não informado';
+}
+
+function getEstimatedMpFeeInfo(payment) {
+  const amount = Number(payment?.amount || payment?.sellerAmount || 0);
+  const method = String(payment?.method || '').toLowerCase();
+  if (method.includes('pix')) {
+    return {
+      label: 'Pix Mercado Pago',
+      rate: '0,99%',
+      value: amount ? formatCurrency(Math.round(amount * 0.0099 * 100) / 100) : '—',
+      detail: 'Recebimento D0 conforme tabela oficial do Mercado Pago.',
+    };
+  }
+  if (method.includes('card') || method.includes('credit') || method.includes('checkout')) {
+    return {
+      label: 'Cartão Mercado Pago',
+      rate: '3,98% a 4,98%',
+      value: amount ? `${formatCurrency(Math.round(amount * 0.0398 * 100) / 100)} a ${formatCurrency(Math.round(amount * 0.0498 * 100) / 100)}` : '—',
+      detail: 'Varia pelo prazo de recebimento configurado na conta Mercado Pago.',
+    };
+  }
+  return {
+    label: 'Mercado Pago',
+    rate: `${MP_FEE_COPY.pix} · ${MP_FEE_COPY.card}`,
+    value: 'Depende do método',
+    detail: MP_FEE_COPY.note,
+  };
+}
+
 function formatMpDate(value) {
   if (!value) return 'Não informado';
   const date = new Date(value);
@@ -389,10 +429,11 @@ function showMercadoPagoInfoModal(container) {
           ${renderMercadoPagoMark()}
         </div>
         <h3>Mercado Pago conectado</h3>
-        <p>Os pagamentos aprovados dos seus produtos vão direto para esta conta. A Linka não cobra comissão sobre a venda.</p>
+        <p>Os pagamentos aprovados dos seus produtos vão direto para esta conta. As taxas aplicáveis são cobradas pelo Mercado Pago.</p>
         <div class="mp-connection-grid">
           <div class="mp-connection-row"><span>Status</span><strong>Pronto para receber</strong></div>
-          <div class="mp-connection-row"><span>Comissão Linka</span><strong>0%</strong></div>
+          <div class="mp-connection-row"><span>Taxa Pix</span><strong>0,99%</strong></div>
+          <div class="mp-connection-row"><span>Taxa cartão</span><strong>3,98% a 4,98%</strong></div>
           <div class="mp-connection-row"><span>Modo</span><strong>${account.liveMode ? 'Produção' : 'Conta autorizada'}</strong></div>
           <div class="mp-connection-row"><span>Conta Mercado Pago</span><strong>${escapeHTML(account.collectorId || 'Autorizada via OAuth')}</strong></div>
           <div class="mp-connection-row"><span>Conectado em</span><strong>${escapeHTML(formatMpDate(account.connectedAt))}</strong></div>
@@ -757,11 +798,6 @@ function renderSellerAdsManager() {
       <button class="seller-detail-card" type="button" data-tab-shortcut="pending"><span>Em análise</span><strong>${statusCounts.pending + statusCounts.queue}</strong><small>Aguardando admin</small></button>
       <button class="seller-detail-card" type="button" data-tab-shortcut="expired"><span>Expirados</span><strong>${statusCounts.expired}</strong><small>Fora da vitrine</small></button>
     </div>
-
-    <section class="seller-status-note">
-      <strong>${icons.shield} Exclusão segura</strong>
-      <span>Ao excluir, o anúncio some do painel e da vitrine. Cupons e pagamentos continuam preservados no histórico financeiro.</span>
-    </section>
 
     ${renderSellerAdsTabs(statusCounts)}
 
@@ -1185,12 +1221,13 @@ async function renderSellerPayments() {
     const dt = new Date(d);
     return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
   };
+  const feeSummary = `${MP_FEE_COPY.pix} · ${MP_FEE_COPY.card}`;
   return `
     <section class="seller-view-header seller-payments-hero">
       <div>
         <span class="seller-setup-kicker">Financeiro</span>
         <h2>Minhas vendas</h2>
-        <p>Acompanhe pagamentos Pix e cartão recebidos pelo Mercado Pago, com 0% de comissão da Linka.</p>
+        <p>Acompanhe pagamentos Pix e cartão recebidos pelo Mercado Pago, com status real e detalhes por venda.</p>
       </div>
       <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Ver anúncios</button>
     </section>
@@ -1216,8 +1253,8 @@ async function renderSellerPayments() {
 
     <div class="commission-info-bar">
       <div class="commission-info-inner">
-        <span class="commission-label">Comissão Linka: <strong>0%</strong></span>
-        <span class="commission-detail">O vendedor recebe 100% do valor no Mercado Pago · Total bruto: ${formatCurrency(stats.totalGross)}</span>
+        <span class="commission-label">Taxas Mercado Pago: <strong>${feeSummary}</strong></span>
+        <span class="commission-detail">${MP_FEE_COPY.note} Total bruto confirmado: ${formatCurrency(stats.totalGross)}</span>
       </div>
     </div>
 
@@ -1231,7 +1268,7 @@ async function renderSellerPayments() {
 
     <div class="payment-list-container seller-payment-list-container">
       ${filtered.length > 0 ? filtered.map(p => `
-        <div class="payment-list-item">
+        <button class="payment-list-item payment-list-button" type="button" data-payment-id="${escapeHTML(p.paymentRowId || p.id)}" aria-label="Ver detalhes do pagamento de ${escapeHTML(p.productTitle)}">
           <div class="payment-list-item-header">
             <div class="payment-list-buyer">
               <div class="avatar-sm avatar">${escapeHTML((p.buyerName || 'U').split(' ').map(n => n[0]).join('').slice(0,2))}</div>
@@ -1245,6 +1282,7 @@ async function renderSellerPayments() {
           <div class="payment-list-item-body">
             <div>
               <div class="payment-list-product">${escapeHTML(p.productTitle)}</div>
+              <div class="payment-list-coupon">Método: ${escapeHTML(getPaymentMethodLabel(p.method))}</div>
               <div class="payment-list-coupon">${p.couponCode ? `Cupom: ${escapeHTML(p.couponCode)}` : 'Sem cupom vinculado'}</div>
               ${p.status === 'paid' ? `<div class="confirmed-indicator">${icons.checkCircle} Pagamento confirmado</div>` : ''}
             </div>
@@ -1253,7 +1291,7 @@ async function renderSellerPayments() {
               ${p.platformFee ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-align:right;">-${formatCurrency(p.platformFee)} taxa</div>` : ''}
             </div>
           </div>
-        </div>
+        </button>
       `).join('') : `
         <div class="empty-payments">
           <div class="empty-payments-icon">${icons.wallet}</div>
@@ -1263,6 +1301,64 @@ async function renderSellerPayments() {
       `}
     </div>
   `;
+}
+
+function showSellerPaymentDetailModal(paymentId) {
+  const payment = (loadedPayments || []).find((p) => String(p.paymentRowId || p.id) === String(paymentId));
+  if (!payment) {
+    showToast('Pagamento não encontrado.', 'error');
+    return;
+  }
+
+  const statusLabels = { paid: 'Concluído', pending: 'Pendente', expired: 'Expirado' };
+  const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
+  const fee = getEstimatedMpFeeInfo(payment);
+  const modalRoot = document.getElementById('modal-root');
+  const formatDetailDate = (value) => value ? new Date(value).toLocaleString('pt-BR') : 'Não informado';
+  modalRoot.innerHTML = `
+    <div class="modal-backdrop seller-payment-detail-backdrop" id="payment-detail-modal">
+      <div class="modal-content seller-payment-detail-modal">
+        <div class="modal-handle"></div>
+        <div class="payment-detail-header">
+          <div>
+            <span class="seller-setup-kicker">Detalhes da venda</span>
+            <h3>${escapeHTML(payment.productTitle || 'Produto')}</h3>
+          </div>
+          <span class="badge ${statusBadges[payment.status] || 'badge-neutral'}">${escapeHTML(statusLabels[payment.status] || payment.status || 'Indefinido')}</span>
+        </div>
+
+        <div class="payment-detail-amount">
+          <span>Valor bruto</span>
+          <strong>${formatCurrency(payment.amount || payment.sellerAmount || 0)}</strong>
+        </div>
+
+        <div class="payment-detail-grid">
+          <div class="payment-detail-row"><span>Comprador</span><strong>${escapeHTML(payment.buyerName || 'Comprador')}</strong></div>
+          <div class="payment-detail-row"><span>Método</span><strong>${escapeHTML(getPaymentMethodLabel(payment.method))}</strong></div>
+          <div class="payment-detail-row"><span>Criado em</span><strong>${escapeHTML(formatDetailDate(payment.createdAt))}</strong></div>
+          <div class="payment-detail-row"><span>Pago em</span><strong>${escapeHTML(formatDetailDate(payment.paidAt))}</strong></div>
+          <div class="payment-detail-row"><span>Cupom</span><strong>${payment.couponCode ? escapeHTML(payment.couponCode) : 'Ainda não emitido'}</strong></div>
+          <div class="payment-detail-row"><span>Referência</span><strong>${escapeHTML(payment.externalReference || payment.mpId || payment.preferenceId || 'Não informada')}</strong></div>
+        </div>
+
+        <div class="mp-fee-detail-card">
+          <div>
+            <span>${escapeHTML(fee.label)}</span>
+            <strong>${escapeHTML(fee.rate)}</strong>
+          </div>
+          <p>Estimativa de taxa: ${escapeHTML(fee.value)}. ${escapeHTML(fee.detail)}</p>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="close-payment-detail">Fechar</button>
+      </div>
+    </div>
+  `;
+  modalRoot.querySelector('#payment-detail-modal')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) modalRoot.innerHTML = '';
+  });
+  modalRoot.querySelector('#close-payment-detail')?.addEventListener('click', () => {
+    modalRoot.innerHTML = '';
+  });
 }
 
 function bindSellerEvents(container) {
@@ -1366,6 +1462,10 @@ function bindSellerEvents(container) {
   // Payment filter chips
   container.querySelectorAll('[data-pfilter]').forEach(chip => {
     chip.addEventListener('click', () => { paymentsFilter = chip.dataset.pfilter; renderSellerPage(container); });
+  });
+
+  container.querySelectorAll('[data-payment-id]').forEach((item) => {
+    item.addEventListener('click', () => showSellerPaymentDetailModal(item.dataset.paymentId));
   });
 
   // Form character counters
