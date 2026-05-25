@@ -994,6 +994,7 @@ function renderCreateForm() {
           ${renderPhotoSlot(2)}
           ${renderPhotoSlot(3)}
         </div>
+        <p class="field-error image-required-error" id="image-required-error" hidden>Adicione uma foto do produto para continuar</p>
       </div>
       <div class="input-group">
         <label>WhatsApp para contato</label>
@@ -1017,7 +1018,7 @@ function renderCreateForm() {
         </div>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-block btn-lg">Enviar para aprovação</button>
+      <button type="submit" class="btn btn-primary btn-block btn-lg" id="create-submit-btn" disabled>Enviar para aprovação</button>
     </form>
   `;
 }
@@ -1574,6 +1575,22 @@ function bindSellerEvents(container) {
   const priceInput = container.querySelector('#ad-price');
   const discountInput = container.querySelector('#ad-discount');
   const selectedPhotoFiles = new Map();
+  const createForm = container.querySelector('#create-ad-form');
+  const createSubmitBtn = container.querySelector('#create-submit-btn');
+  const imageRequiredError = container.querySelector('#image-required-error');
+
+  const hasCreateImage = () => {
+    if (!createForm) return true;
+    const slots = Array.from(container.querySelectorAll('.photo-upload-slot'));
+    return selectedPhotoFiles.size > 0 || slots.some((slot) => Boolean(slot.dataset.existingUrl));
+  };
+
+  const updateCreateSubmitState = ({ showError = false } = {}) => {
+    if (!createForm || !createSubmitBtn) return;
+    const hasImage = hasCreateImage();
+    createSubmitBtn.disabled = !hasImage;
+    if (imageRequiredError) imageRequiredError.hidden = !(showError && !hasImage);
+  };
 
   if (titleInput) {
     titleInput.addEventListener('input', () => {
@@ -1633,6 +1650,7 @@ function bindSellerEvents(container) {
     slot.style.border = '';
     slot.innerHTML = `${icons.upload}<span>${escapeHTML(label)}</span><input type="file" accept="image/*" style="display:none" />`;
     bindPhotoInput(slot);
+    updateCreateSubmitState();
   };
 
   const handlePhotoChange = (event) => {
@@ -1647,6 +1665,7 @@ function bindSellerEvents(container) {
     slot.innerHTML = `<img src="${url}" alt="${escapeHTML(slot.dataset.label || 'Foto')}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" /><button class="photo-remove-btn" type="button" data-slot-id="${slot.id}" aria-label="Remover foto">×</button><input type="file" accept="image/*" style="display:none" />`;
     slot.style.border = '2px solid var(--primary-500)';
     bindPhotoInput(slot);
+    updateCreateSubmitState();
     slot.querySelector('.photo-remove-btn')?.addEventListener('click', (removeEvent) => {
       removeEvent.preventDefault();
       removeEvent.stopPropagation();
@@ -1666,10 +1685,16 @@ function bindSellerEvents(container) {
       if (slot) resetPhotoSlot(slot);
     });
   });
+  updateCreateSubmitState();
 
   // Form submit — real Supabase creation
   container.querySelector('#create-ad-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!hasCreateImage()) {
+      updateCreateSubmitState({ showError: true });
+      showToast('Adicione uma foto do produto para continuar.', 'error');
+      return;
+    }
     const values = readProductFormValues(container);
     const validationError = validateProductForm(values);
     if (validationError) {

@@ -125,6 +125,8 @@ async function openSellerFlow() {
 
 let activeCategory = 'all';
 let searchQuery = '';
+let sortBy = 'newest';
+let minDiscount = '0';
 let currentView = 'home'; // home | categories | detail | coupons | payment | notifications
 let currentPayment = null;
 let selectedProduct = null;
@@ -150,6 +152,7 @@ const buyerCouponsCache = new Map();
 
 // Intersection Observer for card entrance animation
 let observer = null;
+let buyerCountdownInterval = null;
 let lastSyncedCheckoutRef = null;
 const PENDING_CHECKOUT_REF_KEY = 'linka_pending_checkout_ref';
 const INST_BANNER_SESSION_KEY = 'linka_inst_banner_hidden';
@@ -441,6 +444,8 @@ function initObserver() {
 }
 
 async function renderBuyerPage(container) {
+  stopBuyerCountdowns();
+
   if (currentView === 'home' && !container.querySelector('.buyer-wrapper')) {
     renderHome(container, { skipFetch: true, loading: true });
     bindBottomNav(container);
@@ -482,10 +487,12 @@ async function renderBuyerPage(container) {
   }
 
   bindBottomNav(container);
+  refreshBuyerNavBadges(container);
 }
 
 function getTimerInfo(expiresIn) {
-  const match = expiresIn.match(/(\d+)h/);
+  const safeExpiresIn = expiresIn || '24h 00min';
+  const match = safeExpiresIn.match(/(\d+)h/);
   let hours = 24;
   if (match) {
     hours = parseInt(match[1]);
@@ -498,7 +505,162 @@ function getTimerInfo(expiresIn) {
   } else if (hours <= 12) {
     colorClass = 'timer-amber';
   }
-  return { text: `Expira em ${expiresIn}`, colorClass, isCritical };
+  return { text: `Expira em ${safeExpiresIn}`, colorClass, isCritical };
+}
+
+function normalizeExpirationDate(expiresAt) {
+  if (!expiresAt) return null;
+  if (typeof expiresAt === 'number') {
+    return new Date(expiresAt < 10000000000 ? expiresAt * 1000 : expiresAt);
+  }
+  const parsed = new Date(expiresAt);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getCountdownInfo(expiresAt, fallbackExpiresIn = '24h 00min') {
+  const end = normalizeExpirationDate(expiresAt);
+  if (!end) return getTimerInfo(fallbackExpiresIn);
+
+  const diff = end.getTime() - Date.now();
+  if (diff <= 0) {
+    return { text: 'Expirado', colorClass: 'timer-critical', isCritical: true };
+  }
+
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+  const isCritical = hours < 24;
+  const colorClass = hours < 2 ? 'timer-critical' : hours <= 12 ? 'timer-amber' : 'timer-neutral';
+
+  let label;
+  if (hours >= 48) {
+    const days = Math.floor(hours / 24);
+    label = `${days}d ${hours % 24}h`;
+  } else if (hours >= 1) {
+    label = `${hours}h ${minutes}min`;
+  } else {
+    label = `${minutes}min ${seconds}s`;
+  }
+
+  return { text: `Expira em ${label}`, colorClass, isCritical };
+}
+
+function stopBuyerCountdowns() {
+  if (buyerCountdownInterval) {
+    clearInterval(buyerCountdownInterval);
+    buyerCountdownInterval = null;
+  }
+}
+
+function startBuyerCountdowns(container) {
+  stopBuyerCountdowns();
+  const timers = () => Array.from(container.querySelectorAll('[data-countdown-expires]'));
+  const tick = () => {
+    const nodes = timers();
+    if (!nodes.length) {
+      stopBuyerCountdowns();
+      return;
+    }
+    nodes.forEach((node) => {
+      const info = getCountdownInfo(node.dataset.countdownExpires, node.dataset.countdownFallback || '24h 00min');
+      node.classList.remove('timer-neutral', 'timer-amber', 'timer-critical', 'expiry--urgent');
+      node.classList.add(info.colorClass);
+      node.classList.toggle('expiry--urgent', info.isCritical);
+      const label = node.querySelector('[data-countdown-label]');
+      if (label) label.textContent = info.text;
+      node.querySelector('.timer-icon')?.classList.toggle('pulse', info.isCritical);
+    });
+  };
+
+  tick();
+  if (timers().length) buyerCountdownInterval = setInterval(tick, 1000);
+}
+
+function getOfferDiscountPercent(product) {
+  return Number(product?.discountPercent ?? product?.discount ?? 0) || 0;
+}
+
+function getOfferPrice(product) {
+  return Number(product?.discountPrice ?? product?.price ?? product?.originalPrice ?? 0) || 0;
+}
+
+function getOfferDate(product, fieldName) {
+  const value = product?.[fieldName];
+  const parsed = normalizeExpirationDate(value);
+  return parsed?.getTime() || 0;
+}
+
+function applyBuyerFeedFilters(products) {
+  let result = Array.isArray(products) ? [...products] : [];
+  const min = Number(minDiscount || 0);
+
+  if (min > 0) {
+    result = result.filter((product) => getOfferDiscountPercent(product) >= min);
+  }
+
+  result.sort((a, b) => {
+    switch (sortBy) {
+      case 'discount':
+        return getOfferDiscountPercent(b) - getOfferDiscountPercent(a);
+      case 'price_asc':
+        return getOfferPrice(a) - getOfferPrice(b);
+      case 'price_desc':
+        return getOfferPrice(b) - getOfferPrice(a);
+      case 'expiring':
+        return getOfferDate(a, 'expiresAt') - getOfferDate(b, 'expiresAt');
+      case 'newest':
+      default:
+        return getOfferDate(b, 'createdAt') - getOfferDate(a, 'createdAt');
+    }
+  });
+
+  return result;
+}
+
+function getSearchSuggestions(products) {
+  const q = String(searchQuery || '').trim().toLowerCase();
+  if (q.length < 2) return [];
+  const categoryNameById = new Map(getMarketCategories().map((category) => [category.id, category.name]));
+  return (Array.isArray(products) ? products : [])
+    .filter((product) => {
+      const title = String(product.title || '').toLowerCase();
+      const category = String(categoryNameById.get(product.category) || product.category || '').toLowerCase();
+      return title.includes(q) || category.includes(q);
+    })
+    .slice(0, 5)
+    .map((product) => ({
+      id: product.id,
+      label: product.title || 'Oferta',
+      category: categoryNameById.get(product.category) || 'Categoria',
+    }));
+}
+
+async function refreshBuyerNavBadges(container) {
+  const userId = globalSession?.user?.id;
+  const couponsBadges = container.querySelectorAll('[data-nav-coupon-badge]');
+  const notificationBadges = container.querySelectorAll('[data-nav-notification-badge]');
+  if (!userId) {
+    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.style.display = 'none'; });
+    return;
+  }
+
+  try {
+    const [coupons, unread] = await Promise.all([
+      loadBuyerCoupons(userId).catch(() => []),
+      loadUnreadCount(userId).catch(() => 0),
+    ]);
+    const activeCoupons = (Array.isArray(coupons) ? coupons : []).filter((coupon) => coupon.status === 'active').length;
+    couponsBadges.forEach((badge) => {
+      badge.textContent = activeCoupons > 99 ? '99+' : String(activeCoupons);
+      badge.style.display = activeCoupons > 0 ? '' : 'none';
+    });
+    notificationBadges.forEach((badge) => {
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.style.display = unread > 0 ? '' : 'none';
+    });
+  } catch {
+    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.style.display = 'none'; });
+  }
 }
 
 function getSlotsInfo(used, total) {
@@ -543,7 +705,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
   }
 
-  const filteredProducts = products;
+  const filteredProducts = applyBuyerFeedFilters(products);
+  const searchSuggestions = getSearchSuggestions(cachedProducts || products);
   const user = getUser();
   const showSellerAccess = isAuthenticated();
   const greetingName = isAuthenticated()
@@ -581,10 +744,23 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             ${isAuthenticated() ? `<div class="user-avatar">${escapeHTML(user.avatar || 'U')}</div>` : ''}
           </div>
         </div>
-        <div class="search-bar">
-          ${icons.search}
-          <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" />
-          <button class="buyer-filter-btn" type="button" id="btnBuyerFilter" aria-label="Abrir filtros">${icons.adjustments}</button>
+        <div class="search-wrapper">
+          <div class="search-bar">
+            ${icons.search}
+            <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" autocomplete="off" />
+            <button class="buyer-filter-btn" type="button" id="btnBuyerFilter" aria-label="Abrir filtros">${icons.adjustments}</button>
+          </div>
+          ${searchSuggestions.length ? `
+            <div class="search-suggestions" role="listbox" aria-label="SugestÃµes de busca">
+              ${searchSuggestions.map((suggestion) => `
+                <button class="suggestion-item" type="button" data-search-suggestion="${escapeHTML(suggestion.label)}">
+                  ${icons.search}
+                  <span>${escapeHTML(suggestion.label)}</span>
+                  <small class="suggestion-cat">${escapeHTML(suggestion.category)}</small>
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
         </div>
         
         <!-- CATEGORY CHIPS (Now in header for stickiness) -->
@@ -597,6 +773,21 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               </button>
             `).join('')}
           </div>
+        </div>
+        <div class="feed-filters" aria-label="Filtros de ofertas">
+          <select id="sortBySelect" class="filter-select" aria-label="Ordenar ofertas">
+            <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Mais recentes</option>
+            <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Maior desconto</option>
+            <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Menor preÃ§o</option>
+            <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Maior preÃ§o</option>
+            <option value="expiring" ${sortBy === 'expiring' ? 'selected' : ''}>Expirando logo</option>
+          </select>
+          <select id="minDiscountSelect" class="filter-select" aria-label="Filtrar por desconto">
+            <option value="0" ${minDiscount === '0' ? 'selected' : ''}>Qualquer desconto</option>
+            <option value="10" ${minDiscount === '10' ? 'selected' : ''}>Acima de 10%</option>
+            <option value="20" ${minDiscount === '20' ? 'selected' : ''}>Acima de 20%</option>
+            <option value="30" ${minDiscount === '30' ? 'selected' : ''}>Acima de 30%</option>
+          </select>
         </div>
       </header>
 
@@ -632,7 +823,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? renderEmptyProductsState() : filteredProducts.map(p => {
           const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
           const catIcon = icons[p.category] || icons.others;
-          const timer = getTimerInfo(p.expiresIn);
+          const timer = getCountdownInfo(p.expiresAt, p.expiresIn);
           const slots = getSlotsInfo(p.slots.used, p.slots.total);
           const isSoldOut = p.slots.used >= p.slots.total;
           
@@ -656,9 +847,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
                 <span class="price-original">${formatCurrency(p.originalPrice)}</span>
               </div>
               
-              <div class="card-timer ${timer.colorClass}">
+              <div class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                 <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-                <span>${escapeHTML(timer.text)}</span>
+                <span data-countdown-label>${escapeHTML(timer.text)}</span>
               </div>
 
               <div class="card-verified-pill">
@@ -694,7 +885,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item ${currentView === 'coupons' ? 'active' : ''}" data-nav="coupons">
-        ${icons.ticket}
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
         <span>Cupons</span>
         <div class="nav-indicator"></div>
       </div>
@@ -725,6 +916,23 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       }, 400);
     });
   }
+
+  container.querySelectorAll('[data-search-suggestion]').forEach((button) => {
+    button.addEventListener('click', () => {
+      searchQuery = button.dataset.searchSuggestion || '';
+      renderBuyerPage(container);
+    });
+  });
+
+  container.querySelector('#sortBySelect')?.addEventListener('change', (event) => {
+    sortBy = event.target.value || 'newest';
+    renderBuyerPage(container);
+  });
+
+  container.querySelector('#minDiscountSelect')?.addEventListener('change', (event) => {
+    minDiscount = event.target.value || '0';
+    renderBuyerPage(container);
+  });
 
   // Notification button
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
@@ -768,6 +976,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
     }).catch(() => {});
   }
+  refreshBuyerNavBadges(container);
+  startBuyerCountdowns(container);
 
   // Category clicks
   container.querySelectorAll('.chip').forEach(chip => {
@@ -911,7 +1121,7 @@ async function renderCategories(container) {
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item" data-nav="coupons">
-        ${icons.ticket}
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
         <span>Cupons</span>
         <div class="nav-indicator"></div>
       </div>
@@ -961,18 +1171,14 @@ function openProductDetail(productId, container) {
 }
 
 function renderProductSkeletons() {
-  return Array.from({ length: 6 }, () => `
+  return Array.from({ length: 4 }, () => `
     <div class="product-card product-card-skeleton" aria-hidden="true">
-      <div class="card-image-area skeleton-block"></div>
+      <div class="card-image-area skeleton-box skeleton-image-block"></div>
       <div class="card-body">
-        <div class="skeleton-line skeleton-title-line"></div>
-        <div class="skeleton-line"></div>
-        <div class="skeleton-line short"></div>
-        <div class="skeleton-price"></div>
-        <div class="skeleton-actions">
-          <div></div>
-          <div></div>
-        </div>
+        <div class="skeleton-box skeleton-title-line"></div>
+        <div class="skeleton-box skeleton-price"></div>
+        <div class="skeleton-box skeleton-timer-line"></div>
+        <div class="skeleton-box skeleton-button-line"></div>
       </div>
     </div>
   `).join('');
@@ -1279,7 +1485,7 @@ async function renderCoupons(container) {
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item active" data-nav="coupons">
-        ${icons.ticket}
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
         <span>Cupons</span>
         <div class="nav-indicator"></div>
       </div>
@@ -1396,7 +1602,7 @@ function renderProfileLegacy(container) {
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item" data-nav="coupons">
-        ${icons.ticket}
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
         <span>Cupons</span>
         <div class="nav-indicator"></div>
       </div>
@@ -1669,7 +1875,7 @@ function renderProfile(container) {
         <div class="nav-indicator"></div>
       </div>
       <div class="bottom-nav-item" data-nav="coupons">
-        ${icons.ticket}
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
         <span>Cupons</span>
         <div class="nav-indicator"></div>
       </div>
@@ -1884,7 +2090,7 @@ function renderProductDetail(container) {
     if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
 
     const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
-    const timer = getTimerInfo(p.expiresIn || '24h 00min');
+    const timer = getCountdownInfo(p.expiresAt, p.expiresIn || '24h 00min');
     const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
     const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
     const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
@@ -1947,9 +2153,9 @@ function renderProductDetail(container) {
             </div>
 
             <div class="detail-trust-grid">
-              <div class="detail-info-pill card-timer ${timer.colorClass}">
+              <div class="detail-info-pill card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                 <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-                <span>${escapeHTML(timer.text)}</span>
+                <span data-countdown-label>${escapeHTML(timer.text)}</span>
               </div>
               <div class="detail-info-pill detail-verified-pill">
                 ${icons.shield}
@@ -2038,6 +2244,7 @@ function renderProductDetail(container) {
         updateGalleryState(selectedProductImageIndex);
       });
     }
+    startBuyerCountdowns(container);
     return;
   }
 }
@@ -2144,7 +2351,7 @@ async function renderNotifications(container) {
       <nav class="bottom-nav">
         <div class="bottom-nav-item" data-nav="home">${icons.home}<span>Início</span><div class="nav-indicator"></div></div>
         <div class="bottom-nav-item" data-nav="cats">${icons.grid}<span>Categorias</span><div class="nav-indicator"></div></div>
-        <div class="bottom-nav-item" data-nav="coupons">${icons.ticket}<span>Cupons</span><div class="nav-indicator"></div></div>
+        <div class="bottom-nav-item" data-nav="coupons"><span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span><span>Cupons</span><div class="nav-indicator"></div></div>
         <div class="bottom-nav-item" data-nav="profile">${icons.user}<span>Perfil</span><div class="nav-indicator"></div></div>
       </nav>
     `;
