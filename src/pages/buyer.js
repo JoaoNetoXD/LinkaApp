@@ -499,10 +499,10 @@ function getTimerInfo(expiresIn) {
   }
   let colorClass = 'timer-neutral';
   let isCritical = false;
-  if (hours < 2) {
+  if (hours < 24) {
     colorClass = 'timer-critical';
     isCritical = true;
-  } else if (hours <= 12) {
+  } else if (hours <= 48) {
     colorClass = 'timer-amber';
   }
   return { text: `Expira em ${safeExpiresIn}`, colorClass, isCritical };
@@ -530,7 +530,7 @@ function getCountdownInfo(expiresAt, fallbackExpiresIn = '24h 00min') {
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
   const isCritical = hours < 24;
-  const colorClass = hours < 2 ? 'timer-critical' : hours <= 12 ? 'timer-amber' : 'timer-neutral';
+  const colorClass = hours < 24 ? 'timer-critical' : hours <= 48 ? 'timer-amber' : 'timer-neutral';
 
   let label;
   if (hours >= 48) {
@@ -696,12 +696,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   // Load products from Supabase (or mock fallback)
   let products;
   if (skipFetch) {
-    products = cachedProducts || (USE_MOCKS ? mockProducts : []);
+    products = loading ? [] : (cachedProducts || (USE_MOCKS ? mockProducts : []));
   } else {
     products = await loadBuyerProducts({ categoryId: activeCategory, search: searchQuery });
   }
 
-  if (!products || products.length === 0) {
+  if (!loading && (!products || products.length === 0)) {
     products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
   }
 
