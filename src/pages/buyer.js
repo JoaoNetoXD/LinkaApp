@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme, replayFirstRunTour } from '../main.js';
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
@@ -1747,6 +1747,21 @@ function renderProfileThemePanel(currentTheme) {
   `;
 }
 
+function renderProfileHelpPanel() {
+  return `
+    <section class="profile-panel profile-help-panel">
+      <div class="profile-panel-heading">
+        <div class="profile-panel-icon">${icons.ticket}</div>
+        <div>
+          <h2>Como funciona</h2>
+          <p>Reveja a apresentação rápida do app sempre que precisar.</p>
+        </div>
+      </div>
+      <button type="button" class="profile-tour-btn" id="btnReplayTour">${icons.arrowRight} Ver mini-tour</button>
+    </section>
+  `;
+}
+
 function renderProfile(container) {
   const user = getUser();
   const isLoggedIn = isAuthenticated();
@@ -1779,6 +1794,7 @@ function renderProfile(container) {
             <button type="button" class="btn-primary" id="btnGoLogin">Entrar na conta</button>
           </section>
 
+          ${renderProfileHelpPanel()}
           ${renderProfileThemePanel(currentTheme)}
         ` : `
           <section class="profile-hero-panel">
@@ -1829,6 +1845,7 @@ function renderProfile(container) {
           </section>
 
           ${renderProfileThemePanel(currentTheme)}
+          ${renderProfileHelpPanel()}
 
           <section class="profile-panel">
             <div class="profile-panel-heading">
@@ -1926,6 +1943,7 @@ function renderProfile(container) {
     showToast(theme === 'dark' ? 'Tema escuro ativado.' : 'Tema claro ativado.', 'success');
     renderProfile(container);
   });
+  document.getElementById('btnReplayTour')?.addEventListener('click', replayFirstRunTour);
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
     try {

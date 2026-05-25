@@ -309,6 +309,11 @@ const firstRunTourSteps = [
   },
 ];
 
+function setFirstRunTourOpen(isOpen) {
+  document.documentElement.classList.toggle('first-run-tour-lock', isOpen);
+  document.body.classList.toggle('first-run-tour-lock', isOpen);
+}
+
 function shouldForceTour() {
   return new URLSearchParams(window.location.search).get('tour') === '1';
 }
@@ -327,6 +332,7 @@ function markFirstRunTourSeen() {
 }
 
 function renderFirstRunTourStep(shell, stepIndex) {
+  shell.dataset.step = String(stepIndex);
   const step = firstRunTourSteps[stepIndex] || firstRunTourSteps[0];
   const isLast = stepIndex === firstRunTourSteps.length - 1;
   const card = shell.querySelector('.first-run-tour-card');
@@ -371,6 +377,7 @@ function renderFirstRunTourStep(shell, stepIndex) {
 function closeFirstRunTour(shell = document.querySelector('.first-run-tour-shell')) {
   if (!shell) return;
   if (shell.__onEsc) document.removeEventListener('keydown', shell.__onEsc);
+  setFirstRunTourOpen(false);
   markFirstRunTourSeen();
   shell.classList.add('closing');
   setTimeout(() => shell.remove(), 220);
@@ -390,8 +397,28 @@ function showFirstRunTour(path = '') {
   shell.addEventListener('click', (event) => {
     if (event.target === shell) closeFirstRunTour(shell);
   });
+  let touchStartX = 0;
+  shell.addEventListener('touchstart', (event) => {
+    touchStartX = event.changedTouches?.[0]?.clientX || 0;
+  }, { passive: true });
+  shell.addEventListener('touchend', (event) => {
+    const touchEndX = event.changedTouches?.[0]?.clientX || 0;
+    const deltaX = touchEndX - touchStartX;
+    if (Math.abs(deltaX) < 48) return;
+    const currentStep = Number(shell.dataset.step || 0);
+    const nextStep = deltaX < 0
+      ? Math.min(currentStep + 1, firstRunTourSteps.length - 1)
+      : Math.max(currentStep - 1, 0);
+    if (nextStep !== currentStep) renderFirstRunTourStep(shell, nextStep);
+  }, { passive: true });
+  setFirstRunTourOpen(true);
   document.body.appendChild(shell);
   renderFirstRunTourStep(shell, 0);
+}
+
+export function replayFirstRunTour() {
+  localStorage.removeItem(FIRST_RUN_TOUR_KEY);
+  showFirstRunTour('buyer');
 }
 
 function maybeShowFirstRunTour(path = '') {

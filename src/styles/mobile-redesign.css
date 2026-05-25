@@ -8649,6 +8649,12 @@ body:has(.buyer-wrapper) .bottom-nav-item .nav-badge,
 }
 
 /* First-run mini tour */
+html.first-run-tour-lock,
+body.first-run-tour-lock {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
 .first-run-tour-shell {
   position: fixed;
   inset: 0;
@@ -8839,6 +8845,29 @@ body:has(.buyer-wrapper) .bottom-nav-item .nav-badge,
 .first-run-tour-next svg {
   width: 17px;
   height: 17px;
+  stroke: currentColor;
+}
+
+.buyer-wrapper .profile-tour-btn {
+  width: 100%;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--lk-border-md);
+  border-radius: var(--r-md);
+  background: var(--lk-surface);
+  color: var(--lk-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.buyer-wrapper .profile-tour-btn svg {
+  width: 17px;
+  height: 17px;
+  color: var(--lk-accent);
   stroke: currentColor;
 }
 
