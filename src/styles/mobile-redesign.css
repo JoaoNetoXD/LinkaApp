@@ -6311,3 +6311,672 @@ body:has(.buyer-wrapper) .payment-modal-body .btn-payment-option.primary-option 
   color: var(--lk-bg) !important;
   stroke: currentColor !important;
 }
+
+/* Linka global visual pass: align non-buyer screens without changing behavior */
+body:has(.auth-wrapper),
+body:has(.seller-page),
+body:has(.admin-page),
+body:has(.payment-screen) {
+  --mobile-app-bg: var(--lk-bg);
+  --mobile-body-bg: var(--lk-bg);
+  --mobile-card-bg: var(--lk-card);
+  --mobile-surface: var(--lk-surface);
+  --mobile-surface-soft: var(--lk-surface);
+  --mobile-line: var(--lk-border);
+  --mobile-line-strong: var(--lk-border-md);
+  --mobile-ink: var(--lk-text);
+  --mobile-muted: var(--lk-text-muted);
+  --mobile-faint: var(--lk-text-faint);
+  --mobile-blue: var(--lk-accent);
+  --mobile-blue-2: var(--lk-accent);
+  --mobile-blue-soft: var(--lk-accent);
+  --mobile-mint: var(--lk-accent);
+  --mobile-teal: var(--lk-success);
+  --mobile-coral: var(--lk-danger);
+  --mobile-yellow: var(--lk-warning);
+  --surface: var(--lk-bg);
+  --surface-alt: var(--lk-surface);
+  --surface-raised: var(--lk-card);
+  --surface-card: var(--lk-card);
+  --text-primary: var(--lk-text);
+  --text-secondary: var(--lk-text-muted);
+  --text-tertiary: var(--lk-text-faint);
+  --border-light: var(--lk-border);
+  --border: var(--lk-border-md);
+  --gradient-brand: none;
+  --gradient-card: none;
+  --gradient-cta: none;
+  --gradient-success: none;
+  background: var(--lk-bg) !important;
+  color: var(--lk-text) !important;
+}
+
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) {
+  background: var(--lk-bg) !important;
+  background-image: none !important;
+  color: var(--lk-text) !important;
+  font-family: var(--font-body) !important;
+}
+
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) *,
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) *::before,
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) *::after {
+  box-shadow: none !important;
+}
+
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) :is(h1, h2, h3, h4, h5, h6, strong, .stat-value, .payment-stat-value, .modal-title, .seller-setup-kicker, .stat-label, .tab, .chip, .badge, button, .btn, .bottom-nav-item span, .nav-item span) {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0 !important;
+}
+
+:is(.auth-wrapper, .seller-page, .admin-page, .payment-screen) :is(p, small, span, label, input, textarea, select, option, .input-hint, .modal-description) {
+  font-family: var(--font-body) !important;
+}
+
+:is(.seller-page, .admin-page) {
+  width: min(100%, 960px) !important;
+  min-height: 100svh !important;
+  margin: 0 auto !important;
+  border-left: 1px solid var(--lk-border) !important;
+  border-right: 1px solid var(--lk-border) !important;
+}
+
+.auth-wrapper {
+  width: min(100%, 430px) !important;
+  min-height: 100svh !important;
+  margin: 0 auto !important;
+  padding: 48px 18px 28px !important;
+}
+
+:is(.seller-page, .admin-page) .app-body {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 18px 18px calc(104px + env(safe-area-inset-bottom, 0px)) !important;
+  background: transparent !important;
+}
+
+:is(.seller-page, .admin-page) .app-header,
+.seller-page .seller-main-header,
+.admin-page .app-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  width: 100% !important;
+  min-height: 72px !important;
+  margin: 0 !important;
+  padding: 14px 18px !important;
+  background: color-mix(in srgb, var(--lk-bg) 92%, transparent) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+  border-radius: 0 !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+:is(.seller-page, .admin-page) .app-header :is(h1, h2, h3, strong) {
+  color: var(--lk-text) !important;
+  font-weight: 800 !important;
+}
+
+:is(.seller-page, .admin-page) .app-header :is(p, small, span:not(.badge)) {
+  color: var(--lk-text-muted) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(
+  .glass-card,
+  .stat-card,
+  .admin-section,
+  .admin-tabs-container,
+  .moderation-card,
+  .alert-card,
+  .chart-container,
+  .seller-row,
+  .category-metric-card,
+  .category-heat-card,
+  .category-management-panel,
+  .category-product-row,
+  .report-action-card,
+  .report-panel,
+  .settings-section,
+  .setting-item,
+  .seller-dashboard-card,
+  .seller-view-header,
+  .seller-status-note,
+  .seller-view-footer,
+  .seller-insight-panel,
+  .seller-detail-card,
+  .seller-setup-card,
+  .seller-ad-card,
+  .seller-coupon-card,
+  .payment-stat-card,
+  .payment-list-item,
+  .payment-list-button,
+  .commission-info-bar,
+  .payment-summary,
+  .payment-premium-card,
+  .payment-pix-card,
+  .payment-instruction,
+  .auth-form,
+  .auth-mode-switch,
+  .auth-role-btn
+) {
+  background: var(--lk-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-lg) !important;
+  color: var(--lk-text) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(
+  .stat-card,
+  .admin-metric-card,
+  .report-action-card,
+  .category-heat-card,
+  .seller-detail-card,
+  .seller-stat-card,
+  .payment-list-button,
+  .auth-role-btn,
+  button,
+  a
+) {
+  transition: transform var(--duration) var(--ease), border-color var(--duration) var(--ease), background var(--duration) var(--ease), color var(--duration) var(--ease) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(
+  .stat-card:hover,
+  .admin-metric-card:hover,
+  .report-action-card:hover,
+  .category-heat-card:hover,
+  .seller-detail-card:hover,
+  .seller-stat-card:hover,
+  .payment-list-button:hover,
+  .auth-role-btn:hover
+) {
+  transform: translateY(-1px) !important;
+  border-color: var(--lk-border-strong) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn, .auth-btn, .period-filter, .btn-icon, .auth-back-home) {
+  min-height: 42px !important;
+  border-radius: var(--r-pill) !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn-primary, .auth-btn, .btn-success, .btn-pix, .pix-code-copy-btn),
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.tab.active, .chip.active, .auth-mode-switch button.active, .auth-role-btn.active) {
+  background: var(--lk-accent) !important;
+  background-image: none !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn-primary, .auth-btn, .btn-success, .btn-pix, .pix-code-copy-btn, .tab.active, .chip.active) svg {
+  color: var(--lk-bg) !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn-secondary, .btn-ghost, .period-filter, .btn-icon, .auth-back-home, .tab, .chip, .seller-coupon-filters button, .payments-filter button, .category-filter-btn) {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn-secondary, .btn-ghost, .period-filter, .btn-icon, .auth-back-home, .tab, .chip) svg {
+  color: var(--lk-text-muted) !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.btn-danger, .badge-danger, .reject-btn) {
+  background: rgba(255, 92, 92, 0.12) !important;
+  background-image: none !important;
+  border-color: rgba(255, 92, 92, 0.26) !important;
+  color: var(--lk-danger) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.badge-success, .confirmed-indicator) {
+  background: rgba(45, 212, 160, 0.12) !important;
+  color: var(--lk-success) !important;
+  border-color: rgba(45, 212, 160, 0.24) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.badge-warning, .admin-section-count, .tab-count) {
+  background: var(--lk-accent-dim) !important;
+  color: var(--lk-accent) !important;
+  border-color: var(--lk-accent-border) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.stat-icon, .stat-icon-wrapper, .alert-card-icon, .category-heat-icon, .category-management-icon, .empty-state svg, .payment-status-icon, .empty-payments-icon, .coupon-validation-icon, .profile-panel-icon) {
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.stat-value, .payment-stat-value, .payment-list-amount, .payment-detail-amount strong, .final-price, .revenue-value, .success-value) {
+  color: var(--lk-accent) !important;
+  font-weight: 800 !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.stat-label, .payment-stat-label, .seller-setup-kicker, .settings-group-title) {
+  color: var(--lk-accent) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  font-size: max(10px, 0.72rem) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(p, small, .muted-text, .seller-muted-text, .input-hint, .payment-list-coupon, .payment-list-buyer-date, .modal-description, .setting-item-info p) {
+  color: var(--lk-text-muted) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.input-field, .auth-input, input, textarea, select) {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  border-radius: var(--r-md) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.input-field, .auth-input, input, textarea, select)::placeholder {
+  color: var(--lk-text-muted) !important;
+}
+
+:is(.seller-page, .admin-page, .auth-wrapper, .payment-screen) :is(.input-field, .auth-input, input, textarea, select):focus {
+  outline: 2px solid var(--lk-accent-border) !important;
+  border-color: var(--lk-accent-border) !important;
+}
+
+:is(.seller-page, .admin-page) .tabs,
+:is(.seller-page, .admin-page) .seller-tabs-container .tabs,
+:is(.seller-page, .admin-page) .admin-tabs-container .tabs,
+.seller-page .payments-filter,
+.seller-page .seller-coupon-filters {
+  display: flex !important;
+  gap: 10px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  padding: 0 0 4px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+:is(.seller-page, .admin-page) .tabs::-webkit-scrollbar,
+.seller-page .payments-filter::-webkit-scrollbar,
+.seller-page .seller-coupon-filters::-webkit-scrollbar {
+  display: none !important;
+}
+
+:is(.seller-page, .admin-page) :is(.tab, .chip, .category-filter-btn, .seller-coupon-filters button, .payments-filter button) {
+  flex: 0 0 auto !important;
+  min-height: 38px !important;
+  padding: 8px 15px !important;
+  border-radius: var(--r-pill) !important;
+  font-size: 12px !important;
+}
+
+:is(.seller-page, .admin-page) :is(.tab.active, .chip.active, .category-filter-btn.active, .seller-coupon-filters button.active, .payments-filter button.active) {
+  background: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+  border-color: var(--lk-accent) !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav {
+  position: fixed !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: 0 !important;
+  z-index: 50 !important;
+  width: min(100% - 24px, 620px) !important;
+  transform: translateX(-50%) !important;
+  display: grid !important;
+  grid-auto-flow: column !important;
+  grid-auto-columns: 1fr !important;
+  gap: 4px !important;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  background: var(--lk-overlay) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-xl) var(--r-xl) 0 0 !important;
+  backdrop-filter: blur(20px) !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav :is(.bottom-nav-item, .nav-item) {
+  min-width: 0 !important;
+  min-height: 58px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  color: var(--lk-text-muted) !important;
+  border-radius: var(--r-md) !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav :is(.bottom-nav-item, .nav-item) svg {
+  width: 20px !important;
+  height: 20px !important;
+  color: currentColor !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav :is(.bottom-nav-item, .nav-item) span {
+  font-size: 10px !important;
+  line-height: 1 !important;
+  color: currentColor !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav :is(.bottom-nav-item.active, .nav-item.active) {
+  color: var(--lk-accent) !important;
+  background: var(--lk-accent-dim) !important;
+}
+
+:is(.seller-page, .admin-page) .bottom-nav .nav-indicator {
+  display: none !important;
+}
+
+.seller-page .seller-stats-grid,
+.admin-page .admin-stats-grid,
+.seller-page .payments-stats-grid,
+.admin-page .category-summary-grid,
+.admin-page .report-action-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.seller-page .seller-setup-card {
+  padding: 18px !important;
+  overflow: hidden !important;
+}
+
+.seller-page .seller-setup-steps {
+  display: grid !important;
+  gap: 8px !important;
+  margin: 16px 0 !important;
+}
+
+.seller-page .seller-setup-steps button {
+  width: 100% !important;
+  min-height: 44px !important;
+  justify-content: flex-start !important;
+  padding: 10px 12px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  text-align: left !important;
+}
+
+.seller-page .seller-setup-steps button.done {
+  background: var(--lk-accent-dim) !important;
+  border-color: var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.seller-page .seller-dashboard-actions,
+.seller-page .seller-setup-actions,
+.admin-page .admin-section-actions,
+.admin-page .category-heat-actions,
+.admin-page .moderation-actions,
+.admin-page .modal-actions,
+.seller-page .modal-actions {
+  display: flex !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+.seller-page .seller-dashboard-actions .btn,
+.seller-page .seller-setup-actions .btn,
+.admin-page .admin-section-actions .btn,
+.admin-page .category-heat-actions .btn,
+.admin-page .moderation-actions .btn,
+.modal-actions .btn {
+  flex: 1 1 150px !important;
+}
+
+.seller-page .mp-status-pill,
+.seller-page .btn-mp,
+.seller-page .mp-connect-logo .mp-logo-mark {
+  background: #20B6EA !important;
+  background-image: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.30) !important;
+  color: #062033 !important;
+}
+
+.seller-page .mp-status-pill {
+  min-height: 52px !important;
+  padding: 7px 12px !important;
+  border-radius: var(--r-lg) !important;
+}
+
+.seller-page .mp-status-pill .mp-logo-mark {
+  width: 64px !important;
+  min-width: 64px !important;
+  height: 34px !important;
+  border-radius: var(--r-pill) !important;
+}
+
+.seller-page .mp-connect-logo .mp-logo-mark {
+  width: 170px !important;
+  height: 80px !important;
+  border-radius: 42px !important;
+}
+
+.seller-page .mp-logo-mark img,
+.seller-page .mp-logo-mark svg {
+  width: 78% !important;
+  height: 78% !important;
+  object-fit: contain !important;
+}
+
+.seller-page .mp-status-copy strong,
+.seller-page .mp-status-copy small {
+  color: var(--lk-text) !important;
+}
+
+.seller-page .mp-status-copy small {
+  color: var(--lk-text-muted) !important;
+}
+
+.seller-page .btn-mp {
+  color: #062033 !important;
+  font-weight: 800 !important;
+}
+
+.seller-page .mp-info-modal .mp-connect-logo .mp-logo-mark {
+  margin-inline: auto !important;
+}
+
+:is(.seller-page, .admin-page, .payment-screen) :is(.modal-content, .mp-connect-modal, .seller-payment-detail-modal, .admin-product-modal-content, .category-editor-modal, .coupon-validation-modal),
+.modal-backdrop :is(.modal-content, .mp-connect-modal, .seller-payment-detail-modal, .admin-product-modal-content, .category-editor-modal, .coupon-validation-modal) {
+  width: min(94vw, 520px) !important;
+  max-height: min(88svh, 760px) !important;
+  overflow-y: auto !important;
+  background: var(--lk-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  border-radius: var(--r-xl) !important;
+}
+
+.modal-backdrop {
+  background: rgba(13, 13, 18, 0.78) !important;
+  backdrop-filter: blur(14px) !important;
+}
+
+.modal-handle {
+  background: var(--lk-border-strong) !important;
+}
+
+.admin-page .admin-product-modal-content {
+  width: min(94vw, 720px) !important;
+}
+
+.admin-page .admin-product-detail-main,
+.admin-page .admin-product-detail-thumbs button,
+.seller-page .photo-upload-slot,
+.seller-page .seller-ad-thumb {
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-md) !important;
+  overflow: hidden !important;
+}
+
+.admin-page .progress-bar,
+.seller-page .progress-bar {
+  background: var(--lk-surface) !important;
+}
+
+.admin-page .progress-fill,
+.seller-page .progress-fill {
+  background: var(--lk-accent) !important;
+}
+
+.admin-page .toggle,
+.seller-page .toggle {
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+}
+
+.admin-page .toggle.active,
+.seller-page .toggle.active {
+  background: var(--lk-accent) !important;
+}
+
+.auth-wrapper .auth-logo,
+.auth-wrapper .auth-logo span {
+  color: var(--lk-text) !important;
+  font-family: var(--font-display) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.auth-wrapper .auth-subtitle {
+  color: var(--lk-text-muted) !important;
+}
+
+.auth-wrapper .auth-back-home,
+.auth-wrapper .auth-mode-switch button:not(.active) {
+  background-color: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+}
+
+.auth-wrapper .auth-back-home {
+  background: var(--lk-surface) !important;
+  background-color: var(--lk-surface) !important;
+  background-image: none !important;
+  border-color: var(--lk-border-md) !important;
+  color: var(--lk-accent) !important;
+}
+
+body:has(.auth-wrapper) #btnBackHome {
+  background: var(--lk-surface) !important;
+  background-color: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-accent) !important;
+}
+
+.auth-wrapper .auth-form {
+  padding: 18px !important;
+}
+
+.auth-wrapper .auth-switch span {
+  color: var(--lk-accent) !important;
+}
+
+.auth-wrapper .auth-error {
+  background: rgba(255, 92, 92, 0.12) !important;
+  border: 1px solid rgba(255, 92, 92, 0.26) !important;
+  color: var(--lk-danger) !important;
+}
+
+.auth-wrapper .auth-error.success {
+  background: rgba(45, 212, 160, 0.12) !important;
+  border-color: rgba(45, 212, 160, 0.24) !important;
+  color: var(--lk-success) !important;
+}
+
+.payment-screen .payment-header,
+.payment-screen .payment-header-bg {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+.payment-screen .pix-qr-shell {
+  background: #fff !important;
+  border-radius: var(--r-lg) !important;
+  padding: 16px !important;
+}
+
+.payment-screen .pix-copy-action {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.payment-screen .pix-error-state {
+  background: rgba(255, 92, 92, 0.12) !important;
+  border: 1px solid rgba(255, 92, 92, 0.26) !important;
+  color: var(--lk-text) !important;
+}
+
+@media (max-width: 640px) {
+  :is(.seller-page, .admin-page) {
+    width: 100% !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+  }
+
+  :is(.seller-page, .admin-page) .app-header {
+    padding: 12px 14px !important;
+  }
+
+  :is(.seller-page, .admin-page) .app-body {
+    padding: 14px 14px calc(104px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .seller-page .seller-header-actions,
+  .admin-page .app-header > div:last-child {
+    gap: 8px !important;
+  }
+
+  .seller-page .seller-header-actions #open-buyer-mode,
+  .admin-page .hide-mobile {
+    display: none !important;
+  }
+
+  .seller-page .seller-stats-grid,
+  .admin-page .admin-stats-grid,
+  .seller-page .payments-stats-grid,
+  .admin-page .category-summary-grid,
+  .admin-page .report-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .seller-page .mp-status-pill {
+    min-width: 0 !important;
+    max-width: 188px !important;
+  }
+
+  .seller-page .mp-status-pill .mp-logo-mark {
+    width: 54px !important;
+    min-width: 54px !important;
+  }
+
+  .seller-page .mp-status-copy strong {
+    font-size: 12px !important;
+  }
+
+  .seller-page .mp-status-copy small {
+    font-size: 10px !important;
+  }
+}
