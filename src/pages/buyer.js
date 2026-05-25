@@ -248,7 +248,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#C8F135' };
 }
 
 async function syncCategories() {
@@ -549,6 +549,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const greetingName = isAuthenticated()
     ? (user.name || user.fullName || 'usuario').split(' ')[0]
     : 'visitante';
+  const featuredProduct = filteredProducts.length
+    ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
+    : null;
 
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
@@ -557,12 +560,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         <div class="buyer-header-top">
           <div class="buyer-greeting">
             <h1>Olá, ${escapeHTML(greetingName)}</h1>
-            <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
+            <div class="inst-badge">Linka</div>
           </div>
           <div class="buyer-actions">
             ${showSellerAccess ? `
               <button class="buyer-mode-btn" id="btnSellerMode" title="${canUseSellerMode() ? 'Abrir painel de vendas' : 'Ativar modo vendedor'}">
-                ${icons.package}
+                ${icons.plus}
                 <span>Vender</span>
               </button>
             ` : `
@@ -581,6 +584,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         <div class="search-bar">
           ${icons.search}
           <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" />
+          <button class="buyer-filter-btn" type="button" id="btnBuyerFilter" aria-label="Abrir filtros">${icons.adjustments}</button>
         </div>
         
         <!-- CATEGORY CHIPS (Now in header for stickiness) -->
@@ -607,6 +611,17 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         </div>
       ` : ''}
 
+      ${featuredProduct ? `
+        <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque ${escapeHTML(featuredProduct.title)}">
+          <div class="buyer-featured-copy">
+            <span class="buyer-featured-badge">${icons.bolt} Destaque</span>
+            <strong>${escapeHTML(featuredProduct.title)}</strong>
+            <small>${formatCurrency(featuredProduct.discountPrice)} hoje</small>
+          </div>
+          <div class="buyer-featured-emoji" aria-hidden="true">%</div>
+        </button>
+      ` : ''}
+
       <div class="list-header">
         <div class="section-divider"></div>
         <div class="offers-count">${filteredProducts.length} ofertas disponíveis</div>
@@ -628,7 +643,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               <div class="cat-badge">${catIcon} ${escapeHTML(catName)}</div>
               ${isSoldOut 
                 ? `<div class="discount-badge soldout-badge">ESGOTADO</div>`
-                : `<div class="discount-badge">-${p.discount}%</div>`
+                : `<div class="discount-badge">−${p.discount}%</div>`
               }
             </div>
             
@@ -727,6 +742,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   container.querySelector('#btnLoginHeader')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
   });
+  container.querySelector('#btnBuyerFilter')?.addEventListener('click', () => {
+    focusCategoriesSection(container);
+  });
   container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
   });
@@ -787,6 +805,10 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       event.stopPropagation();
       openProductDetail(btn.dataset.id, container);
     });
+  });
+
+  container.querySelector('[data-featured-product]')?.addEventListener('click', (event) => {
+    openProductDetail(event.currentTarget.dataset.featuredProduct, container);
   });
 
   container.querySelectorAll('[data-product-card]').forEach(card => {
@@ -1497,23 +1519,22 @@ function renderProfileActions(role) {
 }
 
 function renderProfileThemePanel(currentTheme) {
-  const isDark = currentTheme === 'dark';
   return `
     <section class="profile-panel profile-theme-panel">
       <div class="profile-panel-heading">
         <div class="profile-panel-icon">${icons.settings}</div>
         <div>
           <h2>Aparência</h2>
-          <p>Escolha o tema que fica melhor para ler e usar no celular.</p>
+          <p>O Linka usa tema escuro por padrão para leitura confortável no celular.</p>
         </div>
       </div>
-      <button type="button" class="profile-theme-toggle" id="btnProfileThemeToggle" aria-label="Alternar tema do aplicativo">
+      <div class="profile-theme-toggle" aria-label="Tema escuro ativo">
         <span class="profile-theme-state">
-          <strong>${isDark ? 'Tema escuro ativo' : 'Tema claro ativo'}</strong>
-          <small>${isDark ? 'Toque para voltar ao claro' : 'Toque para usar o tema escuro'}</small>
+          <strong>Tema escuro ativo</strong>
+          <small>Padrão do aplicativo</small>
         </span>
-        <span class="profile-theme-pill">${isDark ? 'Escuro' : 'Claro'}</span>
-      </button>
+        <span class="profile-theme-pill">Escuro</span>
+      </div>
     </section>
   `;
 }
@@ -1895,7 +1916,7 @@ function renderProductDetail(container) {
             <div class="cat-badge detail-category-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
             ${isSoldOut
               ? '<div class="discount-badge soldout-badge detail-discount-badge">ESGOTADO</div>'
-              : `<div class="discount-badge detail-discount-badge">-${p.discount}%</div>`
+              : `<div class="discount-badge detail-discount-badge">−${p.discount}%</div>`
             }
             ${images.length > 1 ? `
               <div class="detail-gallery-dots" id="detailGalleryDots" aria-hidden="true">
@@ -2152,7 +2173,7 @@ async function renderNotifications(container) {
 
   const notifs = await getNotifications(userId);
   const typeIcons = { success: icons.checkCircle, warning: icons.alertTriangle, error: icons.x, info: icons.bell };
-  const typeColors = { success: '#00E5A0', warning: '#F59E0B', error: '#E24B4A', info: '#6B7280' };
+  const typeColors = { success: 'var(--lk-success)', warning: 'var(--lk-warning)', error: 'var(--lk-danger)', info: 'var(--lk-text-muted)' };
 
   container.innerHTML = `
     <div class="buyer-wrapper">
@@ -2163,7 +2184,7 @@ async function renderNotifications(container) {
           </button>
           <h1>Notificações</h1>
         </div>
-        <button class="btn-ghost" id="btnMarkAllRead" style="font-size:12px;color:#00E5A0;">Marcar tudo lido</button>
+        <button class="btn-ghost" id="btnMarkAllRead" style="font-size:12px;color:var(--lk-success);">Marcar tudo lido</button>
       </header>
       <div class="notifications-list">
         ${notifs.length === 0 ? `
