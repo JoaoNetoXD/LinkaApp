@@ -833,28 +833,26 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 18px;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px),
-    #080910;
-  background-size: 36px 36px, 36px 36px, auto;
-  color: #f7f8fb;
+  gap: 16px;
+  background: #0D0D12;
+  color: #F0EEE8;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
 }
 
 .boot-logo {
-  font-size: 2rem;
-  font-weight: 800;
-  letter-spacing: 0;
+  font-family: var(--font-body, 'DM Sans', sans-serif);
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .boot-logo span {
-  color: var(--app-accent, #22e6a8);
+  color: var(--lk-accent, #C8F135);
 }
 
 .boot-loader {
-  width: 172px;
-  height: 4px;
+  width: 148px;
+  height: 3px;
   border-radius: 999px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.08);
@@ -866,7 +864,7 @@ textarea:focus-visible {
   width: 42%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, #22e6a8, transparent);
+  background: linear-gradient(90deg, transparent, #C8F135, transparent);
   animation: boot-loader 900ms ease-in-out infinite;
 }
 

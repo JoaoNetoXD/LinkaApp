@@ -8568,3 +8568,82 @@ body:has(.buyer-wrapper) .bottom-nav-item .nav-badge,
   cursor: not-allowed !important;
   opacity: 0.55 !important;
 }
+
+/* UX cleanup: keep buyer feed and seller header calm on small screens */
+.buyer-wrapper .feed-filters {
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  transform: translateY(-4px) !important;
+  pointer-events: none !important;
+  transition:
+    max-height 180ms var(--ease),
+    opacity 180ms var(--ease),
+    transform 180ms var(--ease),
+    padding 180ms var(--ease) !important;
+}
+
+.buyer-wrapper .feed-filters.open {
+  max-height: 46px !important;
+  padding: 10px 0 4px !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+.buyer-wrapper .filter-select {
+  min-height: 30px !important;
+  max-width: none !important;
+  padding: 6px 24px 6px 10px !important;
+  background: var(--lk-card) !important;
+  border-color: var(--lk-border) !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.buyer-wrapper .buyer-filter-btn.active {
+  background: var(--lk-accent-dim) !important;
+  border-color: var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .buyer-categories-header {
+  padding-bottom: 14px !important;
+}
+
+.buyer-wrapper .buyer-categories-header::after,
+.buyer-wrapper .buyer-header::after {
+  display: none !important;
+}
+
+.buyer-wrapper .category-search-shortcut {
+  margin-top: 12px !important;
+  min-height: 44px !important;
+  background: var(--lk-surface) !important;
+  border-color: var(--lk-border) !important;
+}
+
+.buyer-wrapper .category-spotlight {
+  margin-top: 12px !important;
+}
+
+.buyer-wrapper .category-section {
+  border-top: 0 !important;
+  padding-top: 8px !important;
+}
+
+@media (max-width: 640px) {
+  .seller-page .seller-header-actions #open-buyer-mode {
+    display: inline-flex !important;
+  }
+
+  .seller-page .seller-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+  }
+}

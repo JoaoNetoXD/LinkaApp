@@ -127,6 +127,7 @@ let activeCategory = 'all';
 let searchQuery = '';
 let sortBy = 'newest';
 let minDiscount = '0';
+let filtersOpen = false;
 let currentView = 'home'; // home | categories | detail | coupons | payment | notifications
 let currentPayment = null;
 let selectedProduct = null;
@@ -748,7 +749,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           <div class="search-bar">
             ${icons.search}
             <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" autocomplete="off" />
-            <button class="buyer-filter-btn" type="button" id="btnBuyerFilter" aria-label="Abrir filtros">${icons.adjustments}</button>
+            <button class="buyer-filter-btn ${filtersOpen ? 'active' : ''}" type="button" id="btnBuyerFilter" aria-label="Abrir filtros" aria-expanded="${filtersOpen ? 'true' : 'false'}">${icons.adjustments}</button>
           </div>
           ${searchSuggestions.length ? `
             <div class="search-suggestions" role="listbox" aria-label="SugestÃµes de busca">
@@ -774,7 +775,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             `).join('')}
           </div>
         </div>
-        <div class="feed-filters" aria-label="Filtros de ofertas">
+        <div class="feed-filters ${filtersOpen ? 'open' : ''}" aria-label="Filtros de ofertas">
           <select id="sortBySelect" class="filter-select" aria-label="Ordenar ofertas">
             <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Mais recentes</option>
             <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Maior desconto</option>
@@ -951,7 +952,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     window.location.hash = '#/auth';
   });
   container.querySelector('#btnBuyerFilter')?.addEventListener('click', () => {
-    focusCategoriesSection(container);
+    filtersOpen = !filtersOpen;
+    renderBuyerPage(container);
   });
   container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
