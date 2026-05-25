@@ -6096,3 +6096,218 @@ body:has(.buyer-wrapper) {
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
+
+/* Buyer refinement pass 2: stronger contrast, zero CTA gradients, quieter details */
+body:has(.buyer-wrapper) :is(.btn-primary, .auth-btn, .primary-option, .category-spotlight-action),
+.buyer-wrapper :is(.btn-primary, .buyer-mode-btn, .category-spotlight-action, .detail-buy-button, .get-coupon-btn, .profile-save-btn),
+.payment-modal-overlay :is(.btn-primary, .primary-option) {
+  background: var(--lk-accent) !important;
+  background-image: none !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+  text-shadow: none !important;
+}
+
+body:has(.buyer-wrapper) :is(.btn-primary, .auth-btn, .primary-option, .category-spotlight-action) svg,
+.buyer-wrapper :is(.btn-primary, .buyer-mode-btn, .category-spotlight-action, .detail-buy-button, .get-coupon-btn, .profile-save-btn) svg,
+.payment-modal-overlay :is(.btn-primary, .primary-option) svg {
+  color: var(--lk-bg) !important;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+.buyer-wrapper .chip.active svg {
+  color: var(--lk-bg) !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper .notif-btn,
+.buyer-wrapper .notification-btn,
+.buyer-wrapper .icon-btn,
+.payment-modal-overlay .icon-btn {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .icon-btn svg,
+.payment-modal-overlay .icon-btn svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper .detail-header {
+  gap: 12px !important;
+  align-items: center !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.buyer-wrapper .detail-header .icon-btn {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: var(--r-md) !important;
+}
+
+body:has(.buyer-wrapper) .buyer-wrapper .detail-header .icon-btn,
+body:has(.buyer-wrapper) .buyer-wrapper > .minimal-header.detail-header .icon-btn,
+body:has(.buyer-wrapper) #btnBackHome {
+  background-color: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .detail-header h1 {
+  font-size: 25px !important;
+  color: var(--lk-text) !important;
+}
+
+.buyer-wrapper :is(.profile-panel, .profile-login-panel, .profile-theme-panel, .coupons-empty-state, .notifications-empty-state, .detail-main-card, .seller-detail-card-v2, .payment-modal-content, .login-required-modal) {
+  background: var(--lk-card) !important;
+  background-image: none !important;
+  border-color: var(--lk-border-md) !important;
+}
+
+.buyer-wrapper :is(.profile-login-panel .btn-primary, .coupons-empty-state .btn-primary, .notifications-empty-state .btn-primary, .profile-theme-pill) {
+  background: var(--lk-accent) !important;
+  background-image: none !important;
+  color: var(--lk-bg) !important;
+}
+
+.buyer-wrapper .profile-panel-icon {
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .profile-theme-toggle {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border-color: var(--lk-border) !important;
+}
+
+.buyer-wrapper .payment-modal-content,
+.payment-modal-overlay .payment-modal-content {
+  background: var(--lk-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+}
+
+.payment-modal-overlay .btn-payment-option {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+}
+
+.payment-modal-overlay .btn-payment-option:not(.primary-option) svg {
+  color: var(--lk-accent) !important;
+  stroke: currentColor !important;
+}
+
+.payment-modal-overlay .login-required-product {
+  background: var(--lk-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--lk-border) !important;
+}
+
+body:has(.buyer-wrapper) .payment-modal-body .btn-payment-option.primary-option,
+.payment-modal-overlay .payment-modal-body .btn-payment-option.primary-option {
+  background-color: var(--lk-accent) !important;
+  background-image: none !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+body:has(.buyer-wrapper) .payment-modal-body .btn-payment-option.primary-option small,
+.payment-modal-overlay .payment-modal-body .btn-payment-option.primary-option small {
+  color: color-mix(in srgb, var(--lk-bg) 78%, transparent) !important;
+}
+
+body:has(.buyer-wrapper) .payment-modal-body .btn-payment-option.primary-option svg,
+.payment-modal-overlay .payment-modal-body .btn-payment-option.primary-option svg {
+  color: var(--lk-bg) !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper .detail-gallery-hint,
+.buyer-wrapper .detail-category-badge,
+.buyer-wrapper .detail-trust-grid {
+  display: none !important;
+}
+
+.buyer-wrapper .detail-container {
+  gap: 14px !important;
+}
+
+.buyer-wrapper .detail-gallery-shell,
+.buyer-wrapper .detail-main-card,
+.buyer-wrapper .seller-detail-card-v2 {
+  border-radius: var(--r-lg) !important;
+}
+
+.buyer-wrapper .detail-main-card {
+  padding: 18px !important;
+}
+
+.buyer-wrapper .detail-main-card h2 {
+  font-size: 25px !important;
+  line-height: 1.12 !important;
+}
+
+.buyer-wrapper .detail-main-card p {
+  color: var(--lk-text-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+.buyer-wrapper .detail-price-current {
+  font-size: 36px !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .detail-price-original {
+  color: var(--lk-text-muted) !important;
+}
+
+.buyer-wrapper .detail-price-discount {
+  background: var(--lk-accent-dim) !important;
+  background-image: none !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .seller-detail-status {
+  background: transparent !important;
+  border-color: var(--lk-border) !important;
+  color: var(--lk-text-muted) !important;
+}
+
+.buyer-wrapper .seller-detail-status svg {
+  color: var(--lk-accent) !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper .seller-whatsapp-button {
+  background: var(--lk-success) !important;
+  background-image: none !important;
+  border-color: var(--lk-success) !important;
+  color: var(--lk-bg) !important;
+}
+
+.buyer-wrapper .seller-whatsapp-button svg {
+  color: var(--lk-bg) !important;
+  fill: currentColor !important;
+}
+
+.buyer-wrapper .detail-buy-button {
+  min-height: 56px !important;
+  color: var(--lk-bg) !important;
+}
+
+.buyer-wrapper .detail-buy-button svg {
+  color: var(--lk-bg) !important;
+  stroke: currentColor !important;
+}
