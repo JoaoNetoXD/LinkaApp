@@ -208,6 +208,23 @@ const INSTALL_PROMPT_SEEN_KEY = 'linka_install_prompt_seen_v1';
 const FIRST_RUN_TOUR_KEY = 'linka_first_run_tour_seen_v1';
 let deferredInstallPrompt = null;
 
+export function renderLinkaLogo(className = 'linka-brand-logo') {
+  return `
+    <span class="${className}" aria-label="Linka">
+      <span class="${className}__mark" aria-hidden="true">
+        <svg viewBox="0 0 42 42" role="img" focusable="false">
+          <rect x="5" y="5" width="32" height="32" rx="12" />
+          <path d="M15 14v14h12" />
+          <path d="M26.5 14.5l-11 11" />
+          <circle cx="15" cy="14" r="2.6" />
+          <circle cx="27" cy="28" r="2.6" />
+        </svg>
+      </span>
+      <span class="${className}__word">Linka</span>
+    </span>
+  `;
+}
+
 function isMobileInstallSurface() {
   const userAgent = navigator.userAgent || '';
   const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
@@ -284,30 +301,102 @@ function showInstallPrompt(mode = 'native') {
 
 const firstRunTourSteps = [
   {
-    icon: icons.shield,
+    scene: 'feed',
     kicker: 'Bem-vindo',
-    title: 'Ofertas da sua instituição',
-    text: 'Veja produtos e serviços publicados por alunos, já revisados para compradores da Linka.',
+    title: 'Ofertas reais, direto no app',
+    text: 'Abra o Linka, veja fotos, preço e oferta aprovada sem precisar procurar em grupos ou conversas soltas.',
   },
   {
-    icon: icons.ticket,
+    scene: 'checkout',
     kicker: 'Comprar',
     title: 'Escolha, pague e receba o cupom',
-    text: 'Abra uma oferta, confira as fotos e finalize por Pix ou cartão quando o vendedor estiver conectado.',
+    text: 'O pagamento acontece pelo Mercado Pago do vendedor. Depois, o cupom fica salvo na sua conta.',
   },
   {
-    icon: icons.checkCircle,
+    scene: 'coupon',
     kicker: 'Usar',
-    title: 'Cupom validado no atendimento',
-    text: 'Depois da compra, o cupom fica salvo na sua conta. O vendedor valida manualmente quando você usar.',
+    title: 'Cupom seguro para usar uma vez',
+    text: 'No atendimento, o vendedor confere o código e marca como usado. Assim o mesmo cupom não é reaproveitado.',
   },
   {
-    icon: icons.package,
+    scene: 'seller',
     kicker: 'Vender',
-    title: 'Também dá para anunciar',
-    text: 'Ative o modo vendedor, conecte o Mercado Pago e acompanhe anúncios, vendas e cupons em tempo real.',
+    title: 'Venda com sua própria conta',
+    text: 'Ative o modo vendedor, cadastre produtos, acompanhe vendas e valide cupons no painel da loja.',
   },
 ];
+
+function renderFirstRunTourScene(scene = 'feed') {
+  if (scene === 'checkout') {
+    return `
+      <div class="first-run-tour-phone">
+        <div class="tour-scene-top">
+          <span>${icons.ticket}</span>
+          <strong>Comprar cupom</strong>
+        </div>
+        <div class="tour-product-row">
+          <span class="tour-product-thumb"></span>
+          <span><b>Bolo no pote</b><small>Oferta aprovada</small></span>
+        </div>
+        <div class="tour-price-row"><span>Total</span><strong>R$ 9,00</strong></div>
+        <div class="tour-action-pill">${icons.check} Pagar e receber cupom</div>
+      </div>
+    `;
+  }
+
+  if (scene === 'coupon') {
+    return `
+      <div class="first-run-tour-phone">
+        <div class="tour-scene-top">
+          <span>${icons.checkCircle}</span>
+          <strong>Validação</strong>
+        </div>
+        <div class="tour-coupon-ticket">
+          <small>Código do cupom</small>
+          <b>LKA7-92Q</b>
+        </div>
+        <div class="tour-status-list">
+          <span>${icons.shield} Ativo agora</span>
+          <span>${icons.clock} Válido até o prazo da oferta</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (scene === 'seller') {
+    return `
+      <div class="first-run-tour-phone">
+        <div class="tour-scene-top">
+          <span>${icons.package}</span>
+          <strong>Painel vendedor</strong>
+        </div>
+        <div class="tour-metric-grid">
+          <span><b>3</b><small>Anúncios</small></span>
+          <span><b>2</b><small>Cupons</small></span>
+        </div>
+        <div class="tour-action-pill">${icons.plus} Criar anúncio</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="first-run-tour-phone">
+      <div class="tour-scene-top">
+        <span>${icons.shield}</span>
+        <strong>Vitrine Linka</strong>
+      </div>
+      <div class="tour-offer-card">
+        <span class="tour-offer-image"></span>
+        <span class="tour-offer-info">
+          <b>Camiseta básica</b>
+          <small>Aprovado pela Linka</small>
+          <strong>R$ 33,75</strong>
+        </span>
+      </div>
+      <div class="tour-action-pill">${icons.tag} Pegar cupom</div>
+    </div>
+  `;
+}
 
 function setFirstRunTourOpen(isOpen) {
   document.documentElement.classList.toggle('first-run-tour-lock', isOpen);
@@ -339,11 +428,11 @@ function renderFirstRunTourStep(shell, stepIndex) {
   if (!card) return;
 
   card.innerHTML = `
-    <button class="first-run-tour-close" type="button" aria-label="Fechar apresentação">${icons.x}</button>
-    <div class="first-run-tour-visual" aria-hidden="true">
-      <span class="first-run-tour-ring"></span>
-      <span class="first-run-tour-icon">${step.icon}</span>
+    <div class="first-run-tour-head">
+      ${renderLinkaLogo('first-run-tour-logo')}
+      <button class="first-run-tour-close" type="button" aria-label="Fechar apresentação">${icons.x}</button>
     </div>
+    <div class="first-run-tour-visual" aria-hidden="true">${renderFirstRunTourScene(step.scene)}</div>
     <div class="first-run-tour-copy">
       <span class="first-run-tour-kicker">${escapeHTML(step.kicker)}</span>
       <h2>${escapeHTML(step.title)}</h2>

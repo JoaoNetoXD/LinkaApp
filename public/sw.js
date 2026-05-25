@@ -1,10 +1,13 @@
 // Linka — Service Worker (v1.2)
-const CACHE_NAME = 'linka-v1.7';
+const CACHE_NAME = 'linka-v1.8';
 const ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/icons/favicon.svg',
   '/icons/favicon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', (e) => {
