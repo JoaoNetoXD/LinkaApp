@@ -5869,3 +5869,230 @@ body:has(.buyer-wrapper) .bottom-nav-item .nav-indicator,
     font-size: 12px !important;
   }
 }
+
+/* Buyer refinement: simpler, direct, no decorative gradients */
+body:has(.buyer-wrapper) {
+  --font-display: 'DM Sans', sans-serif;
+}
+
+.buyer-wrapper :is(h1, h2, h3, h4, strong, button, .chip, .price-discount, .price-main, .detail-price-current) {
+  font-family: var(--font-body) !important;
+  font-style: normal !important;
+  letter-spacing: 0 !important;
+}
+
+.buyer-wrapper .buyer-greeting h1,
+.buyer-wrapper > .page-simple-header h1,
+.buyer-wrapper .category-section-heading h2,
+.buyer-wrapper .detail-header h1 {
+  font-family: var(--font-body) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+}
+
+.buyer-wrapper .avatar-btn {
+  background: var(--lk-card) !important;
+  border-color: var(--lk-border-md) !important;
+}
+
+.buyer-wrapper .buyer-mode-btn,
+.buyer-wrapper .category-spotlight-action,
+.buyer-wrapper .detail-buy-button,
+.buyer-wrapper .get-coupon-btn,
+.buyer-wrapper .product-card .btn-primary {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.buyer-wrapper .buyer-featured-strip {
+  display: none !important;
+}
+
+.buyer-wrapper .products-list {
+  gap: 14px !important;
+}
+
+.buyer-wrapper .product-card {
+  background: var(--lk-card) !important;
+  border-color: var(--lk-border) !important;
+}
+
+.buyer-wrapper .card-image-area {
+  height: 118px !important;
+  min-height: 118px !important;
+  background: var(--lk-surface) !important;
+}
+
+.buyer-wrapper .product-card .cat-badge {
+  display: none !important;
+}
+
+.buyer-wrapper .card-body {
+  gap: 10px !important;
+  padding: 12px !important;
+}
+
+.buyer-wrapper .card-title {
+  min-height: 36px;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+}
+
+.buyer-wrapper .price-discount,
+.buyer-wrapper .price-main {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+}
+
+.buyer-wrapper .price-original {
+  font-size: 11px !important;
+}
+
+.buyer-wrapper .product-card .card-timer,
+.buyer-wrapper .product-card .card-verified-pill {
+  display: none !important;
+}
+
+.buyer-wrapper .get-coupon-btn,
+.buyer-wrapper .product-card .btn-primary {
+  min-height: 38px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.buyer-wrapper .buyer-categories-header,
+.buyer-wrapper .category-spotlight,
+.buyer-wrapper .category-app-card,
+.buyer-wrapper .detail-main-card,
+.buyer-wrapper .seller-detail-card-v2 {
+  background: var(--lk-card) !important;
+  border-color: var(--lk-border-md) !important;
+}
+
+.buyer-wrapper .category-spotlight {
+  margin-inline: 14px !important;
+  padding: 18px !important;
+}
+
+.buyer-wrapper .category-spotlight h2 {
+  color: var(--lk-text) !important;
+  font-size: 22px !important;
+  line-height: 1.1 !important;
+}
+
+.buyer-wrapper .category-app-card {
+  overflow: hidden;
+}
+
+.buyer-wrapper .category-app-image::after,
+.buyer-wrapper .category-cover-icon {
+  display: none !important;
+}
+
+.buyer-wrapper .category-app-copy {
+  gap: 12px !important;
+}
+
+.buyer-wrapper .category-app-icon {
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .category-app-icon svg {
+  color: var(--lk-accent) !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper .category-deal-pill {
+  background: var(--lk-danger) !important;
+  color: white !important;
+}
+
+.buyer-wrapper .detail-price-row {
+  align-items: center !important;
+}
+
+.buyer-wrapper .detail-price-current {
+  color: var(--lk-accent) !important;
+  font-size: 34px !important;
+  font-weight: 800 !important;
+}
+
+.buyer-wrapper .detail-price-discount {
+  background: var(--lk-accent-dim) !important;
+  color: var(--lk-accent) !important;
+}
+
+.buyer-wrapper .seller-detail-compact {
+  display: grid !important;
+  gap: 12px !important;
+  padding: 16px !important;
+  border-radius: var(--r-lg) !important;
+}
+
+.buyer-wrapper .seller-detail-compact .seller-detail-head {
+  margin: 0 !important;
+}
+
+.buyer-wrapper .seller-detail-compact .seller-detail-avatar {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+  color: var(--lk-text) !important;
+}
+
+.buyer-wrapper .seller-detail-name {
+  color: var(--lk-text) !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.buyer-wrapper .seller-detail-subtitle {
+  color: var(--lk-text-muted) !important;
+  font-size: 12px !important;
+}
+
+.buyer-wrapper .seller-detail-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  padding: 7px 10px;
+  border: 1px solid var(--lk-accent-border);
+  border-radius: var(--r-pill);
+  background: var(--lk-accent-dim);
+  color: var(--lk-accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.buyer-wrapper .seller-detail-status svg {
+  width: 15px;
+  height: 15px;
+}
+
+.buyer-wrapper .seller-detail-facts {
+  display: none !important;
+}
+
+.buyer-wrapper .seller-whatsapp-button {
+  min-height: 42px !important;
+  border: 1px solid color-mix(in srgb, var(--lk-success) 55%, transparent) !important;
+  border-radius: var(--r-sm) !important;
+  background: color-mix(in srgb, var(--lk-success) 16%, transparent) !important;
+  color: var(--lk-success) !important;
+}
+
+.buyer-wrapper .detail-buy-button {
+  border-radius: var(--r-md) !important;
+  font-size: 15px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}

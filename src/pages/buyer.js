@@ -669,7 +669,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               <div class="card-actions">
                 <button class="btn-primary get-coupon-btn" ${isSoldOut ? 'disabled' : ''} data-id="${p.id}">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                  Pegar cupom
+                  Comprar
                 </button>
                 <button class="btn-details view-details-btn" data-id="${p.id}">
                   Ver detalhes
@@ -1889,11 +1889,7 @@ function renderProductDetail(container) {
     const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
     const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
     selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
-    const sellerSubtitle = [p.seller?.course, p.seller?.semester].filter(Boolean).join(' - ') || 'Vendedor no Linka';
     const whatsappDigits = String(p.seller?.whatsapp || '').replace(/\D/g, '');
-    const productPublishedAt = p.createdAt
-      ? new Date(p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-      : '';
 
     container.innerHTML = `
       <div class="buyer-wrapper">
@@ -1962,33 +1958,23 @@ function renderProductDetail(container) {
             </div>
           </section>
 
-          <section class="seller-detail-card-v2">
+          <section class="seller-detail-card-v2 seller-detail-compact">
             <div class="seller-detail-head">
               <div class="user-avatar seller-detail-avatar">${escapeHTML(sellerInitials)}</div>
               <div>
                 <div class="seller-detail-name">${escapeHTML(p.seller?.name || 'Vendedor')}</div>
-                <div class="seller-detail-subtitle">${escapeHTML(sellerSubtitle)}</div>
+                <div class="seller-detail-subtitle">Vendedor no Linka</div>
               </div>
             </div>
 
-            <div class="seller-detail-facts">
-              <div>
-                ${icons.shield}
-                <span>Anúncio aprovado pela Linka</span>
-              </div>
-              <div>
-                ${icons.whatsapp}
-                <span>${whatsappDigits ? 'Fale direto com o vendedor' : 'Contato do vendedor indisponível'}</span>
-              </div>
-              <div>
-                ${icons.tag}
-                <span>${escapeHTML(catName)}${productPublishedAt ? ` - publicado em ${escapeHTML(productPublishedAt)}` : ''}</span>
-              </div>
+            <div class="seller-detail-status">
+              ${icons.shield}
+              <span>Anúncio aprovado pela Linka</span>
             </div>
 
             ${whatsappDigits ? `
               <a href="https://wa.me/${encodeURIComponent(whatsappDigits)}?text=Oi! Vi seu anuncio '${encodeURIComponent(p.title)}' no Linka." target="_blank" rel="noopener" class="btn-whatsapp seller-whatsapp-button">
-                ${icons.whatsapp} Chamar vendedor no WhatsApp
+                ${icons.whatsapp} Falar com vendedor
               </a>
             ` : ''}
           </section>
