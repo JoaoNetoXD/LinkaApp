@@ -8647,3 +8647,229 @@ body:has(.buyer-wrapper) .bottom-nav-item .nav-badge,
     flex-wrap: wrap !important;
   }
 }
+
+/* First-run mini tour */
+.first-run-tour-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: end center;
+  padding: 18px;
+  background: rgba(13, 13, 18, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: first-run-fade-in 180ms var(--ease) both;
+}
+
+.first-run-tour-shell.closing {
+  animation: first-run-fade-out 180ms var(--ease) both;
+}
+
+.first-run-tour-card {
+  width: min(100%, 430px);
+  min-height: 430px;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid var(--lk-border-md);
+  border-radius: 28px 28px 22px 22px;
+  background: var(--lk-card);
+  color: var(--lk-text);
+}
+
+.first-run-tour-close {
+  justify-self: end;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--lk-border);
+  border-radius: var(--r-md);
+  background: var(--lk-surface);
+  color: var(--lk-text-muted);
+}
+
+.first-run-tour-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.first-run-tour-visual {
+  position: relative;
+  width: 124px;
+  height: 124px;
+  margin: 4px auto 0;
+  display: grid;
+  place-items: center;
+}
+
+.first-run-tour-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--lk-accent-border);
+  border-radius: 34px;
+  background: var(--lk-accent-dim);
+}
+
+.first-run-tour-ring::before,
+.first-run-tour-ring::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+  border: 1px solid var(--lk-border);
+}
+
+.first-run-tour-ring::before {
+  inset: 14px;
+}
+
+.first-run-tour-ring::after {
+  inset: 28px;
+}
+
+.first-run-tour-icon {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--lk-accent-border);
+  border-radius: 18px;
+  background: var(--lk-bg);
+  color: var(--lk-accent);
+}
+
+.first-run-tour-icon svg {
+  width: 28px;
+  height: 28px;
+  stroke: currentColor;
+}
+
+.first-run-tour-copy {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.first-run-tour-kicker {
+  color: var(--lk-accent);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.first-run-tour-copy h2 {
+  margin: 0;
+  color: var(--lk-text);
+  font-family: var(--font-body);
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.08;
+}
+
+.first-run-tour-copy p {
+  max-width: 330px;
+  margin: 0 auto;
+  color: var(--lk-text-muted);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.first-run-tour-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.first-run-tour-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--lk-border-strong);
+}
+
+.first-run-tour-dot.active {
+  width: 24px;
+  background: var(--lk-accent);
+}
+
+.first-run-tour-actions {
+  display: grid;
+  grid-template-columns: 0.78fr 1.22fr;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.first-run-tour-skip,
+.first-run-tour-next {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.first-run-tour-skip {
+  border: 1px solid var(--lk-border-md);
+  background: var(--lk-surface);
+  color: var(--lk-text-muted);
+}
+
+.first-run-tour-next {
+  border: 1px solid var(--lk-accent);
+  background: var(--lk-accent);
+  color: var(--lk-bg);
+}
+
+.first-run-tour-next svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+}
+
+@keyframes first-run-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes first-run-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (min-width: 560px) {
+  .first-run-tour-shell {
+    place-items: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .first-run-tour-card {
+    min-height: 400px;
+    padding: 18px;
+  }
+
+  .first-run-tour-visual {
+    width: 108px;
+    height: 108px;
+  }
+
+  .first-run-tour-copy h2 {
+    font-size: 23px;
+  }
+}

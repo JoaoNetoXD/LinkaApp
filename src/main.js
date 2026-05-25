@@ -205,6 +205,7 @@ export function formatCurrency(value) {
 }
 
 const INSTALL_PROMPT_SEEN_KEY = 'linka_install_prompt_seen_v1';
+const FIRST_RUN_TOUR_KEY = 'linka_first_run_tour_seen_v1';
 let deferredInstallPrompt = null;
 
 function isMobileInstallSurface() {
@@ -279,6 +280,129 @@ function showInstallPrompt(mode = 'native') {
   });
 
   document.body.appendChild(shell);
+}
+
+const firstRunTourSteps = [
+  {
+    icon: icons.shield,
+    kicker: 'Bem-vindo',
+    title: 'Ofertas da sua instituição',
+    text: 'Veja produtos e serviços publicados por alunos, já revisados para compradores da Linka.',
+  },
+  {
+    icon: icons.ticket,
+    kicker: 'Comprar',
+    title: 'Escolha, pague e receba o cupom',
+    text: 'Abra uma oferta, confira as fotos e finalize por Pix ou cartão quando o vendedor estiver conectado.',
+  },
+  {
+    icon: icons.checkCircle,
+    kicker: 'Usar',
+    title: 'Cupom validado no atendimento',
+    text: 'Depois da compra, o cupom fica salvo na sua conta. O vendedor valida manualmente quando você usar.',
+  },
+  {
+    icon: icons.package,
+    kicker: 'Vender',
+    title: 'Também dá para anunciar',
+    text: 'Ative o modo vendedor, conecte o Mercado Pago e acompanhe anúncios, vendas e cupons em tempo real.',
+  },
+];
+
+function shouldForceTour() {
+  return new URLSearchParams(window.location.search).get('tour') === '1';
+}
+
+function canShowFirstRunTour(path = '') {
+  const normalizedPath = String(path || '').replace(/^\//, '');
+  const isBuyerSurface = !normalizedPath || normalizedPath === 'buyer' || normalizedPath.startsWith('buyer/');
+  return (shouldForceTour() || !localStorage.getItem(FIRST_RUN_TOUR_KEY))
+    && isBuyerSurface
+    && !document.querySelector('.first-run-tour-shell')
+    && !document.querySelector('.install-prompt-shell');
+}
+
+function markFirstRunTourSeen() {
+  localStorage.setItem(FIRST_RUN_TOUR_KEY, new Date().toISOString());
+}
+
+function renderFirstRunTourStep(shell, stepIndex) {
+  const step = firstRunTourSteps[stepIndex] || firstRunTourSteps[0];
+  const isLast = stepIndex === firstRunTourSteps.length - 1;
+  const card = shell.querySelector('.first-run-tour-card');
+  if (!card) return;
+
+  card.innerHTML = `
+    <button class="first-run-tour-close" type="button" aria-label="Fechar apresentação">${icons.x}</button>
+    <div class="first-run-tour-visual" aria-hidden="true">
+      <span class="first-run-tour-ring"></span>
+      <span class="first-run-tour-icon">${step.icon}</span>
+    </div>
+    <div class="first-run-tour-copy">
+      <span class="first-run-tour-kicker">${escapeHTML(step.kicker)}</span>
+      <h2>${escapeHTML(step.title)}</h2>
+      <p>${escapeHTML(step.text)}</p>
+    </div>
+    <div class="first-run-tour-dots" aria-label="Passo ${stepIndex + 1} de ${firstRunTourSteps.length}">
+      ${firstRunTourSteps.map((_, index) => `
+        <button class="first-run-tour-dot ${index === stepIndex ? 'active' : ''}" type="button" data-tour-dot="${index}" aria-label="Ir para o passo ${index + 1}"></button>
+      `).join('')}
+    </div>
+    <div class="first-run-tour-actions">
+      <button class="first-run-tour-skip" type="button">${isLast ? 'Agora não' : 'Pular'}</button>
+      <button class="first-run-tour-next" type="button">${isLast ? 'Começar' : 'Próximo'} ${isLast ? icons.check : icons.arrowRight}</button>
+    </div>
+  `;
+
+  card.querySelector('.first-run-tour-close')?.addEventListener('click', () => closeFirstRunTour(shell));
+  card.querySelector('.first-run-tour-skip')?.addEventListener('click', () => closeFirstRunTour(shell));
+  card.querySelector('.first-run-tour-next')?.addEventListener('click', () => {
+    if (isLast) {
+      closeFirstRunTour(shell);
+      return;
+    }
+    renderFirstRunTourStep(shell, stepIndex + 1);
+  });
+  card.querySelectorAll('[data-tour-dot]').forEach((dot) => {
+    dot.addEventListener('click', () => renderFirstRunTourStep(shell, Number(dot.dataset.tourDot || 0)));
+  });
+}
+
+function closeFirstRunTour(shell = document.querySelector('.first-run-tour-shell')) {
+  if (!shell) return;
+  if (shell.__onEsc) document.removeEventListener('keydown', shell.__onEsc);
+  markFirstRunTourSeen();
+  shell.classList.add('closing');
+  setTimeout(() => shell.remove(), 220);
+}
+
+function showFirstRunTour(path = '') {
+  if (!canShowFirstRunTour(path)) return;
+  const shell = document.createElement('div');
+  shell.className = 'first-run-tour-shell';
+  shell.innerHTML = `
+    <section class="first-run-tour-card" role="dialog" aria-modal="true" aria-label="Como usar o Linka"></section>
+  `;
+  shell.__onEsc = (event) => {
+    if (event.key === 'Escape') closeFirstRunTour(shell);
+  };
+  document.addEventListener('keydown', shell.__onEsc);
+  shell.addEventListener('click', (event) => {
+    if (event.target === shell) closeFirstRunTour(shell);
+  });
+  document.body.appendChild(shell);
+  renderFirstRunTourStep(shell, 0);
+}
+
+function maybeShowFirstRunTour(path = '') {
+  if (!canShowFirstRunTour(path)) return;
+  window.setTimeout(() => {
+    if (document.querySelector('.install-prompt-shell')) {
+      window.setTimeout(() => showFirstRunTour(path), 1800);
+      return;
+    }
+    showFirstRunTour(path);
+  }, 900);
 }
 
 // Global auth state
@@ -380,6 +504,7 @@ async function handleRoute() {
     }
     renderBuyer(app);
   }
+  maybeShowFirstRunTour(path);
 }
 
 // Listen to auth changes
