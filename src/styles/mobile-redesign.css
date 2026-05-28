@@ -9557,3 +9557,225 @@ body.first-run-tour-lock {
     border-inline: 0 !important;
   }
 }
+
+/* Admin final repair: readable typography and app-like spacing */
+body:has(.admin-page) {
+  background: var(--lk-bg) !important;
+}
+
+.admin-page,
+.admin-page * {
+  font-family: "DM Sans", var(--font-body), sans-serif !important;
+  font-style: normal !important;
+  font-stretch: normal !important;
+  letter-spacing: 0 !important;
+}
+
+.admin-page {
+  width: min(100%, 1040px) !important;
+  max-width: 1040px !important;
+  margin-inline: auto !important;
+  background: var(--lk-bg) !important;
+  border-inline: 1px solid var(--lk-border) !important;
+}
+
+.admin-page .app-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  min-height: 72px !important;
+  padding: 14px 22px !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+  background: rgba(13, 13, 18, 0.96) !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+.admin-page .app-body {
+  padding: 22px 22px calc(116px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.admin-page .admin-tabs-container {
+  margin: 0 0 22px !important;
+  padding: 0 !important;
+}
+
+.admin-page .tabs {
+  min-width: 0 !important;
+  width: 100% !important;
+  padding: 0 !important;
+  gap: 10px !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.admin-page .tab {
+  min-height: 42px !important;
+  padding: 10px 18px !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--lk-surface) !important;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.admin-page .tab.active {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.admin-page .tab-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  padding: 0 6px !important;
+  margin-left: 6px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(13, 13, 18, 0.18) !important;
+  color: currentColor !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+
+.admin-page .admin-stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+  gap: 14px !important;
+  padding: 0 !important;
+  margin: 0 0 24px !important;
+}
+
+.admin-page .admin-stats-grid .stat-card {
+  min-height: 124px !important;
+  padding: 16px !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-lg) !important;
+  background: var(--lk-card) !important;
+}
+
+.admin-page .stat-icon-wrapper {
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 18px !important;
+  overflow: visible !important;
+}
+
+.admin-page .stat-icon {
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  border-radius: 11px !important;
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.admin-page .stat-change {
+  width: 18px !important;
+  max-width: 18px !important;
+  height: 3px !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--lk-accent-dim) !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  text-indent: -999px !important;
+  overflow: hidden !important;
+}
+
+.admin-page .stat-info .stat-value,
+.admin-page .stat-value {
+  color: var(--lk-text) !important;
+  font-size: 31px !important;
+  font-weight: 900 !important;
+  line-height: 0.95 !important;
+  margin: 0 0 8px !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.admin-page .stat-info .stat-label,
+.admin-page .stat-label {
+  color: var(--lk-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
+}
+
+.admin-page .admin-section {
+  width: 100% !important;
+  padding: 18px !important;
+  margin: 0 0 18px !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-lg) !important;
+  background: var(--lk-card) !important;
+}
+
+.admin-page .admin-section-title {
+  color: var(--lk-text) !important;
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  line-height: 1.15 !important;
+}
+
+.admin-page .empty-state {
+  min-height: 220px !important;
+  border: 1px solid var(--lk-border) !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+}
+
+.admin-page .empty-state h3 {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+.admin-page .empty-state p {
+  color: var(--lk-text-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+@media (max-width: 720px) {
+  .admin-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-inline: 0 !important;
+  }
+
+  .admin-page .app-header {
+    padding-inline: 16px !important;
+  }
+
+  .admin-page .app-body {
+    padding: 18px 14px calc(112px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .admin-page .admin-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .admin-page .admin-stats-grid .stat-card {
+    min-height: 118px !important;
+  }
+
+  .admin-page .stat-info .stat-value,
+  .admin-page .stat-value {
+    font-size: 28px !important;
+  }
+}

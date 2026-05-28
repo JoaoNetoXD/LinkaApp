@@ -609,20 +609,8 @@ async function handleRoute() {
     window.location.hash = '#/buyer';
     return;
   } else {
-    if (session) {
-      const profile = await loadProfileForSession(session);
-      const home = getHomePathForRole(getSessionRole(session, profile));
-      if (home !== '#/buyer') {
-        window.location.hash = home;
-        return;
-      }
-      setPageTitle('buyer');
-      renderBuyer(app);
-    } else {
-      // Visitante não logado -> landing page
-      setPageTitle('buyer');
-      renderBuyer(app);
-    }
+    setPageTitle('buyer');
+    renderBuyer(app);
   }
   maybeShowFirstRunTour(path);
 }
@@ -636,7 +624,9 @@ onAuthStateChange(async (event, session) => {
     } catch { globalProfile = null; }
     const rawRoute = window.location.hash.slice(1) || window.location.pathname;
     const [path] = rawRoute.split('?');
-    if (!path || path === '/' || path === 'auth' || path.startsWith('/auth')) {
+    if (!path || path === '/') {
+      window.location.hash = '#/buyer';
+    } else if (path === 'auth' || path.startsWith('/auth')) {
       window.location.hash = getHomePathForRole(getSessionRole(session));
     } else {
       handleRoute();
