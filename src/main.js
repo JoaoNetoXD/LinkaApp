@@ -1,4 +1,3 @@
-import { renderLanding } from './pages/landing.js';
 import { renderBuyer } from './pages/buyer.js';
 import { renderSeller } from './pages/seller.js';
 import { renderAdmin } from './pages/admin.js';
@@ -10,9 +9,6 @@ import './styles/tokens.css';
 import './styles/reset.css';
 import './styles/base.css';
 import './styles/components.css';
-import './styles/landing-core.css';
-import './styles/landing-sections.css';
-import './styles/landing-bottom.css';
 import './styles/buyer.css';
 import './styles/seller.css';
 import './styles/payment.css';
@@ -610,9 +606,8 @@ async function handleRoute() {
     setPageTitle('admin');
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
-    setPageTitle('landing');
-    renderLanding(app);
-    resetAppScroll(app);
+    window.location.hash = '#/buyer';
+    return;
   } else {
     if (session) {
       const profile = await loadProfileForSession(session);
@@ -625,9 +620,8 @@ async function handleRoute() {
       renderBuyer(app);
     } else {
       // Visitante não logado -> landing page
-      setPageTitle('landing');
-      renderLanding(app);
-      resetAppScroll(app);
+      setPageTitle('buyer');
+      renderBuyer(app);
     }
   }
   maybeShowFirstRunTour(path);
