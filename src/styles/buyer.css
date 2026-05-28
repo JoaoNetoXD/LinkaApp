@@ -1275,3 +1275,68 @@ body:has(.buyer-wrapper) {
 .card-option svg {
   color: #3b82f6;
 }
+
+/* Notification Items */
+.notif-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--mobile-border, rgba(148, 163, 184, 0.12));
+  border-radius: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.notif-item:hover {
+  background: rgba(47, 109, 246, 0.04);
+}
+
+.notif-unread {
+  background: rgba(47, 109, 246, 0.04);
+  border-color: rgba(47, 109, 246, 0.18);
+}
+
+.notif-read {
+  background: transparent;
+}
+
+.notif-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notif-content {
+  min-width: 0;
+}
+
+.notif-title {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.notif-title-bold {
+  font-weight: 600;
+}
+
+.notif-body {
+  font-size: 12px;
+  color: var(--mobile-muted, #64748b);
+}
+
+.notif-time {
+  font-size: 11px;
+  color: var(--mobile-faint, #94a3b8);
+  margin-top: 4px;
+}
+
+.notifications-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--mobile-muted, #64748b);
+}
+
+.notifications-empty-state p {
+  margin-top: 12px;
+}
+

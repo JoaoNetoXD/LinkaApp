@@ -834,8 +834,8 @@ textarea:focus-visible {
   place-items: center;
   align-content: center;
   gap: 16px;
-  background: #0D0D12;
-  color: #F0EEE8;
+  background: linear-gradient(180deg, #e0edff 0%, #f7fbff 100%);
+  color: #0b1220;
   font-family: var(--font-body, 'DM Sans', sans-serif);
 }
 
@@ -844,10 +844,11 @@ textarea:focus-visible {
   font-size: 1.9rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  color: #0b1220;
 }
 
 .boot-logo span {
-  color: var(--lk-accent, #C8F135);
+  color: var(--lk-accent, #2f6df6);
 }
 
 .boot-loader {
@@ -855,7 +856,7 @@ textarea:focus-visible {
   height: 3px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(47, 109, 246, 0.12);
 }
 
 .boot-loader::after {
@@ -864,13 +865,45 @@ textarea:focus-visible {
   width: 42%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, #C8F135, transparent);
+  background: linear-gradient(90deg, transparent, #2f6df6, transparent);
   animation: boot-loader 900ms ease-in-out infinite;
 }
 
 @keyframes boot-loader {
   from { transform: translateX(-100%); }
   to { transform: translateX(250%); }
+}
+
+/* Payment trust seal */
+.payment-trust-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(34, 230, 168, 0.07);
+  border: 1px solid rgba(34, 230, 168, 0.15);
+  font-size: 12px;
+  color: var(--app-muted, #9aa3b8);
+}
+
+.payment-trust-seal svg {
+  color: var(--app-accent, #22e6a8);
+  flex-shrink: 0;
+}
+
+.payment-trust-seal strong {
+  color: var(--app-text, #f7f8fb);
+}
+
+/* Pix copy button icon alignment */
+.pix-copy-action {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
 }
 
 .product-card-skeleton {
@@ -924,3 +957,5 @@ textarea:focus-visible {
   from { background-position: 140% 0; }
   to { background-position: -140% 0; }
 }
+
+

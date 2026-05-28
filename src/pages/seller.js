@@ -1,4 +1,4 @@
-﻿import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
 import { sellerAds, sellerCoupons, categories as mockCategories, currentUser, institution, sellerStats } from '../data/mock.js';
 import { getSellerPayments, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
@@ -545,7 +545,7 @@ async function renderSellerPage(container, { force = false } = {}) {
         <div class="seller-identity">
           <div class="user-avatar" style="width: 40px; height: 40px;">${escapeHTML(user.avatar || 'U')}</div>
           <div>
-            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff;">${escapeHTML(user.fullName || user.name)}</div>
+            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);">${escapeHTML(user.fullName || user.name)}</div>
             <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${escapeHTML(activeInstitution.name)}</div>
           </div>
         </div>

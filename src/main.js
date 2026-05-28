@@ -25,12 +25,8 @@ import './styles/mobile-redesign.css';
 const app = document.getElementById('app');
 
 const THEME_STORAGE_KEY = 'linka_theme';
-const themeToggleIcons = {
-  moon: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
-  sun: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
-};
 
-function normalizeTheme(theme) {
+function normalizeTheme() {
   return 'dark';
 }
 
@@ -39,39 +35,41 @@ function getInitialTheme() {
 }
 
 export function getCurrentTheme() {
-  return normalizeTheme(document.documentElement.dataset.theme || getInitialTheme());
+  return 'dark';
 }
 
 export function setAppTheme(theme, { persist = true } = {}) {
-  const normalizedTheme = normalizeTheme(theme);
-  document.documentElement.dataset.theme = normalizedTheme;
-  document.documentElement.style.colorScheme = normalizedTheme;
-  if (persist) localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
-  updateThemeToggle();
-  return normalizedTheme;
+  document.documentElement.dataset.theme = 'dark';
+  document.documentElement.style.colorScheme = 'dark';
+  if (persist) localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+  return 'dark';
 }
 
 export function toggleAppTheme() {
-  return setAppTheme('dark');
+  return 'dark';
 }
 
-function updateThemeToggle() {
-  const button = document.getElementById('themeToggleFab');
-  if (!button) return;
-
-  const currentTheme = getCurrentTheme();
-  const nextLabel = currentTheme === 'dark' ? 'Claro' : 'Black';
-  button.dataset.theme = currentTheme;
-  button.setAttribute('aria-label', `Alternar para tema ${nextLabel.toLowerCase()}`);
-  button.setAttribute('title', `Tema ${nextLabel}`);
-  button.innerHTML = `
-    <span class="theme-toggle-icon">${currentTheme === 'dark' ? themeToggleIcons.sun : themeToggleIcons.moon}</span>
-    <span class="theme-toggle-label">${nextLabel}</span>
-  `;
-}
+function updateThemeToggle() {}
 
 function mountThemeToggle() {
   document.getElementById('themeToggleFab')?.remove();
+}
+
+// Dynamic page title
+const PAGE_TITLES = {
+  buyer: 'Linka — Marketplace',
+  seller: 'Linka — Painel de Vendas',
+  admin: 'Linka — Administração',
+  auth: 'Linka — Entrar',
+  landing: 'Linka — Marketplace Estudantil',
+  coupons: 'Linka — Meus Cupons',
+  profile: 'Linka — Perfil',
+  notifications: 'Linka — Notificações',
+  payment: 'Linka — Pagamento',
+};
+
+function setPageTitle(page) {
+  document.title = PAGE_TITLES[page] || 'Linka — Marketplace Estudantil';
 }
 
 setAppTheme(getInitialTheme(), { persist: false });
@@ -589,6 +587,7 @@ async function handleRoute() {
   }
 
   if (path.startsWith('/auth') || path === 'auth') {
+    setPageTitle('auth');
     renderAuth(app);
     resetAppScroll(app);
     if (session) {
@@ -599,14 +598,19 @@ async function handleRoute() {
     }
   } else if (path.startsWith('/buyer') || path === 'buyer') {
     const parts = path.split('/').filter(Boolean);
-    renderBuyer(app, parts[1]?.split('?')[0]);
+    const subPage = parts[1]?.split('?')[0];
+    setPageTitle(subPage || 'buyer');
+    renderBuyer(app, subPage);
   } else if (path.startsWith('/seller') || path === 'seller') {
     const parts = path.split('/').filter(Boolean);
+    setPageTitle('seller');
     renderSeller(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/admin') || path === 'admin') {
     const parts = path.split('/').filter(Boolean);
+    setPageTitle('admin');
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
+    setPageTitle('landing');
     renderLanding(app);
     resetAppScroll(app);
   } else {
@@ -617,8 +621,14 @@ async function handleRoute() {
         window.location.hash = home;
         return;
       }
+      setPageTitle('buyer');
+      renderBuyer(app);
+    } else {
+      // Visitante não logado -> landing page
+      setPageTitle('landing');
+      renderLanding(app);
+      resetAppScroll(app);
     }
-    renderBuyer(app);
   }
   maybeShowFirstRunTour(path);
 }

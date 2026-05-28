@@ -1091,7 +1091,14 @@ app.post('/api/pix', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao criar Pix:', error);
-    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'PIX_ERROR', error: error.message || 'Erro ao gerar Pix' });
+    const permissionDenied = String(error?.message || '').includes('permission denied for function register_payment_intent');
+    res.status(error.statusCode || 500).json({
+      success: false,
+      code: permissionDenied ? 'PIX_PERMISSION_FIX_REQUIRED' : (error.code || 'PIX_ERROR'),
+      error: permissionDenied
+        ? 'Permissao do Pix pendente no Supabase. Execute scripts/fix-permissions-supabase.sql no SQL Editor.'
+        : (error.message || 'Erro ao gerar Pix'),
+    });
   }
 });
 

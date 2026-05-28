@@ -676,18 +676,38 @@ function getSlotsInfo(used, total) {
   return { percent, colorClass, text: `${available} de ${total} vagas`, almostEmpty: available === 1 };
 }
 
+/**
+ * Single source of truth for the buyer bottom navigation bar.
+ * @param {'home'|'cats'|'coupons'|'profile'|null} activeTab
+ */
+function renderBuyerBottomNav(activeTab) {
+  return `
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item ${activeTab === 'home' ? 'active' : ''}" data-nav="home">
+        ${icons.home}<span>Início</span><div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item ${activeTab === 'cats' ? 'active' : ''}" data-nav="cats">
+        ${icons.grid}<span>Categorias</span><div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item ${activeTab === 'coupons' ? 'active' : ''}" data-nav="coupons">
+        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
+        <span>Cupons</span><div class="nav-indicator"></div>
+      </div>
+      <div class="bottom-nav-item ${activeTab === 'profile' ? 'active' : ''}" data-nav="profile">
+        ${icons.user}<span>Perfil</span><div class="nav-indicator"></div>
+      </div>
+    </nav>
+  `;
+}
+
 function renderEmptyProductsState() {
-  const isSeller = canUseSellerMode();
   return `
     <div class="market-empty-state">
       <div class="market-empty-icon">${icons.package}</div>
-      <h3>Nenhuma oferta disponível ainda</h3>
-      <p>${isSeller
-        ? 'Você está no modo compra. Abra seu painel de vendedor para cadastrar e acompanhar seus produtos.'
-        : 'Se você quer vender, ative o modo vendedor e cadastre o primeiro produto da instituição.'}</p>
+      <h3>As primeiras ofertas estão chegando</h3>
+      <p>Os vendedores da sua instituição ainda estão preparando as ofertas. Volte em breve!</p>
       <div class="market-empty-actions">
-        <button class="btn-primary" id="btnEmptySellerFlow">${isSeller ? 'Abrir painel de vendas' : 'Quero vender no Linka'}</button>
-        ${!isAuthenticated() ? `<button class="btn-details" id="btnEmptyLogin">Entrar para comprar</button>` : ''}
+        ${!isAuthenticated() ? `<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>` : ''}
       </div>
     </div>
   `;
@@ -712,7 +732,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const showSellerAccess = isAuthenticated();
   const greetingName = isAuthenticated()
     ? (user.name || user.fullName || 'usuario').split(' ')[0]
-    : 'visitante';
+    : null;
   const featuredProduct = filteredProducts.length
     ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
     : null;
@@ -723,7 +743,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       <header class="buyer-header">
         <div class="buyer-header-top">
           <div class="buyer-greeting">
-            <h1>Olá, ${escapeHTML(greetingName)}</h1>
+            <h1>${greetingName ? `Olá, ${escapeHTML(greetingName)}` : 'Explore as ofertas'}</h1>
             <div class="inst-badge">Linka</div>
           </div>
           <div class="buyer-actions">
@@ -841,7 +861,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             
             <div class="card-body">
               <h3 class="card-title">${escapeHTML(p.title)}</h3>
-              <p class="card-desc">${escapeHTML(p.description || 'Aproveite esta oferta imperdível e garanta o seu produto com desconto exclusivo.')}</p>
+              ${p.description ? `<p class="card-desc">${escapeHTML(p.description)}</p>` : ''}
 
               <div class="card-price-row">
                 <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
@@ -874,28 +894,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     </div>
     
     <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item ${currentView === 'home' && buyerNavFocus !== 'cats' ? 'active' : ''}" data-nav="home">
-        ${icons.home}
-        <span>Início</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item ${currentView === 'home' && buyerNavFocus === 'cats' ? 'active' : ''}" data-nav="cats">
-        ${icons.grid}
-        <span>Categorias</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item ${currentView === 'coupons' ? 'active' : ''}" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="profile">
-        ${icons.user}
-        <span>Perfil</span>
-        <div class="nav-indicator"></div>
-      </div>
-    </nav>
+    ${renderBuyerBottomNav(currentView === 'coupons' ? 'coupons' : buyerNavFocus === 'cats' ? 'cats' : 'home')}
   `;
 
   // Animate progress bars after render
@@ -1111,28 +1110,7 @@ async function renderCategories(container) {
       </section>
     </div>
 
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item" data-nav="home">
-        ${icons.home}
-        <span>Início</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item active" data-nav="cats">
-        ${icons.grid}
-        <span>Categorias</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="profile">
-        ${icons.user}
-        <span>Perfil</span>
-        <div class="nav-indicator"></div>
-      </div>
-    </nav>
+    ${renderBuyerBottomNav('cats')}
   `;
 
   container.querySelector('#btnBackBuyerHome')?.addEventListener('click', () => {
@@ -1187,6 +1165,9 @@ function renderProductSkeletons() {
 }
 
 function getPaymentUnavailableMessage(message = '') {
+  if (message.includes('register_payment_intent') || message.includes('Permissao do Pix') || message.includes('PIX_PERMISSION_FIX_REQUIRED')) {
+    return 'O Pix ainda precisa da permissao final no Supabase. O administrador deve executar o script scripts/fix-permissions-supabase.sql uma vez.';
+  }
   if (message.includes('seller-mp-migration') || message.includes('Banco de pagamentos')) {
     return 'Pagamento ainda não configurado no banco. O administrador precisa rodar a migration de pagamentos no Supabase.';
   }
@@ -1474,29 +1455,7 @@ async function renderCoupons(container) {
       </div>
     </div>
     
-    <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item" data-nav="home">
-        ${icons.home}
-        <span>Início</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="cats">
-        ${icons.grid}
-        <span>Categorias</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item active" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="profile">
-        ${icons.user}
-        <span>Perfil</span>
-        <div class="nav-indicator"></div>
-      </div>
-    </nav>
+    ${renderBuyerBottomNav('coupons')}
   `;
 
   container.querySelector('#btnCouponsLogin')?.addEventListener('click', () => {
@@ -1591,29 +1550,7 @@ function renderProfileLegacy(container) {
       </div>
     </div>
     
-    <!-- BOTTOM NAV -->
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item" data-nav="home">
-        ${icons.home}
-        <span>Início</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="cats">
-        ${icons.grid}
-        <span>Categorias</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item active" data-nav="profile">
-        ${icons.user}
-        <span>Perfil</span>
-        <div class="nav-indicator"></div>
-      </div>
-    </nav>
+    ${renderBuyerBottomNav('profile')}
   `;
 
   // Save profile to Supabase
@@ -1882,28 +1819,7 @@ function renderProfile(container) {
       </div>
     </div>
 
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item" data-nav="home">
-        ${icons.home}
-        <span>Início</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="cats">
-        ${icons.grid}
-        <span>Categorias</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span>
-        <div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item active" data-nav="profile">
-        ${icons.user}
-        <span>Perfil</span>
-        <div class="nav-indicator"></div>
-      </div>
-    </nav>
+    ${renderBuyerBottomNav('profile')}
   `;
 
   document.getElementById('btnSaveProfile')?.addEventListener('click', async () => {
@@ -1969,7 +1885,7 @@ function renderPayment(container) {
   container.innerHTML = `
     <div class="buyer-wrapper">
       <header class="buyer-header minimal-header" style="display:flex;align-items:center;gap:12px;">
-        <button class="icon-btn" id="btnBackHome" style="color:#FFF;">
+        <button class="icon-btn" id="btnBackHome">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         </button>
         <h1>Pagamento</h1>
@@ -1984,6 +1900,11 @@ function renderPayment(container) {
             ${icons.loader}
             <span style="font-size:14px;font-weight:600;display:block;margin-top:8px;">Gerando código Pix...</span>
           </div>
+        </div>
+
+        <div class="payment-trust-seal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Pagamento seguro via <strong>Mercado Pago</strong></span>
         </div>
       </div>
     </div>
@@ -2012,10 +1933,15 @@ async function initPixFlow(product, container) {
         ${pixData.qrCodeSVG}
       </div>
       <p class="pix-expiry-note">Código expira em 10 minutos</p>
-      <button class="btn-outline pix-copy-action" id="btnCopyPix">
+      <button class="btn-primary pix-copy-action" id="btnCopyPix">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copiar código Pix
       </button>
       <div id="pixStatusMsg" class="pix-status-message">Aguardando pagamento...</div>
+      <div class="payment-trust-seal" style="margin-top:16px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Pagamento seguro via <strong>Mercado Pago</strong></span>
+      </div>
     `;
 
     document.getElementById('btnCopyPix')?.addEventListener('click', () => {
@@ -2368,12 +2294,7 @@ async function renderNotifications(container) {
           </div>
         </div>
       </div>
-      <nav class="bottom-nav">
-        <div class="bottom-nav-item" data-nav="home">${icons.home}<span>Início</span><div class="nav-indicator"></div></div>
-        <div class="bottom-nav-item" data-nav="cats">${icons.grid}<span>Categorias</span><div class="nav-indicator"></div></div>
-        <div class="bottom-nav-item" data-nav="coupons"><span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span><span>Cupons</span><div class="nav-indicator"></div></div>
-        <div class="bottom-nav-item" data-nav="profile">${icons.user}<span>Perfil</span><div class="nav-indicator"></div></div>
-      </nav>
+      ${renderBuyerBottomNav(null)}
     `;
     container.querySelector('#btnBackFromNotif')?.addEventListener('click', () => {
       currentView = 'home'; renderBuyerPage(container);
@@ -2392,7 +2313,7 @@ async function renderNotifications(container) {
     <div class="buyer-wrapper">
       <header class="buyer-header minimal-header page-simple-header" style="display:flex;align-items:center;justify-content:space-between;">
         <div style="display:flex;align-items:center;gap:12px;">
-          <button class="icon-btn" id="btnBackFromNotif" style="color:#FFF;">
+          <button class="icon-btn" id="btnBackFromNotif">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           </button>
           <h1>Notificações</h1>
@@ -2401,21 +2322,22 @@ async function renderNotifications(container) {
       </header>
       <div class="notifications-list">
         ${notifs.length === 0 ? `
-          <div style="text-align:center;padding:60px 20px;color:#6B7280;">
-            ${icons.bell}<p style="margin-top:12px;">Nenhuma notificação.</p>
+          <div class="notifications-empty-state">
+            ${icons.bell}<p>Nenhuma notificação.</p>
           </div>
         ` : notifs.map(n => `
-            <div class="notif-item" style="display:flex;gap:12px;padding:14px;background:${n.read ? 'transparent' : 'rgba(0,229,160,0.04)'};border:1px solid ${n.read ? '#1E1E2A' : 'rgba(0,229,160,0.15)'};border-radius:12px;margin-bottom:8px;cursor:pointer;" data-url="${escapeHTML(n.action_url || '')}">
-            <div style="color:${typeColors[n.type] || typeColors.info};flex-shrink:0;margin-top:2px;">${typeIcons[n.type] || typeIcons.info}</div>
-            <div>
-              <div style="font-weight:${n.read ? '400' : '600'};font-size:14px;margin-bottom:4px;">${escapeHTML(n.title)}</div>
-              <div style="font-size:12px;color:#6B7280;">${escapeHTML(n.body || '')}</div>
-              <div style="font-size:11px;color:#4B5563;margin-top:4px;">${new Date(n.created_at).toLocaleString('pt-BR')}</div>
+            <div class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}" data-url="${escapeHTML(n.action_url || '')}">
+            <div class="notif-icon" style="color:${typeColors[n.type] || typeColors.info};">${typeIcons[n.type] || typeIcons.info}</div>
+            <div class="notif-content">
+              <div class="notif-title ${n.read ? '' : 'notif-title-bold'}">${escapeHTML(n.title)}</div>
+              <div class="notif-body">${escapeHTML(n.body || '')}</div>
+              <div class="notif-time">${new Date(n.created_at).toLocaleString('pt-BR')}</div>
             </div>
           </div>
         `).join('')}
       </div>
     </div>
+    ${renderBuyerBottomNav(null)}
   `;
 
   container.querySelector('#btnBackFromNotif').addEventListener('click', () => {

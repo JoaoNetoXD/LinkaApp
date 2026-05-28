@@ -4,8 +4,8 @@
   "description": "Fluxo real de compras, vendas e cupons dentro da instituição",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0D0D12",
-  "theme_color": "#0D0D12",
+  "background_color": "#eaf2ff",
+  "theme_color": "#eaf2ff",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

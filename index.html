@@ -2,14 +2,27 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0D0D12" />
-  <meta name="description" content="Linka — fluxo real de compras, vendas e cupons para a instituição." />
+  <meta name="description" content="Linka — o marketplace da sua instituição. Compre, venda e resgate cupons com desconto entre alunos verificados." />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Linka" />
 
-  <title>Linka — Painel Operacional</title>
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Linka — Marketplace Estudantil" />
+  <meta property="og:description" content="Compre e venda entre alunos da sua instituição. Cupons rastreáveis, pagamento via Pix e Mercado Pago." />
+  <meta property="og:url" content="https://linka-app.netlify.app" />
+  <meta property="og:site_name" content="Linka" />
+  <meta property="og:locale" content="pt_BR" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Linka — Marketplace Estudantil" />
+  <meta name="twitter:description" content="Compre e venda entre alunos da sua instituição. Cupons rastreáveis, pagamento via Pix e Mercado Pago." />
+
+  <title>Linka — Marketplace Estudantil</title>
 
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
@@ -21,9 +34,9 @@
   <style>
     body{margin:0;background:#0D0D12;color:#F0EEE8;font-family:'DM Sans',sans-serif}
     .boot-screen{min-height:100vh;display:grid;place-items:center;align-content:center;gap:16px;background:#0D0D12}
-    .boot-logo{display:inline-flex;align-items:center;gap:10px;font-family:'DM Sans',sans-serif;font-size:1.9rem;font-weight:900;letter-spacing:-.02em;color:#F0EEE8}
-    .boot-logo-mark{width:40px;height:40px;display:inline-grid;place-items:center;border-radius:14px;background:#C8F135}
-    .boot-logo-mark svg{width:31px;height:31px}.boot-logo-mark rect{fill:#0D0D12;stroke:rgba(200,241,53,.34)}.boot-logo-mark path,.boot-logo-mark circle{fill:none;stroke:#C8F135;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+    .boot-logo{display:inline-flex;align-items:center;gap:10px;font-family:'DM Sans',sans-serif;font-size:1.9rem;font-weight:800;letter-spacing:-.01em;color:#F0EEE8}
+    .boot-logo-mark{width:40px;height:40px;display:inline-grid;place-items:center;border-radius:14px;background:rgba(200,241,53,.12);border:1px solid rgba(200,241,53,.25)}
+    .boot-logo-mark svg{width:31px;height:31px}.boot-logo-mark rect{fill:none;stroke:rgba(200,241,53,.24)}.boot-logo-mark path,.boot-logo-mark circle{fill:none;stroke:#C8F135;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
     .boot-loader{width:148px;height:3px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08)}
     .boot-loader:after{content:'';display:block;width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,transparent,#C8F135,transparent);animation:boot-loader .9s ease-in-out infinite}
     @keyframes boot-loader{from{transform:translateX(-100%)}to{transform:translateX(250%)}}

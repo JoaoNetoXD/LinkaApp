@@ -421,8 +421,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE ALL ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) TO service_role;
+REVOKE ALL ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) TO authenticated, service_role;
 
 -- Emite cupom quando o pagamento é confirmado
 CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id UUID)
@@ -514,8 +514,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE ALL ON FUNCTION public.issue_coupon_for_payment(uuid) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.issue_coupon_for_payment(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO authenticated, service_role;
 
 
 -- ====================================================================
@@ -610,6 +610,27 @@ CREATE POLICY "Products are writable by owner or admin" ON products
 
 CREATE POLICY "Payments are viewable by participants" ON payments
   FOR SELECT USING (
+    buyer_id = (select auth.uid())
+    OR seller_id = (select auth.uid())
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR (select auth.role()) = 'service_role'
+  );
+
+-- Buyers can insert their own payments (via SECURITY DEFINER fn, but also needed for direct insert fallback)
+DROP POLICY IF EXISTS "Buyers insert own payments" ON payments;
+CREATE POLICY "Buyers insert own payments" ON payments
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = buyer_id);
+
+-- service_role can insert/update payments (webhooks, server)
+DROP POLICY IF EXISTS "Service role manages payments" ON payments;
+CREATE POLICY "Service role manages payments" ON payments
+  FOR ALL USING ((select auth.role()) = 'service_role');
+
+-- Buyers/sellers can update their own payments (status sync)
+DROP POLICY IF EXISTS "Participants update own payments" ON payments;
+CREATE POLICY "Participants update own payments" ON payments
+  FOR UPDATE USING (
     buyer_id = (select auth.uid())
     OR seller_id = (select auth.uid())
     OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
