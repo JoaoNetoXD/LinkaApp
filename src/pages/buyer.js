@@ -772,7 +772,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             <button class="buyer-filter-btn ${filtersOpen ? 'active' : ''}" type="button" id="btnBuyerFilter" aria-label="Abrir filtros" aria-expanded="${filtersOpen ? 'true' : 'false'}">${icons.adjustments}</button>
           </div>
           ${searchSuggestions.length ? `
-            <div class="search-suggestions" role="listbox" aria-label="SugestÃµes de busca">
+            <div class="search-suggestions" role="listbox" aria-label="Sugestões de busca">
               ${searchSuggestions.map((suggestion) => `
                 <button class="suggestion-item" type="button" data-search-suggestion="${escapeHTML(suggestion.label)}">
                   ${icons.search}
@@ -799,8 +799,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           <select id="sortBySelect" class="filter-select" aria-label="Ordenar ofertas">
             <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Mais recentes</option>
             <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Maior desconto</option>
-            <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Menor preÃ§o</option>
-            <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Maior preÃ§o</option>
+            <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Menor preço</option>
+            <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Maior preço</option>
             <option value="expiring" ${sortBy === 'expiring' ? 'selected' : ''}>Expirando logo</option>
           </select>
           <select id="minDiscountSelect" class="filter-select" aria-label="Filtrar por desconto">

@@ -9779,3 +9779,521 @@ body:has(.admin-page) {
     font-size: 28px !important;
   }
 }
+
+/* Buyer UX hit-area repair */
+.buyer-wrapper .search-bar {
+  min-height: 50px !important;
+}
+
+.buyer-wrapper .search-bar input {
+  min-height: 40px !important;
+}
+
+.buyer-wrapper .buyer-filter-btn {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  margin-right: -6px !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--r-md) !important;
+}
+
+.buyer-wrapper .buyer-filter-btn:focus-visible {
+  outline: 2px solid var(--lk-accent-border) !important;
+  outline-offset: 2px !important;
+}
+
+.buyer-wrapper .feed-filters.open {
+  max-height: 58px !important;
+  padding: 10px 0 6px !important;
+}
+
+.buyer-wrapper .filter-select {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 8px 30px 8px 12px !important;
+  font-size: 12px !important;
+}
+
+/* Final usability pass: readable weights, stable spacing, no cramped operational panels */
+body:has(.buyer-wrapper),
+body:has(.seller-page),
+body:has(.admin-page),
+body:has(.auth-wrapper),
+body:has(.payment-screen) {
+  background: var(--lk-bg) !important;
+}
+
+:is(.buyer-wrapper, .seller-page, .admin-page, .auth-wrapper, .payment-screen),
+:is(.buyer-wrapper, .seller-page, .admin-page, .auth-wrapper, .payment-screen) * {
+  font-family: var(--font-body) !important;
+  font-synthesis-weight: none;
+  font-synthesis-style: none;
+}
+
+:is(.buyer-wrapper, .seller-page, .admin-page, .auth-wrapper, .payment-screen)
+  :is(h1, h2, h3, h4, .stat-value, .seller-stat-value, .payment-stat-value, .payment-list-amount, .price-discount, .price-main, .detail-price-current) {
+  font-weight: 800 !important;
+  letter-spacing: -0.005em !important;
+  line-height: 1.12 !important;
+}
+
+:is(.buyer-wrapper, .seller-page, .admin-page, .auth-wrapper, .payment-screen)
+  :is(p, small, span, label, input, select, textarea) {
+  line-height: 1.42;
+}
+
+.admin-page,
+.seller-page {
+  width: min(100%, 980px) !important;
+  max-width: 980px !important;
+  margin-inline: auto !important;
+  background: var(--lk-bg) !important;
+  background-image: none !important;
+}
+
+.admin-page .app-header,
+.seller-page .app-header {
+  position: sticky !important;
+  top: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  border-radius: 0 0 var(--r-lg) var(--r-lg) !important;
+}
+
+.admin-page .app-body,
+.seller-page .app-body {
+  padding-top: 18px !important;
+  padding-inline: clamp(14px, 3vw, 28px) !important;
+  gap: 18px !important;
+}
+
+.admin-page .admin-tabs-container,
+.seller-page .seller-tabs-container {
+  position: relative !important;
+  top: auto !important;
+  z-index: 2 !important;
+  width: 100% !important;
+  margin: 0 0 18px !important;
+  padding: 0 !important;
+}
+
+.admin-page .tabs,
+.seller-page .tabs {
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.admin-page .tab,
+.seller-page .tab,
+.admin-page .btn,
+.seller-page .btn {
+  min-height: 42px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .admin-stats-grid,
+.seller-page .seller-stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)) !important;
+  gap: 14px !important;
+  margin-bottom: 22px !important;
+}
+
+.admin-page .admin-stats-grid .stat-card,
+.seller-page .seller-stat-card {
+  min-height: 116px !important;
+  padding: 15px !important;
+}
+
+.admin-page .stat-info .stat-value,
+.admin-page .stat-value,
+.seller-page .seller-stat-value,
+.seller-page .payment-stat-value {
+  font-size: clamp(27px, 3.5vw, 34px) !important;
+  font-weight: 800 !important;
+}
+
+.admin-page .stat-info .stat-label,
+.admin-page .stat-label,
+.seller-page .seller-stat-label,
+.seller-page .payment-stat-label {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.admin-page .admin-section,
+.seller-page :is(.seller-view-header, .seller-dashboard-card, .seller-setup-card, .seller-ad-card, .payment-list-button, .coupon-card) {
+  border-radius: var(--r-lg) !important;
+  background: var(--lk-card) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .empty-state,
+.seller-page .empty-state,
+.buyer-wrapper .empty-state {
+  min-height: 180px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+}
+
+.buyer-wrapper .products-list {
+  padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.buyer-wrapper .product-card {
+  min-width: 0 !important;
+}
+
+.buyer-wrapper .product-card .btn-primary,
+.buyer-wrapper .get-coupon-btn,
+.buyer-wrapper .detail-buy-button,
+.auth-wrapper .auth-btn,
+.auth-wrapper .auth-role-btn.active {
+  color: var(--lk-bg) !important;
+  font-weight: 800 !important;
+}
+
+@media (max-width: 520px) {
+  .admin-page .admin-stats-grid,
+  .seller-page .seller-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-page .tab,
+  .seller-page .tab {
+    font-size: 13px !important;
+    padding-inline: 14px !important;
+  }
+}
+
+/* Final polish: remove remaining visual drag from legacy layers */
+body,
+#app {
+  min-height: 100dvh !important;
+  background: var(--lk-bg) !important;
+}
+
+body:has(.admin-page),
+body:has(.seller-page),
+body:has(.buyer-wrapper),
+body:has(.auth-wrapper),
+body:has(.payment-screen) {
+  overflow-x: hidden !important;
+}
+
+:is(.admin-page, .seller-page, .buyer-wrapper, .auth-wrapper, .payment-screen) {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+:is(.admin-page, .seller-page, .buyer-wrapper, .auth-wrapper, .payment-screen)
+  :is(h1, h2, h3, h4, strong, button, .tab, .chip, .btn, .stat-value, .seller-stat-value, .payment-stat-value, .price-discount, .price-main, .detail-price-current) {
+  font-family: var(--font-body) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+  text-shadow: none !important;
+}
+
+:is(.admin-page, .seller-page, .buyer-wrapper, .auth-wrapper, .payment-screen)
+  :is(p, small, span, label, input, textarea, select, .stat-label, .seller-stat-label, .payment-stat-label) {
+  font-family: var(--font-body) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+}
+
+.admin-page,
+.seller-page {
+  min-height: 100dvh !important;
+  isolation: isolate;
+}
+
+.admin-page .app-header,
+.seller-page .app-header {
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  background: color-mix(in srgb, var(--lk-bg) 92%, transparent) !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .app-body,
+.seller-page .app-body {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  min-height: auto !important;
+  margin: 0 !important;
+}
+
+.admin-page #admin-content,
+.seller-page #seller-content {
+  width: 100% !important;
+}
+
+.admin-page .admin-tabs-container,
+.seller-page .seller-tabs-container {
+  transform: none !important;
+  inset: auto !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+.admin-page .tabs,
+.seller-page .tabs {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
+.admin-page .tabs::-webkit-scrollbar,
+.seller-page .tabs::-webkit-scrollbar {
+  display: none !important;
+}
+
+.admin-page .tab,
+.seller-page .tab,
+.seller-page .seller-coupon-filters button,
+.seller-page .payments-filter button,
+.buyer-wrapper .category-chip,
+.buyer-wrapper .filter-select {
+  white-space: nowrap !important;
+  flex: 0 0 auto !important;
+}
+
+.admin-page .admin-stats-grid,
+.seller-page .seller-stats-grid,
+.seller-page .seller-detail-grid,
+.seller-page .payment-stats-grid,
+.admin-page .category-summary-grid {
+  align-items: stretch !important;
+}
+
+.admin-page .stat-card,
+.seller-page .seller-stat-card,
+.seller-page .seller-detail-card,
+.seller-page .payment-stat-card,
+.admin-page .category-metric-card {
+  position: relative !important;
+  overflow: hidden !important;
+  background: var(--lk-card) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .stat-icon-wrapper,
+.admin-page .stat-icon,
+.seller-page .seller-stat-icon {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: var(--r-sm) !important;
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .stat-change,
+.seller-page .seller-stat-trend,
+.seller-page .seller-stat-card::after,
+.admin-page .stat-card::after {
+  width: 18px !important;
+  height: 3px !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--lk-accent-dim) !important;
+  color: transparent !important;
+  box-shadow: none !important;
+}
+
+.admin-page .admin-section,
+.seller-page :is(.seller-view-header, .seller-dashboard-card, .seller-setup-card, .seller-ad-card, .payment-list-button, .coupon-item, .seller-coupon-card, .seller-insight-panel, .performance-section) {
+  padding: clamp(16px, 2.4vw, 22px) !important;
+}
+
+.admin-page .admin-section + .admin-section,
+.seller-page :is(.seller-view-header, .seller-dashboard-card, .seller-setup-card, .seller-ad-card, .payment-list-button, .seller-insight-panel, .performance-section) + :is(.seller-view-header, .seller-dashboard-card, .seller-setup-card, .seller-ad-card, .payment-list-button, .seller-insight-panel, .performance-section) {
+  margin-top: 16px !important;
+}
+
+.admin-page .empty-state,
+.seller-page .empty-state,
+.buyer-wrapper .empty-state {
+  border-style: solid !important;
+  min-height: clamp(150px, 24dvh, 210px) !important;
+  padding: 22px !important;
+}
+
+.admin-page .empty-state svg,
+.seller-page .empty-state svg,
+.buyer-wrapper .empty-state svg {
+  width: 42px !important;
+  height: 42px !important;
+  opacity: 0.72 !important;
+}
+
+.seller-page .seller-header-actions {
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+  justify-content: flex-end !important;
+}
+
+.seller-page .mp-status-pill {
+  min-height: 52px !important;
+  padding: 8px 14px !important;
+  gap: 10px !important;
+}
+
+.seller-page .mp-status-pill .mp-logo-mark {
+  width: 76px !important;
+  height: 34px !important;
+  min-width: 76px !important;
+  border-radius: var(--r-pill) !important;
+}
+
+.seller-page .mp-status-pill .mp-logo-mark img,
+.seller-page .mp-status-pill .mp-logo-mark svg {
+  max-width: 58px !important;
+  max-height: 24px !important;
+}
+
+.seller-page .mp-status-copy strong {
+  font-size: 14px !important;
+  line-height: 1.05 !important;
+}
+
+.seller-page .mp-status-copy small {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+}
+
+.seller-page .payment-list-container {
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.seller-page .payment-list-button {
+  width: 100% !important;
+  min-height: 112px !important;
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  gap: 12px !important;
+  align-items: center !important;
+}
+
+.seller-page .payment-list-amount {
+  color: var(--lk-accent) !important;
+  font-size: clamp(22px, 4vw, 30px) !important;
+  white-space: nowrap !important;
+}
+
+.seller-page .payment-list-title,
+.seller-page .payment-list-product {
+  overflow-wrap: anywhere !important;
+}
+
+.buyer-wrapper {
+  width: min(100%, 560px) !important;
+  margin-inline: auto !important;
+  border-inline: 1px solid var(--lk-border) !important;
+}
+
+.buyer-wrapper .buyer-header,
+.buyer-wrapper .search-section,
+.buyer-wrapper .products-count,
+.buyer-wrapper .products-list,
+.buyer-wrapper .buyer-categories-page,
+.buyer-wrapper .buyer-profile-page,
+.buyer-wrapper .buyer-coupons-page {
+  width: 100% !important;
+}
+
+.buyer-wrapper .products-list {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.buyer-wrapper .product-card {
+  border-radius: var(--r-lg) !important;
+  overflow: hidden !important;
+}
+
+.buyer-wrapper .product-card img,
+.buyer-wrapper .product-image {
+  object-fit: cover !important;
+}
+
+.buyer-wrapper .product-card :is(.btn-primary, .get-coupon-btn) svg,
+.auth-wrapper .auth-btn svg,
+.payment-screen .btn svg {
+  stroke: currentColor !important;
+  color: currentColor !important;
+}
+
+@media (min-width: 900px) {
+  .admin-page,
+  .seller-page {
+    max-width: 1040px !important;
+  }
+
+  .admin-page .app-body,
+  .seller-page .app-body {
+    padding-inline: 24px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-page .app-header,
+  .seller-page .app-header {
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 14px !important;
+  }
+
+  .admin-page .app-header > div,
+  .seller-page .app-header > div {
+    min-width: 0 !important;
+  }
+
+  .admin-page .admin-stats-grid,
+  .seller-page .seller-stats-grid,
+  .seller-page .seller-detail-grid,
+  .seller-page .payment-stats-grid,
+  .admin-page .category-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .seller-page .payment-list-button {
+    grid-template-columns: 1fr !important;
+  }
+
+  .seller-page .payment-list-amount {
+    justify-self: start !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .buyer-wrapper .products-list {
+    gap: 10px !important;
+  }
+
+  .buyer-wrapper .product-card :is(.product-title, h3) {
+    font-size: 13px !important;
+  }
+
+  .buyer-wrapper .price-main,
+  .buyer-wrapper .price-discount {
+    font-size: 18px !important;
+  }
+}
