@@ -147,7 +147,7 @@ async function renderAdminPage(container, options = {}) {
         <div style="display:flex; align-items:center; gap: 12px;">
           <div class="avatar" style="width: 40px; height: 40px; background:var(--gray-800); flex-shrink: 0;">AD</div>
           <div style="min-width: 0;">
-            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Painel Administrativo</div>
+            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Painel Admin</div>
             <div style="font-size:var(--font-size-xs);color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(activeInstitution.fullName)}</div>
           </div>
         </div>
@@ -211,18 +211,21 @@ function renderAdminDashboard() {
   ];
   return `
     <div class="admin-stats-grid">
-      ${stats.map(s => `
+      ${stats.map(s => {
+        const change = String(s.change || '').trim();
+        return `
         <button class="stat-card glass-card admin-metric-card" type="button" data-admin-metric="${s.id}" aria-label="Abrir detalhes de ${escapeHTML(s.label)}">
           <div class="stat-icon-wrapper">
             <div class="stat-icon">${s.icon || ''}</div>
-            <span class="stat-change ${s.positive ? 'positive' : 'negative'}">${s.change}</span>
+            ${change ? `<span class="stat-change ${s.positive ? 'positive' : 'negative'}">${escapeHTML(change)}</span>` : ''}
           </div>
           <div class="stat-info">
             <div class="stat-value">${s.value}</div>
             <div class="stat-label">${s.label}</div>
           </div>
         </button>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
 
     <!-- Alerts -->

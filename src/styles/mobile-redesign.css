@@ -10823,3 +10823,89 @@ body:has(.admin-page) {
     min-height: 112px !important;
   }
 }
+
+/* Admin final mobile cleanup: no phantom bars, no giant single-column metrics */
+.admin-page .admin-metric-card > .stat-icon-wrapper {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 36px !important;
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.admin-page .admin-metric-card > .stat-icon-wrapper::before,
+.admin-page .admin-metric-card > .stat-icon-wrapper::after,
+.admin-page .admin-metric-card::before,
+.admin-page .admin-metric-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+.admin-page .admin-metric-card .stat-change {
+  flex: 0 0 auto !important;
+  max-width: max-content !important;
+}
+
+.admin-page .admin-metric-card .stat-change:empty {
+  display: none !important;
+}
+
+@media (max-width: 540px) {
+  .admin-page .app-header {
+    min-height: 68px !important;
+    padding: 12px !important;
+  }
+
+  .admin-page .app-header .avatar {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .admin-page .app-header .period-filter {
+    width: 40px !important;
+    min-width: 40px !important;
+    padding: 0 !important;
+  }
+
+  .admin-page .admin-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .admin-page .stat-card {
+    min-height: 118px !important;
+    padding: 15px !important;
+  }
+
+  .admin-page .stat-value {
+    font-size: 30px !important;
+  }
+
+  .admin-page .stat-label {
+    font-size: 11px !important;
+  }
+
+  .admin-page .admin-tabs-container {
+    margin-bottom: 18px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .admin-page .tab {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding-inline: 16px !important;
+  }
+}
+
+@media (max-width: 350px) {
+  .admin-page .admin-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
