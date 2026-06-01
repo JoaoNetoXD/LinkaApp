@@ -10297,3 +10297,529 @@ body:has(.payment-screen) {
     font-size: 18px !important;
   }
 }
+
+/* Admin readability rescue: neutral typography, real icon boxes, calmer proportions */
+body:has(.admin-page) {
+  background: var(--lk-bg) !important;
+}
+
+.admin-page {
+  width: min(100%, 1120px) !important;
+  max-width: 1120px !important;
+  min-height: 100dvh !important;
+  margin-inline: auto !important;
+  color: var(--lk-text) !important;
+  background: var(--lk-bg) !important;
+  background-image: none !important;
+}
+
+.admin-page,
+.admin-page * {
+  font-family: var(--font-body) !important;
+  font-stretch: normal !important;
+  font-synthesis: none !important;
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+.admin-page :is(h1, h2, h3, h4, strong, button, .tab, .btn, .stat-value, .category-metric-card strong, .report-action-card strong) {
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.18 !important;
+}
+
+.admin-page :is(p, small, span, label, .stat-label, .admin-section-subtitle, .category-heat-slots, .category-rule-line) {
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.45 !important;
+}
+
+.admin-page .app-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important;
+  min-height: 74px !important;
+  padding: 14px clamp(16px, 3vw, 24px) !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+  border-radius: 0 0 var(--r-lg) var(--r-lg) !important;
+  background: color-mix(in srgb, var(--lk-bg) 94%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .app-header .avatar {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .app-header .period-filter,
+.admin-page .app-header .btn-icon,
+.admin-page .admin-logout-btn {
+  min-height: 40px !important;
+  border-radius: var(--r-pill) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .app-header .btn-icon {
+  width: 40px !important;
+  min-width: 40px !important;
+  padding: 0 !important;
+}
+
+.admin-page .app-body {
+  width: 100% !important;
+  padding: 22px clamp(16px, 3vw, 26px) calc(132px + env(safe-area-inset-bottom, 0px)) !important;
+  gap: 22px !important;
+}
+
+.admin-page #admin-content {
+  display: block !important;
+  width: 100% !important;
+}
+
+.admin-page .admin-tabs-container {
+  position: relative !important;
+  z-index: 3 !important;
+  width: 100% !important;
+  margin: 0 0 22px !important;
+  padding: 0 !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.admin-page .admin-tabs-container::-webkit-scrollbar {
+  display: none !important;
+}
+
+.admin-page .tabs {
+  display: flex !important;
+  gap: 10px !important;
+  width: max-content !important;
+  min-width: min(100%, 680px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.admin-page .tab {
+  min-width: 0 !important;
+  min-height: 42px !important;
+  height: 42px !important;
+  padding: 0 18px !important;
+  border-radius: var(--r-pill) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.admin-page .tab.active {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.admin-page .tab-count,
+.admin-page .admin-section-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 7px !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--lk-accent-dim) !important;
+  color: var(--lk-accent) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .tab.active .tab-count {
+  background: rgba(13, 13, 18, 0.14) !important;
+  color: var(--lk-bg) !important;
+}
+
+.admin-page .admin-stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  padding: 0 !important;
+  margin: 0 0 24px !important;
+}
+
+.admin-page .stat-card {
+  min-height: 128px !important;
+  padding: 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  align-items: stretch !important;
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-card) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.admin-page .stat-icon-wrapper {
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  margin: 0 0 14px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.admin-page .stat-icon,
+.admin-page .category-heat-icon,
+.admin-page .category-management-icon,
+.admin-page .alert-card-icon {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--r-sm) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  background: var(--lk-accent-dim) !important;
+  color: var(--lk-accent) !important;
+  box-shadow: none !important;
+}
+
+.admin-page :is(.stat-icon, .category-heat-icon, .category-management-icon, .alert-card-icon) svg {
+  width: 18px !important;
+  height: 18px !important;
+  stroke: currentColor !important;
+}
+
+.admin-page .stat-change {
+  position: static !important;
+  width: auto !important;
+  height: 20px !important;
+  min-width: 18px !important;
+  padding: 0 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--lk-accent-dim) !important;
+  color: var(--lk-accent) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .stat-change:empty {
+  display: none !important;
+}
+
+.admin-page .stat-value {
+  margin: 0 0 4px !important;
+  color: var(--lk-text) !important;
+  font-size: clamp(30px, 4vw, 38px) !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.admin-page .stat-label {
+  color: var(--lk-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+}
+
+.admin-page .admin-section {
+  width: 100% !important;
+  margin: 0 0 22px !important;
+  padding: 22px !important;
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-card) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .admin-section-header,
+.admin-page .category-management-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 18px !important;
+}
+
+.admin-page .admin-section-title,
+.admin-page .category-management-title h3 {
+  margin: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: clamp(20px, 2.4vw, 24px) !important;
+  font-weight: 700 !important;
+  line-height: 1.18 !important;
+}
+
+.admin-page .admin-section-subtitle,
+.admin-page .category-management-title p {
+  max-width: 620px !important;
+  margin-top: 6px !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 14px !important;
+}
+
+.admin-page .empty-state {
+  min-height: 172px !important;
+  padding: 28px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  border: 1px solid var(--lk-border) !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+  text-align: center !important;
+}
+
+.admin-page .empty-state svg {
+  width: 38px !important;
+  height: 38px !important;
+  margin: 0 0 4px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--lk-accent) !important;
+  opacity: 0.62 !important;
+}
+
+.admin-page .empty-state h3,
+.admin-page .empty-state h2 {
+  max-width: 520px !important;
+  margin: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+}
+
+.admin-page .empty-state p {
+  max-width: 420px !important;
+  margin: 0 !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+.admin-page .category-summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin: 0 0 18px !important;
+}
+
+.admin-page .category-metric-card {
+  min-height: 96px !important;
+  padding: 16px !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+}
+
+.admin-page .category-metric-card strong {
+  margin: 4px 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 30px !important;
+  line-height: 1 !important;
+}
+
+.admin-page .category-heat-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.admin-page .category-heat-card {
+  min-width: 0 !important;
+  padding: 18px !important;
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .category-heat-card.is-selected {
+  border-color: var(--lk-accent-border) !important;
+  background: color-mix(in srgb, var(--lk-surface) 88%, var(--lk-accent) 12%) !important;
+}
+
+.admin-page .category-heat-header {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.admin-page .category-heat-name {
+  min-width: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+.admin-page .category-heat-card .badge {
+  max-width: 112px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.admin-page .category-heat-actions,
+.admin-page .category-management-actions,
+.admin-page .admin-section-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+}
+
+.admin-page .category-heat-actions .btn {
+  flex: 1 1 100% !important;
+  min-height: 40px !important;
+}
+
+.admin-page .btn,
+.admin-page .period-filter,
+.admin-page .category-filter-btn,
+.admin-page .report-action-card {
+  border-radius: var(--r-pill) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .btn-primary,
+.admin-page .category-filter-btn.active {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.admin-page .btn-secondary,
+.admin-page .btn-ghost,
+.admin-page .category-filter-btn {
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+}
+
+.admin-page .progress-bar {
+  height: 6px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.admin-page .progress-fill {
+  border-radius: inherit !important;
+  background: var(--lk-accent) !important;
+}
+
+.admin-page .bottom-nav {
+  z-index: 50 !important;
+  width: min(720px, calc(100% - 32px)) !important;
+  max-width: 720px !important;
+  border-radius: 24px 24px 0 0 !important;
+}
+
+/* Buyer simple pages: fix cramped notification header/back button */
+.buyer-wrapper > .page-simple-header {
+  min-height: 72px !important;
+  padding: 14px 16px !important;
+  border-radius: 0 0 var(--r-lg) var(--r-lg) !important;
+  box-shadow: none !important;
+}
+
+.buyer-wrapper > .page-simple-header > div:first-child {
+  min-width: 0 !important;
+}
+
+.buyer-wrapper > .page-simple-header .icon-btn {
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-text) !important;
+  color: var(--lk-bg) !important;
+  border: 0 !important;
+}
+
+.buyer-wrapper > .page-simple-header .icon-btn svg {
+  width: 22px !important;
+  height: 22px !important;
+  stroke: currentColor !important;
+}
+
+.buyer-wrapper > .page-simple-header h1 {
+  min-width: 0 !important;
+  margin: 0 !important;
+  overflow-wrap: anywhere !important;
+  color: var(--lk-text) !important;
+  font-size: clamp(24px, 6vw, 30px) !important;
+  font-weight: 700 !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.01em !important;
+}
+
+@media (max-width: 760px) {
+  .admin-page .admin-stats-grid,
+  .admin-page .category-summary-grid,
+  .admin-page .category-heat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-page .app-header {
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .admin-page .app-header > div:last-child {
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-page .app-body {
+    padding-inline: 14px !important;
+  }
+
+  .admin-page .admin-section {
+    padding: 18px !important;
+  }
+
+  .admin-page .admin-stats-grid,
+  .admin-page .category-summary-grid,
+  .admin-page .category-heat-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-page .stat-card {
+    min-height: 112px !important;
+  }
+}
