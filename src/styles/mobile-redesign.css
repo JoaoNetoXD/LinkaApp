@@ -10909,3 +10909,847 @@ body:has(.admin-page) {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Admin visual refinement: cleaner category, reports, settings and modal surfaces */
+.admin-page .admin-section {
+  overflow: visible !important;
+}
+
+.admin-page .category-heat-card {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  min-height: 0 !important;
+}
+
+.admin-page .category-heat-card.is-selected {
+  background: var(--lk-card) !important;
+  border-color: var(--lk-accent-border) !important;
+  box-shadow: inset 3px 0 0 var(--lk-accent) !important;
+}
+
+.admin-page .category-heat-header {
+  margin: 0 !important;
+}
+
+.admin-page .category-heat-slots,
+.admin-page .category-rule-line,
+.admin-page .category-heat-footer,
+.admin-page .category-rule-preview {
+  margin: 0 !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 13px !important;
+}
+
+.admin-page .category-rule-line {
+  display: inline-flex !important;
+  align-items: center !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  padding: 4px 8px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.admin-page .category-heat-footer {
+  padding-top: 2px !important;
+}
+
+.admin-page .category-heat-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin-top: auto !important;
+}
+
+.admin-page .category-heat-actions .btn {
+  flex: unset !important;
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+}
+
+.admin-page .category-heat-actions .btn:first-child:last-child,
+.admin-page .category-heat-actions .btn:nth-child(3) {
+  grid-column: 1 / -1 !important;
+}
+
+.admin-page .category-management-panel {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.admin-page .category-management-header {
+  align-items: center !important;
+  padding-bottom: 16px !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+}
+
+.admin-page .category-management-actions {
+  justify-content: flex-end !important;
+}
+
+.admin-page .category-management-actions .btn {
+  min-height: 40px !important;
+  padding-inline: 16px !important;
+}
+
+.admin-page .category-filter-row {
+  gap: 8px !important;
+  margin: 14px 0 14px !important;
+  padding-bottom: 2px !important;
+}
+
+.admin-page .category-filter-btn {
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+}
+
+.admin-page .category-products-list {
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.admin-page .category-product-row {
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border) !important;
+  background: var(--lk-surface) !important;
+  overflow: hidden !important;
+}
+
+.admin-page .reports-grid,
+.admin-page .reports-insight-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.admin-page .report-action-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin: 20px 0 18px !important;
+}
+
+.admin-page .report-action-card {
+  min-height: 104px !important;
+  padding: 16px !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+  text-align: left !important;
+}
+
+.admin-page .report-action-card span,
+.admin-page .report-action-card small {
+  color: var(--lk-text-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+
+.admin-page .report-action-card strong {
+  margin: 6px 0 3px !important;
+  color: var(--lk-text) !important;
+  font-size: 30px !important;
+  line-height: 1 !important;
+}
+
+.admin-page .report-panel,
+.admin-page .chart-container {
+  min-height: 220px !important;
+  padding: 18px !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+}
+
+.admin-page .report-panel h4,
+.admin-page .chart-container h4 {
+  margin: 0 0 14px !important;
+  color: var(--lk-text) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .report-list > div {
+  min-height: 44px !important;
+  padding: 10px 0 !important;
+  border-bottom: 1px solid var(--lk-border) !important;
+}
+
+.admin-page .report-list > div:last-child {
+  border-bottom: 0 !important;
+}
+
+.admin-page .settings-section {
+  display: grid !important;
+  gap: 10px !important;
+}
+
+.admin-page .settings-group-title {
+  margin: 22px 0 4px !important;
+  padding: 0 !important;
+  color: var(--lk-accent) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  border: 0 !important;
+}
+
+.admin-page .settings-group-title:first-child {
+  margin-top: 0 !important;
+}
+
+.admin-page .setting-item {
+  min-height: 66px !important;
+  padding: 14px 16px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 14px !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border) !important;
+  background: var(--lk-surface) !important;
+  box-shadow: none !important;
+}
+
+.admin-page .setting-item-info {
+  min-width: 0 !important;
+}
+
+.admin-page .setting-item-info h4 {
+  margin: 0 0 4px !important;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.25 !important;
+}
+
+.admin-page .setting-item-info p {
+  margin: 0 !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.admin-page .settings-real-summary {
+  margin-top: 14px !important;
+  padding: 14px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  border-radius: var(--r-md) !important;
+  background: var(--lk-surface) !important;
+  border: 1px solid var(--lk-border) !important;
+}
+
+.admin-page .settings-real-summary span {
+  display: inline-flex !important;
+  min-height: 30px !important;
+  align-items: center !important;
+  padding: 0 10px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 12px !important;
+}
+
+.admin-page .modal-backdrop,
+#modal-root .modal-backdrop {
+  padding: 18px !important;
+}
+
+.admin-page .modal-content,
+#modal-root .category-editor-modal,
+#modal-root .admin-metric-modal {
+  width: min(520px, calc(100vw - 28px)) !important;
+  max-height: calc(100dvh - 36px) !important;
+  padding: 26px !important;
+  border-radius: var(--r-xl) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-card) !important;
+  box-shadow: none !important;
+}
+
+#modal-root .category-editor-modal .modal-title,
+.admin-page .modal-content .modal-title {
+  margin: 0 0 8px !important;
+  color: var(--lk-text) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+}
+
+#modal-root .category-editor-modal .modal-description,
+.admin-page .modal-content .modal-description {
+  margin: 0 0 18px !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+#modal-root .category-editor-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+#modal-root .category-editor-modal label {
+  display: grid !important;
+  gap: 7px !important;
+  min-width: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+#modal-root .category-editor-modal label:first-child,
+#modal-root .category-editor-modal label:last-of-type {
+  grid-column: 1 / -1 !important;
+}
+
+#modal-root .category-editor-modal :is(input, textarea) {
+  width: 100% !important;
+  min-height: 48px !important;
+  padding: 13px 14px !important;
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  background: var(--lk-bg) !important;
+  color: var(--lk-text) !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  outline: 0 !important;
+}
+
+#modal-root .category-editor-modal textarea {
+  min-height: 108px !important;
+  resize: vertical !important;
+}
+
+#modal-root .category-editor-modal :is(input, textarea):focus {
+  border-color: var(--lk-accent-border) !important;
+}
+
+#modal-root .category-editor-modal .modal-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  margin-top: 18px !important;
+}
+
+#modal-root .category-editor-modal .modal-actions .btn {
+  min-height: 48px !important;
+  border-radius: var(--r-md) !important;
+}
+
+@media (max-width: 760px) {
+  .admin-page .report-action-grid,
+  .admin-page .reports-grid,
+  .admin-page .reports-insight-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-page .category-management-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+
+  .admin-page .category-management-actions .btn {
+    flex: 1 1 100% !important;
+  }
+}
+
+@media (max-width: 520px) {
+  #modal-root .category-editor-grid,
+  #modal-root .category-editor-modal .modal-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-page .setting-item {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .admin-page .setting-item .btn,
+  .admin-page .setting-item .toggle {
+    justify-self: start !important;
+  }
+}
+
+/* Admin premium cleanup: removes conflicting legacy blocks and restores legible operations UI */
+.admin-page {
+  --admin-muted: #a2a0b4;
+  --admin-card: #1a1a22;
+  --admin-surface: #14141b;
+}
+
+.admin-page,
+.admin-page * {
+  font-family: "DM Sans", var(--font-body), sans-serif !important;
+  letter-spacing: 0 !important;
+}
+
+.admin-page :is(h1, h2, h3, h4, .admin-section-title, .category-management-title h3, .category-heat-name, .report-panel h4, .chart-container h4) {
+  font-family: "DM Sans", var(--font-body), sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.015em !important;
+  line-height: 1.15 !important;
+}
+
+.admin-page :is(.stat-value, .category-metric-card strong, .report-action-card strong) {
+  font-family: "DM Sans", var(--font-body), sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.admin-page :is(.admin-metric-card, .category-heat-card, .category-metric-card, .report-action-card, .report-panel, .chart-container, .setting-item, .admin-section, .category-management-panel) {
+  background: var(--admin-card) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  box-shadow: none !important;
+}
+
+.admin-page :is(.admin-metric-card, .category-heat-card, .category-metric-card, .report-action-card)::before,
+.admin-page :is(.admin-metric-card, .category-heat-card, .category-metric-card, .report-action-card)::after,
+.admin-page :is(.stat-icon-wrapper, .category-heat-header, .category-management-title, .report-action-card)::before,
+.admin-page :is(.stat-icon-wrapper, .category-heat-header, .category-management-title, .report-action-card)::after {
+  display: none !important;
+  content: none !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.admin-page .admin-stats-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+}
+
+.admin-page .admin-metric-card {
+  min-height: 132px !important;
+  padding: 16px !important;
+  display: grid !important;
+  grid-template-rows: auto 1fr !important;
+  gap: 12px !important;
+  border-radius: 18px !important;
+  overflow: hidden !important;
+}
+
+.admin-page .admin-metric-card > .stat-icon-wrapper {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 36px !important;
+  max-height: none !important;
+  flex: 0 1 auto !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+.admin-page .admin-metric-card .stat-icon,
+.admin-page .category-heat-icon,
+.admin-page .category-management-icon,
+.admin-page .alert-card-icon {
+  width: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+  flex: 0 0 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 12px !important;
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+  overflow: hidden !important;
+}
+
+.admin-page .admin-metric-card .stat-icon svg,
+.admin-page .category-heat-icon svg,
+.admin-page .category-management-icon svg,
+.admin-page .alert-card-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+  stroke: currentColor !important;
+}
+
+.admin-page .admin-metric-card .stat-info {
+  display: grid !important;
+  align-content: end !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+}
+
+.admin-page .admin-metric-card .stat-value {
+  margin: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: clamp(26px, 3vw, 34px) !important;
+  line-height: 1 !important;
+}
+
+.admin-page .admin-metric-card .stat-label {
+  color: var(--admin-muted) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+.admin-page .admin-section {
+  padding: 22px !important;
+  border-radius: 22px !important;
+  margin-bottom: 22px !important;
+}
+
+.admin-page .admin-section-header {
+  gap: 14px !important;
+  margin-bottom: 20px !important;
+}
+
+.admin-page .admin-section-title {
+  margin: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: clamp(22px, 2.2vw, 28px) !important;
+}
+
+.admin-page .admin-section-subtitle {
+  max-width: 680px !important;
+  margin-top: 6px !important;
+  color: var(--admin-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+
+.admin-page .empty-state {
+  min-height: 190px !important;
+  padding: 28px !important;
+  background: var(--admin-surface) !important;
+  border: 1px solid var(--lk-border) !important;
+  border-radius: 18px !important;
+}
+
+.admin-page .empty-state svg {
+  width: 42px !important;
+  height: 42px !important;
+  padding: 8px !important;
+  border-radius: 14px !important;
+  background: var(--lk-accent-dim) !important;
+  border: 1px solid var(--lk-accent-border) !important;
+  color: var(--lk-accent) !important;
+}
+
+.admin-page .empty-state h3,
+.admin-page .empty-state h2 {
+  margin-top: 12px !important;
+  color: var(--lk-text) !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+}
+
+.admin-page .empty-state p {
+  max-width: 340px !important;
+  color: var(--admin-muted) !important;
+  font-size: 14px !important;
+}
+
+.admin-page .category-summary-grid {
+  gap: 12px !important;
+}
+
+.admin-page .category-metric-card {
+  min-height: 104px !important;
+  padding: 16px !important;
+  border-radius: 16px !important;
+}
+
+.admin-page .category-metric-card span,
+.admin-page .category-metric-card small {
+  color: var(--admin-muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.admin-page .category-metric-card strong {
+  margin: 6px 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 30px !important;
+}
+
+.admin-page .category-heat-grid {
+  gap: 14px !important;
+}
+
+.admin-page .category-heat-card {
+  padding: 16px !important;
+  border-radius: 18px !important;
+}
+
+.admin-page .category-heat-card.is-selected {
+  background: color-mix(in srgb, var(--lk-accent-dim) 42%, var(--admin-card)) !important;
+  border-color: var(--lk-accent-border) !important;
+}
+
+.admin-page .category-heat-header {
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) auto !important;
+  gap: 12px !important;
+  align-items: center !important;
+}
+
+.admin-page .category-heat-name {
+  color: var(--lk-text) !important;
+  font-size: 17px !important;
+}
+
+.admin-page .category-heat-card .badge {
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(45, 212, 160, 0.12) !important;
+  color: var(--lk-success) !important;
+  border: 0 !important;
+  font-size: 12px !important;
+}
+
+.admin-page .category-heat-slots,
+.admin-page .category-rule-line,
+.admin-page .category-heat-footer {
+  color: var(--admin-muted) !important;
+  font-size: 13px !important;
+}
+
+.admin-page .category-rule-line {
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+  color: var(--admin-muted) !important;
+}
+
+.admin-page .category-heat-card .progress-bar {
+  height: 6px !important;
+  border-radius: var(--r-pill) !important;
+  background: rgba(255,255,255,0.06) !important;
+  overflow: hidden !important;
+}
+
+.admin-page .category-heat-card .progress-fill {
+  border-radius: inherit !important;
+  background: var(--lk-accent) !important;
+}
+
+.admin-page .category-heat-actions {
+  grid-template-columns: 1fr !important;
+}
+
+.admin-page .category-heat-actions .btn {
+  min-height: 40px !important;
+  border-radius: var(--r-pill) !important;
+  background: var(--admin-surface) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  font-weight: 800 !important;
+}
+
+.admin-page .category-heat-actions .btn:not(:first-child) {
+  display: none !important;
+}
+
+.admin-page .category-management-header {
+  align-items: flex-start !important;
+  gap: 14px !important;
+}
+
+.admin-page .category-management-title h3 {
+  color: var(--lk-text) !important;
+  font-size: clamp(24px, 2.5vw, 30px) !important;
+}
+
+.admin-page .category-management-title p {
+  color: var(--admin-muted) !important;
+  font-size: 14px !important;
+}
+
+.admin-page .category-management-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+}
+
+.admin-page .category-management-actions .btn {
+  min-height: 44px !important;
+  border-radius: var(--r-pill) !important;
+}
+
+.admin-page .category-rule-detail {
+  background: var(--admin-surface) !important;
+  border-color: var(--lk-border) !important;
+  color: var(--admin-muted) !important;
+}
+
+.admin-page .report-action-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+.admin-page .report-action-card {
+  min-height: 126px !important;
+  border-radius: 18px !important;
+  display: grid !important;
+  align-content: center !important;
+  gap: 6px !important;
+}
+
+.admin-page .report-action-card strong {
+  color: var(--lk-text) !important;
+  font-size: 32px !important;
+}
+
+.admin-page .report-action-card span,
+.admin-page .report-action-card small {
+  color: var(--admin-muted) !important;
+}
+
+.admin-page .reports-insight-grid,
+.admin-page .reports-grid {
+  gap: 16px !important;
+}
+
+.admin-page .report-panel,
+.admin-page .chart-container {
+  min-height: 240px !important;
+  border-radius: 20px !important;
+}
+
+.admin-page .report-list > div,
+.admin-page .report-product-list button {
+  min-height: 46px !important;
+  color: var(--lk-text) !important;
+}
+
+.admin-page .chart-container canvas {
+  max-height: 210px !important;
+}
+
+.admin-page .settings-section {
+  gap: 12px !important;
+}
+
+.admin-page .settings-section .divider {
+  display: none !important;
+}
+
+.admin-page .settings-group-title {
+  margin: 26px 0 2px !important;
+  color: var(--lk-text) !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  text-transform: none !important;
+  letter-spacing: -0.01em !important;
+}
+
+.admin-page .settings-group-title:first-child {
+  margin-top: 0 !important;
+}
+
+.admin-page .setting-item {
+  min-height: 74px !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+}
+
+.admin-page .setting-item-info h4 {
+  color: var(--lk-text) !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.admin-page .setting-item-info p {
+  color: var(--admin-muted) !important;
+  font-size: 13px !important;
+}
+
+#modal-root .category-editor-modal {
+  width: min(500px, calc(100vw - 24px)) !important;
+  padding: 24px !important;
+  background: var(--admin-card) !important;
+}
+
+#modal-root .category-editor-modal .input-group {
+  margin-bottom: 12px !important;
+}
+
+#modal-root .category-editor-modal label {
+  margin: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 13px !important;
+}
+
+#modal-root .category-editor-modal :is(input, textarea) {
+  background: var(--lk-bg) !important;
+}
+
+@media (max-width: 920px) {
+  .admin-page .admin-stats-grid,
+  .admin-page .report-action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-page .category-heat-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-page .app-body {
+    padding-inline: 14px !important;
+    padding-bottom: calc(126px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .admin-page .admin-section {
+    padding: 18px !important;
+    border-radius: 20px !important;
+  }
+
+  .admin-page .admin-stats-grid,
+  .admin-page .category-summary-grid,
+  .admin-page .report-action-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-page .admin-metric-card {
+    min-height: 122px !important;
+  }
+
+  .admin-page .category-management-header {
+    display: grid !important;
+  }
+
+  .admin-page .category-management-actions {
+    width: 100% !important;
+  }
+
+  .admin-page .category-management-actions .btn {
+    flex: 1 1 100% !important;
+  }
+
+  .admin-page .reports-insight-grid,
+  .admin-page .reports-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

@@ -556,7 +556,7 @@ function renderCategories() {
               <div class="category-heat-actions">
                 <button class="btn btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver produtos</button>
                 <button class="btn btn-ghost btn-sm" type="button" data-category-edit="${escapeHTML(cat.id)}">Regras</button>
-                <button class="btn btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}" ${cat.queue ? '' : 'disabled'}>Moderar</button>
+                ${cat.queue ? `<button class="btn btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}">Moderar fila</button>` : ''}
               </div>
             </article>
           `;
@@ -639,7 +639,7 @@ function renderReports() {
 
       <div class="reports-insight-grid">
         <div class="report-panel">
-          <h4>Saude da vitrine</h4>
+          <h4>Saúde da vitrine</h4>
           <div class="report-list">
             <div><span>Categoria mais ativa</span><strong>${escapeHTML(mostActiveCategory?.name || 'Sem dados')}</strong></div>
             <div><span>Produtos expirados</span><strong>${expiredProducts}</strong></div>
@@ -688,15 +688,15 @@ function renderSettings() {
     defaultAnnouncementHours: 24,
     supportWhatsapp: '',
     termsUrl: '',
-    paymentPolicy: 'O Linka nao cobra taxa. O vendedor recebe diretamente pelo Mercado Pago conectado.',
+    paymentPolicy: 'O Linka não cobra taxa. O vendedor recebe diretamente pelo Mercado Pago conectado.',
     ...(activeInstitution.settings || {}),
   };
   return `
     <div class="admin-section">
       <div class="admin-section-header">
         <div>
-          <h3 class="admin-section-title">Configuracoes institucionais</h3>
-          <p class="admin-section-subtitle">Politicas, identidade e regras operacionais usadas pelo app em producao.</p>
+          <h3 class="admin-section-title">Configurações institucionais</h3>
+          <p class="admin-section-subtitle">Políticas, identidade e regras operacionais usadas pelo app em produção.</p>
         </div>
       </div>
       ${!activeInstitution?.id ? `
@@ -725,10 +725,10 @@ function renderSettings() {
         </div>
         <div class="divider"></div>
 
-        <h4 class="settings-group-title">Aparencia do app</h4>
+        <h4 class="settings-group-title">Aparência do app</h4>
         <div class="setting-item setting-item-theme">
           <div class="setting-item-info">
-            <h4>Tema padrao neste dispositivo</h4>
+            <h4>Tema padrão neste dispositivo</h4>
             <p>${isDarkTheme ? 'Tema escuro ativo. Recomendado para o uso mobile do Linka.' : 'Tema claro ativo neste dispositivo.'}</p>
           </div>
           <button class="btn btn-ghost btn-sm admin-theme-toggle" type="button" id="btnAdminThemeToggle">
@@ -737,17 +737,17 @@ function renderSettings() {
         </div>
         <div class="divider"></div>
 
-        <h4 class="settings-group-title">Moderacao e seguranca</h4>
+        <h4 class="settings-group-title">Moderação e segurança</h4>
         <div class="setting-item">
           <div class="setting-item-info"><h4>Autoaprovação para bons vendedores</h4><p>Vendedores com 5+ anúncios aprovados sem recusa</p></div>
           <div class="toggle ${settings.autoApproveTrustedSellers ? 'active' : ''}" data-setting-toggle="autoApproveTrustedSellers"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Consentimento de responsavel (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
+          <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
           <div class="toggle ${settings.requireMinorConsent !== false ? 'active' : ''}" data-setting-toggle="requireMinorConsent"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>WhatsApp obrigatorio para vendedor</h4><p>Melhora contato, retirada e suporte ao comprador</p></div>
+          <div class="setting-item-info"><h4>WhatsApp obrigatório para vendedor</h4><p>Melhora contato, retirada e suporte ao comprador</p></div>
           <div class="toggle ${settings.requireSellerWhatsapp !== false ? 'active' : ''}" data-setting-toggle="requireSellerWhatsapp"></div>
         </div>
         <div class="setting-item">
@@ -755,7 +755,7 @@ function renderSettings() {
           <div class="toggle ${settings.requireProductPhoto !== false ? 'active' : ''}" data-setting-toggle="requireProductPhoto"></div>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Navegacao de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
+          <div class="setting-item-info"><h4>Navegação de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
           <div class="toggle ${settings.allowGuestBrowsing !== false ? 'active' : ''}" data-setting-toggle="allowGuestBrowsing"></div>
         </div>
         <div class="divider"></div>
@@ -774,12 +774,12 @@ function renderSettings() {
           <button class="btn btn-ghost btn-sm" data-setting-number="reviewSlaHours">Editar</button>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Duracao padrao da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria nao definir</p></div>
+          <div class="setting-item-info"><h4>Duração padrão da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria não definir</p></div>
           <button class="btn btn-ghost btn-sm" data-setting-number="defaultAnnouncementHours">Editar</button>
         </div>
         <div class="divider"></div>
 
-        <h4 class="settings-group-title">Governanca e suporte</h4>
+        <h4 class="settings-group-title">Governança e suporte</h4>
         <div class="setting-item">
           <div class="setting-item-info"><h4>WhatsApp de suporte da instituição</h4><p>${escapeHTML(settings.supportWhatsapp || 'Não configurado')}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting-text="supportWhatsapp">Editar</button>
@@ -789,7 +789,7 @@ function renderSettings() {
           <button class="btn btn-ghost btn-sm" data-setting-text="termsUrl">Editar</button>
         </div>
         <div class="setting-item">
-          <div class="setting-item-info"><h4>Politica de pagamentos</h4><p>${escapeHTML(settings.paymentPolicy)}</p></div>
+          <div class="setting-item-info"><h4>Política de pagamentos</h4><p>${escapeHTML(settings.paymentPolicy)}</p></div>
           <button class="btn btn-ghost btn-sm" data-setting-text="paymentPolicy">Editar</button>
         </div>
         <div class="settings-real-summary">
@@ -812,7 +812,7 @@ function showAdminProductDetails(productId, container) {
   const products = [...(loadedAllProducts || []), ...(loadedPendingAds || [])];
   const product = products.find(item => String(item.id) === String(productId));
   if (!product) {
-    showToast('Produto nao encontrado nesta sessao.', 'error');
+    showToast('Produto não encontrado nesta sessão.', 'error');
     return;
   }
 
@@ -937,7 +937,7 @@ function showAdminPhotoViewer(images, startIndex = 0, product = {}) {
           <div class="admin-photo-controls">
             <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-prev" ${safeImages.length <= 1 ? 'disabled' : ''}>Anterior</button>
             <span>${currentIndex + 1} / ${safeImages.length}</span>
-            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-next" ${safeImages.length <= 1 ? 'disabled' : ''}>Proxima</button>
+            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-next" ${safeImages.length <= 1 ? 'disabled' : ''}>Próxima</button>
           </div>
         </div>
       </div>
@@ -967,7 +967,7 @@ function showDeleteProductModal(productId, container) {
       <div class="modal-content">
         <div class="modal-handle"></div>
         <h3 class="modal-title">Excluir anúncio</h3>
-        <p class="modal-description">Isso remove o produto da vitrine e encerra a oferta para compradores. O historico continua preservado para auditoria.</p>
+        <p class="modal-description">Isso remove o produto da vitrine e encerra a oferta para compradores. O histórico continua preservado para auditoria.</p>
         ${product ? `<div class="delete-product-summary"><strong>${escapeHTML(product.title)}</strong><span>${formatCurrency(product.discountPrice)}</span></div>` : ''}
         <div class="modal-actions">
           <button class="btn btn-secondary" type="button" id="cancel-delete-product">Cancelar</button>
@@ -988,7 +988,7 @@ function showDeleteProductModal(productId, container) {
     const result = await deleteSellerProduct(productId);
     if (result?.success) {
       close();
-      showToast('Anuncio removido da vitrine.', 'success');
+      showToast('Anúncio removido da vitrine.', 'success');
       invalidateAdminData();
       await renderAdminPage(container);
       if (adminView === 'categories') scrollCategoryManagementIntoView(container);
@@ -1252,7 +1252,7 @@ function bindAdminEvents(container) {
         const result = await approveProduct(adId);
         if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar o anúncio.');
         removePendingAd(adId);
-        showToast('Anuncio aprovado com sucesso!', 'success');
+        showToast('Anúncio aprovado com sucesso!', 'success');
         invalidateAdminData();
         await renderAdminPage(container);
       } catch (err) {
@@ -1444,7 +1444,7 @@ function bindAdminEvents(container) {
     toggle.addEventListener('click', async () => {
       if (toggle.classList.contains('is-saving')) return;
       if (!activeInstitution?.id) {
-        showToast('Instituicao real nao encontrada para salvar.', 'error');
+        showToast('Instituição real não encontrada para salvar.', 'error');
         return;
       }
       const key = toggle.dataset.settingToggle;
@@ -1499,7 +1499,7 @@ function bindAdminEvents(container) {
       modalRoot.querySelector('#settings-edit-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!activeInstitution?.id) {
-          showToast('Instituicao real nao encontrada para salvar.', 'error');
+          showToast('Instituição real não encontrada para salvar.', 'error');
           return;
         }
         const confirmBtn = modalRoot.querySelector('#confirm-setting');
@@ -1542,7 +1542,7 @@ function bindAdminEvents(container) {
   container.querySelectorAll('[data-setting-text], [data-setting-number]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!activeInstitution?.id) {
-        showToast('Instituicao real nao encontrada para salvar.', 'error');
+        showToast('Instituição real não encontrada para salvar.', 'error');
         return;
       }
       const isNumber = Boolean(btn.dataset.settingNumber);
