@@ -9132,6 +9132,55 @@ body.first-run-tour-lock {
   line-height: 1.5;
 }
 
+.first-run-tour-install {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--lk-accent-border);
+  border-radius: 18px;
+  background: var(--lk-accent-dim);
+}
+
+.first-run-tour-install-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(200, 241, 53, 0.14);
+  color: var(--lk-accent);
+}
+
+.first-run-tour-install-icon svg {
+  width: 19px;
+  height: 19px;
+  stroke: currentColor;
+}
+
+.first-run-tour-install-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.first-run-tour-install-copy strong {
+  color: var(--lk-text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.first-run-tour-install-copy small {
+  color: var(--lk-text-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .first-run-tour-dots {
   display: flex;
   justify-content: center;
@@ -9414,7 +9463,7 @@ body.first-run-tour-lock {
 
 @media (max-width: 380px) {
   .first-run-tour-card {
-    min-height: 500px;
+    min-height: auto;
     padding: 16px;
   }
 

@@ -247,10 +247,20 @@ function isIosBrowser() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
+function isAndroidBrowser() {
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+function hasFinishedFirstRunTour() {
+  return Boolean(localStorage.getItem(FIRST_RUN_TOUR_KEY));
+}
+
 function canShowInstallPrompt() {
   return isMobileInstallSurface()
     && !isRunningStandalone()
+    && hasFinishedFirstRunTour()
     && !localStorage.getItem(INSTALL_PROMPT_SEEN_KEY)
+    && !document.querySelector('.first-run-tour-shell')
     && !document.querySelector('.install-prompt-shell');
 }
 
@@ -304,6 +314,53 @@ function showInstallPrompt(mode = 'native') {
   });
 
   document.body.appendChild(shell);
+}
+
+function canOfferInstallInsideTour() {
+  return isMobileInstallSurface()
+    && !isRunningStandalone()
+    && !localStorage.getItem(INSTALL_PROMPT_SEEN_KEY);
+}
+
+function getTourInstallMode() {
+  if (!canOfferInstallInsideTour()) return 'none';
+  if (deferredInstallPrompt && isAndroidBrowser()) return 'native';
+  if (isIosBrowser()) return 'ios';
+  return 'hint';
+}
+
+function renderTourInstallPanel(mode = 'none') {
+  if (mode === 'none') return '';
+  const title = mode === 'native' ? 'Instale o Linka no celular' : 'Use como app no celular';
+  const text = mode === 'native'
+    ? 'Depois do tour, toque para instalar e abrir o Linka direto pela tela inicial.'
+    : mode === 'ios'
+      ? 'No iPhone, abra o menu Compartilhar e escolha “Adicionar à Tela de Início”.'
+      : 'Quando o navegador mostrar a opção, instale o Linka para acessar mais rápido.';
+  return `
+    <div class="first-run-tour-install" data-install-mode="${mode}">
+      <span class="first-run-tour-install-icon" aria-hidden="true">${icons.package}</span>
+      <span class="first-run-tour-install-copy">
+        <strong>${escapeHTML(title)}</strong>
+        <small>${escapeHTML(text)}</small>
+      </span>
+    </div>
+  `;
+}
+
+async function runTourInstallAction(mode) {
+  if (mode === 'native' && deferredInstallPrompt) {
+    const installEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    markInstallPromptSeen();
+    await installEvent.prompt();
+    await installEvent.userChoice.catch(() => null);
+    return true;
+  }
+  if (mode === 'ios' || mode === 'hint') {
+    markInstallPromptSeen();
+  }
+  return false;
 }
 
 const firstRunTourSteps = [
@@ -419,8 +476,7 @@ function canShowFirstRunTour(path = '') {
   const isBuyerSurface = !normalizedPath || normalizedPath === 'buyer' || normalizedPath.startsWith('buyer/');
   return (shouldForceTour() || !localStorage.getItem(FIRST_RUN_TOUR_KEY))
     && isBuyerSurface
-    && !document.querySelector('.first-run-tour-shell')
-    && !document.querySelector('.install-prompt-shell');
+    && !document.querySelector('.first-run-tour-shell');
 }
 
 function markFirstRunTourSeen() {
@@ -431,6 +487,8 @@ function renderFirstRunTourStep(shell, stepIndex) {
   shell.dataset.step = String(stepIndex);
   const step = firstRunTourSteps[stepIndex] || firstRunTourSteps[0];
   const isLast = stepIndex === firstRunTourSteps.length - 1;
+  const installMode = isLast ? getTourInstallMode() : 'none';
+  const nextLabel = isLast && installMode === 'native' ? 'Instalar app' : isLast ? 'Começar' : 'Próximo';
   const card = shell.querySelector('.first-run-tour-card');
   if (!card) return;
 
@@ -445,6 +503,7 @@ function renderFirstRunTourStep(shell, stepIndex) {
       <h2>${escapeHTML(step.title)}</h2>
       <p>${escapeHTML(step.text)}</p>
     </div>
+    ${renderTourInstallPanel(installMode)}
     <div class="first-run-tour-dots" aria-label="Passo ${stepIndex + 1} de ${firstRunTourSteps.length}">
       ${firstRunTourSteps.map((_, index) => `
         <button class="first-run-tour-dot ${index === stepIndex ? 'active' : ''}" type="button" data-tour-dot="${index}" aria-label="Ir para o passo ${index + 1}"></button>
@@ -452,14 +511,15 @@ function renderFirstRunTourStep(shell, stepIndex) {
     </div>
     <div class="first-run-tour-actions">
       <button class="first-run-tour-skip" type="button">${isLast ? 'Agora não' : 'Pular'}</button>
-      <button class="first-run-tour-next" type="button">${isLast ? 'Começar' : 'Próximo'} ${isLast ? icons.check : icons.arrowRight}</button>
+      <button class="first-run-tour-next" type="button">${nextLabel} ${isLast ? icons.check : icons.arrowRight}</button>
     </div>
   `;
 
   card.querySelector('.first-run-tour-close')?.addEventListener('click', () => closeFirstRunTour(shell));
   card.querySelector('.first-run-tour-skip')?.addEventListener('click', () => closeFirstRunTour(shell));
-  card.querySelector('.first-run-tour-next')?.addEventListener('click', () => {
+  card.querySelector('.first-run-tour-next')?.addEventListener('click', async () => {
     if (isLast) {
+      await runTourInstallAction(installMode);
       closeFirstRunTour(shell);
       return;
     }
@@ -481,6 +541,7 @@ function closeFirstRunTour(shell = document.querySelector('.first-run-tour-shell
 
 function showFirstRunTour(path = '') {
   if (!canShowFirstRunTour(path)) return;
+  closeInstallPrompt();
   const shell = document.createElement('div');
   shell.className = 'first-run-tour-shell';
   shell.innerHTML = `
@@ -520,10 +581,6 @@ export function replayFirstRunTour() {
 function maybeShowFirstRunTour(path = '') {
   if (!canShowFirstRunTour(path)) return;
   window.setTimeout(() => {
-    if (document.querySelector('.install-prompt-shell')) {
-      window.setTimeout(() => showFirstRunTour(path), 1800);
-      return;
-    }
     showFirstRunTour(path);
   }, 900);
 }
@@ -658,6 +715,14 @@ window.addEventListener('beforeinstallprompt', (event) => {
   if (!isMobileInstallSurface()) return;
   event.preventDefault();
   deferredInstallPrompt = event;
+  const tour = document.querySelector('.first-run-tour-shell');
+  if (tour) {
+    const currentStep = Number(tour.dataset.step || 0);
+    if (currentStep === firstRunTourSteps.length - 1) {
+      renderFirstRunTourStep(tour, currentStep);
+    }
+    return;
+  }
   window.setTimeout(() => showInstallPrompt('native'), 1400);
 });
 
