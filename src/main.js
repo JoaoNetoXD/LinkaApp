@@ -110,7 +110,7 @@ export const icons = {
   digital: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.16 3.84a2.76 2.76 0 0 0-3.92 0L5.3 15.78a2 2 0 0 0-.5.98l-.78 3.93a1 1 0 0 0 1.18 1.18l3.93-.78a2 2 0 0 0 .98-.5l11.94-11.94a2.76 2.76 0 0 0 0-3.93z"/><path d="M16.5 7.5l2 2"/></svg>',
   others: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
   all: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>',
-  refresh: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.13 15.57a10 10 0 1 0 3.43-11.02L21.5 8"/></svg>'
+  refresh: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.7-4.4"/><path d="M4 5v4h4"/><path d="M4 13a8 8 0 0 0 14.7 4.4"/><path d="M20 19v-4h-4"/></svg>'
 };
 
 export function escapeHTML(value) {
@@ -140,14 +140,27 @@ export function showToast(message, type = 'info') {
   container.classList.add('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `${type === 'success' ? icons.check : type === 'error' ? icons.x : ''} ${escapeHTML(message)}`;
+  const icon = type === 'success' ? icons.check : type === 'error' ? icons.x : type === 'warning' ? icons.alertTriangle : icons.bell;
+  toast.innerHTML = `
+    <span class="toast-icon" aria-hidden="true">${icon}</span>
+    <span class="toast-message">${escapeHTML(message)}</span>
+    <button class="toast-close" type="button" aria-label="Fechar notificação">${icons.x}</button>
+  `;
   container.appendChild(toast);
-  setTimeout(() => {
+
+  const dismiss = () => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(-8px)';
     toast.style.transition = 'all 300ms ease';
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  };
+
+  toast.querySelector('.toast-close')?.addEventListener('click', dismiss);
+  let timer = setTimeout(dismiss, 5200);
+  toast.addEventListener('pointerenter', () => clearTimeout(timer));
+  toast.addEventListener('pointerleave', () => {
+    timer = setTimeout(dismiss, 2200);
+  });
 }
 
 // Placeholder fine line icons

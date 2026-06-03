@@ -143,16 +143,16 @@ async function renderAdminPage(container, options = {}) {
   await loadAdminData({ force: Boolean(options.forceRefresh) });
   container.innerHTML = `
     <div class="page admin-page">
-      <header class="app-header" style="justify-content:space-between; align-items:center; padding: 16px 24px;">
-        <div style="display:flex; align-items:center; gap: 12px;">
-          <div class="avatar" style="width: 40px; height: 40px; background:var(--gray-800); flex-shrink: 0;">AD</div>
-          <div style="min-width: 0;">
-            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Painel Admin</div>
-            <div style="font-size:var(--font-size-xs);color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHTML(activeInstitution.fullName)}</div>
+      <header class="app-header admin-main-header">
+        <div class="admin-header-brand">
+          <div class="avatar admin-header-avatar">AD</div>
+          <div class="admin-header-copy">
+            <div class="admin-header-title">Painel Admin</div>
+            <div class="admin-header-subtitle">${escapeHTML(activeInstitution.fullName)}</div>
           </div>
         </div>
-      <div style="display:flex;align-items:center;gap:12px; flex-shrink: 0;">
-          <button class="period-filter" id="btnAdminRefresh" style="padding: 6px 10px;">${icons.refresh} <span class="hide-mobile">Atualizar</span></button>
+        <div class="admin-header-actions">
+          <button class="period-filter admin-refresh-btn" id="btnAdminRefresh" type="button">${icons.refresh} <span class="hide-mobile">Atualizar</span></button>
           <button class="btn-icon" id="btnAdminNotif" style="position:relative;">
             ${icons.bell}
             <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
@@ -1140,7 +1140,7 @@ function showDeleteCategoryModal(categoryId, container) {
       await deleteCategory(categoryId);
       close();
       selectedCategoryId = null;
-      showToast('Categoria excluida.', 'success');
+      showToast('Categoria excluída.', 'success');
       invalidateAdminData();
       await renderAdminPage(container);
     } catch (error) {
@@ -1426,7 +1426,7 @@ function bindAdminEvents(container) {
     logoutBtn.textContent = 'Saindo...';
     try {
       await signOutUser();
-      showToast('Voce saiu da conta admin.', 'success');
+      showToast('Você saiu da conta admin.', 'success');
       window.location.hash = '#/auth';
     } catch {
       window.location.hash = '#/auth';
@@ -1455,7 +1455,7 @@ function bindAdminEvents(container) {
       const result = await updateInstitution(activeInstitution.id, { settings });
       if (result?.success) {
         activeInstitution = result.institution;
-        showToast('Configuracao salva.', 'success');
+        showToast('Configuração salva.', 'success');
       } else {
         toggle.classList.toggle('active', !nextValue);
         showToast(result?.error || 'Não foi possível salvar.', 'error');
@@ -1548,7 +1548,7 @@ function bindAdminEvents(container) {
       const isNumber = Boolean(btn.dataset.settingNumber);
       const settingKey = btn.dataset.settingNumber || btn.dataset.settingText;
       const settingItem = btn.closest('.setting-item');
-      const title = settingItem?.querySelector('h4')?.textContent || 'Configuracao';
+      const title = settingItem?.querySelector('h4')?.textContent || 'Configuração';
       const currentValue = activeInstitution.settings?.[settingKey] ?? '';
       const modalRoot = document.getElementById('modal-root');
       modalRoot.innerHTML = `
@@ -1583,21 +1583,21 @@ function bindAdminEvents(container) {
         const rawValue = modalRoot.querySelector('#settingJsonVal')?.value?.trim() || '';
         const value = isNumber ? Number(rawValue) : rawValue;
         if (isNumber && (!Number.isFinite(value) || value < 0)) {
-          showToast('Informe um numero valido.', 'error');
+          showToast('Informe um número válido.', 'error');
           return;
         }
         saveBtn.disabled = true;
         saveBtn.textContent = 'Salvando...';
         if (statusEl) {
           statusEl.className = 'modal-inline-status info';
-          statusEl.textContent = 'Salvando configuracao...';
+          statusEl.textContent = 'Salvando configuração...';
         }
         const settings = { ...(activeInstitution.settings || {}), [settingKey]: value };
         const result = await updateInstitution(activeInstitution.id, { settings });
         if (result?.success) {
           activeInstitution = result.institution;
           close();
-          showToast('Configuracao salva.', 'success');
+          showToast('Configuração salva.', 'success');
           renderAdminPage(container);
         } else {
           saveBtn.disabled = false;
@@ -1656,7 +1656,7 @@ function bindAdminEvents(container) {
     const a = document.createElement('a');
     a.href = url; a.download = `relatorio-linka-${Date.now()}.txt`;
     a.click(); URL.revokeObjectURL(url);
-    showToast('Relatorio exportado!', 'success');
+    showToast('Relatório exportado!', 'success');
   });
 
   // Charts

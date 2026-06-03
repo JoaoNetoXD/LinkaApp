@@ -11753,3 +11753,281 @@ body:has(.admin-page) {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Final UX pass: centered auth brand, dismissible toasts and calmer admin header/settings */
+.toast-container {
+  top: 18px !important;
+  right: 18px !important;
+  left: auto !important;
+  width: min(440px, calc(100vw - 28px)) !important;
+  max-width: none !important;
+  transform: none !important;
+  gap: 10px !important;
+  pointer-events: none !important;
+}
+
+.toast {
+  min-height: 58px !important;
+  display: grid !important;
+  grid-template-columns: 30px minmax(0, 1fr) 34px !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 12px 12px 14px !important;
+  border-radius: 18px !important;
+  background: color-mix(in srgb, var(--lk-card) 92%, transparent) !important;
+  border: 1px solid var(--lk-border-md) !important;
+  color: var(--lk-text) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+.toast.success {
+  background: color-mix(in srgb, var(--lk-success) 14%, var(--lk-card)) !important;
+  border-color: rgba(45, 212, 160, 0.26) !important;
+}
+
+.toast.error {
+  background: color-mix(in srgb, var(--lk-danger) 14%, var(--lk-card)) !important;
+  border-color: rgba(255, 92, 92, 0.28) !important;
+}
+
+.toast.warning {
+  background: color-mix(in srgb, var(--lk-warning) 15%, var(--lk-card)) !important;
+  border-color: rgba(245, 158, 11, 0.30) !important;
+  color: var(--lk-text) !important;
+}
+
+.toast-icon {
+  width: 30px !important;
+  height: 30px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--lk-accent) !important;
+}
+
+.toast.success .toast-icon {
+  color: var(--lk-success) !important;
+}
+
+.toast.error .toast-icon {
+  color: var(--lk-danger) !important;
+}
+
+.toast-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.toast-message {
+  min-width: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+}
+
+.toast-close {
+  width: 34px !important;
+  height: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 1px solid var(--lk-border) !important;
+  border-radius: 12px !important;
+  background: rgba(13, 13, 18, 0.38) !important;
+  color: var(--lk-text-muted) !important;
+  cursor: pointer !important;
+}
+
+.toast-close:hover,
+.toast-close:focus-visible {
+  color: var(--lk-text) !important;
+  border-color: var(--lk-border-strong) !important;
+  outline: none !important;
+}
+
+.toast-close svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+.auth-wrapper {
+  justify-content: flex-start !important;
+  align-items: center !important;
+  min-height: 100dvh !important;
+  padding: clamp(38px, 8vh, 72px) 24px 44px !important;
+}
+
+.auth-wrapper .auth-header {
+  width: 100% !important;
+  max-width: 440px !important;
+  display: grid !important;
+  justify-items: center !important;
+  text-align: center !important;
+  margin: 0 auto 26px !important;
+}
+
+.auth-wrapper .auth-logo {
+  width: 100% !important;
+  text-align: center !important;
+  color: var(--lk-text) !important;
+  font-family: "DM Sans", var(--font-body), sans-serif !important;
+  font-size: clamp(38px, 10vw, 48px) !important;
+  line-height: 1 !important;
+  letter-spacing: -0.035em !important;
+}
+
+.auth-wrapper .auth-logo span {
+  color: var(--lk-accent) !important;
+}
+
+.auth-wrapper .auth-subtitle {
+  margin: 14px auto 0 !important;
+  max-width: 330px !important;
+  color: var(--lk-text-muted) !important;
+  font-size: 15px !important;
+}
+
+.auth-wrapper .auth-back-home {
+  margin-top: 18px !important;
+  border-color: var(--lk-border-md) !important;
+  background: var(--lk-surface) !important;
+  color: var(--lk-accent) !important;
+  box-shadow: none !important;
+}
+
+.auth-wrapper .auth-mode-switch,
+.auth-wrapper .auth-form,
+.auth-wrapper .auth-switch {
+  width: min(100%, 440px) !important;
+}
+
+.auth-wrapper .auth-mode-switch {
+  margin-inline: auto !important;
+}
+
+.auth-wrapper .auth-role-btn.active {
+  background: var(--lk-accent) !important;
+  border-color: var(--lk-accent) !important;
+  color: var(--lk-bg) !important;
+}
+
+.auth-wrapper .auth-role-btn.active strong,
+.auth-wrapper .auth-role-btn.active span {
+  color: var(--lk-bg) !important;
+}
+
+.admin-page .admin-main-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+  padding: 14px clamp(14px, 3vw, 22px) !important;
+  border-radius: 0 0 20px 20px !important;
+}
+
+.admin-page .admin-header-brand,
+.admin-page .admin-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.admin-page .admin-header-actions {
+  flex: 0 0 auto !important;
+}
+
+.admin-page .admin-header-avatar {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 42px !important;
+}
+
+.admin-page .admin-header-copy {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 3px !important;
+}
+
+.admin-page .admin-header-title {
+  color: var(--lk-text) !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.admin-page .admin-header-subtitle {
+  color: var(--admin-muted, var(--lk-text-muted)) !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.admin-page .admin-refresh-btn {
+  min-width: 116px !important;
+  gap: 8px !important;
+  padding: 0 15px !important;
+}
+
+.admin-page .admin-refresh-btn svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.admin-page .settings-section {
+  padding: 0 !important;
+}
+
+.admin-page .settings-group-title {
+  margin: 30px 0 10px !important;
+  padding-top: 0 !important;
+  color: var(--lk-text) !important;
+  font-size: 18px !important;
+}
+
+.admin-page .settings-group-title + .setting-item {
+  margin-top: 0 !important;
+}
+
+.admin-page .setting-item {
+  background: var(--admin-surface) !important;
+  border-color: var(--lk-border) !important;
+}
+
+@media (max-width: 560px) {
+  .toast-container {
+    top: 12px !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+  }
+
+  .admin-page .admin-main-header {
+    gap: 10px !important;
+  }
+
+  .admin-page .admin-header-title {
+    font-size: 15px !important;
+  }
+
+  .admin-page .admin-header-subtitle {
+    max-width: 150px !important;
+    font-size: 12px !important;
+  }
+
+  .admin-page .admin-refresh-btn {
+    min-width: 42px !important;
+    width: 42px !important;
+    padding: 0 !important;
+  }
+}
