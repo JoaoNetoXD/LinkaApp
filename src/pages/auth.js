@@ -12,6 +12,12 @@ function readAuthParams() {
 
 function syncIntentFromUrl() {
   const params = readAuthParams();
+  if (params.get('confirmed') === '1') {
+    isLoginMode = true;
+    selectedRole = params.get('role') === 'seller' ? 'seller' : 'buyer';
+    return;
+  }
+
   const intent = params.get('role') || params.get('intent') || '';
   if (intent && intent !== lastIntent) {
     lastIntent = intent;
@@ -36,6 +42,7 @@ function setLoading(button, isLoading, text) {
 
 export function renderAuth(container) {
   syncIntentFromUrl();
+  const authParams = readAuthParams();
   const subtitle = isLoginMode
     ? 'Entre para continuar usando o Linka.'
     : selectedRole === 'seller'
@@ -135,6 +142,13 @@ export function renderAuth(container) {
   document.getElementById('btnBackHome')?.addEventListener('click', () => {
     window.location.hash = '#/';
   });
+
+  if (authParams.get('confirmed') === '1') {
+    const confirmedRole = authParams.get('role') === 'seller' ? 'seller' : 'buyer';
+    showAuthMessage(confirmedRole === 'seller'
+      ? 'E-mail confirmado. Entre para abrir seu painel de vendedor.'
+      : 'E-mail confirmado. Entre para acessar suas ofertas e cupons.', 'success');
+  }
 
   let enterSubmitQueued = false;
   const submitAuthFromEnter = (event) => {

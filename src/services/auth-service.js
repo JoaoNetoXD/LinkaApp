@@ -1,6 +1,39 @@
 import { supabase } from '../lib/supabase.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
+const DEFAULT_PUBLIC_APP_URL = 'https://linka-app.netlify.app';
+
+function cleanUrl(url = '') {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function isLocalOrigin(origin = '') {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+}
+
+function getPublicAppUrl() {
+  const configuredUrl = cleanUrl(
+    import.meta.env.VITE_APP_URL
+    || import.meta.env.VITE_PUBLIC_APP_URL
+    || import.meta.env.VITE_FRONTEND_URL
+    || ''
+  );
+  if (configuredUrl) return configuredUrl;
+
+  const currentOrigin = cleanUrl(window.location.origin);
+  return isLocalOrigin(currentOrigin) ? DEFAULT_PUBLIC_APP_URL : currentOrigin;
+}
+
+function getEmailRedirectTo(role = 'buyer') {
+  const accountRole = normalizeRole(role);
+  const target = accountRole === 'seller' ? 'seller' : 'buyer';
+  const params = new URLSearchParams({
+    confirmed: '1',
+    role: accountRole,
+    next: target,
+  });
+  return `${getPublicAppUrl()}/#/auth?${params.toString()}`;
+}
 
 export function getHomePathForRole(role = 'buyer') {
   if (role === 'admin') return '#/admin';
@@ -92,14 +125,20 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
 export async function signUpUser(email, password, fullName, role = 'buyer', extra = {}) {
   try {
     const accountRole = role === 'seller' ? 'seller' : 'buyer';
+    const roleLabel = accountRole === 'seller' ? 'vendedor' : 'comprador';
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/#/auth?confirmed=1`,
+        emailRedirectTo: getEmailRedirectTo(accountRole),
         data: {
           full_name: fullName,
           role: accountRole,
+          role_label: roleLabel,
+          app_name: 'Linka',
+          confirmation_context: accountRole === 'seller'
+            ? 'Confirme seu e-mail para ativar sua conta de vendedor no Linka.'
+            : 'Confirme seu e-mail para comprar ofertas e receber cupons no Linka.',
           whatsapp: extra.whatsapp || '',
         },
       },

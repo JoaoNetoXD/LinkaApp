@@ -47,6 +47,7 @@ Depois que o site existir no Netlify, configure em Site configuration > Environm
 ```env
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+VITE_APP_URL=https://seu-site.netlify.app
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 
 MP_ACCESS_TOKEN=APP_USR-seu-access-token-de-producao
@@ -64,6 +65,30 @@ Nao coloque `SUPABASE_SERVICE_ROLE_KEY`, `MP_ACCESS_TOKEN` ou `MP_CLIENT_SECRET`
 WEBHOOK_URL=https://seu-site.netlify.app/api/webhook
 MP_REDIRECT_URI=https://seu-site.netlify.app/api/mercadopago/oauth/callback
 ```
+
+## 3.1. Supabase Auth URL e e-mail de confirmacao
+
+No Supabase, abra Authentication > URL Configuration:
+
+```text
+Site URL: https://seu-site.netlify.app
+Redirect URLs:
+https://seu-site.netlify.app/**
+http://localhost:5173/**
+http://127.0.0.1:5173/**
+```
+
+Para o projeto publicado atual, use:
+
+```text
+Site URL: https://linka-app.netlify.app
+Redirect URLs:
+https://linka-app.netlify.app/**
+http://localhost:5173/**
+http://127.0.0.1:5173/**
+```
+
+Depois, em Authentication > Email Templates > Confirm signup, use o modelo em `SUPABASE_AUTH_EMAILS.md`.
 
 ## 4. Mercado Pago
 
