@@ -63,6 +63,33 @@ function setLoading(button, isLoading, text) {
   button.innerHTML = isLoading ? `${icons.loader || ''} Aguarde...` : text;
 }
 
+function isEmailRateLimitError(text = '') {
+  const normalized = text.toLowerCase();
+  return normalized.includes('limite temporario')
+    || normalized.includes('muitas tentativas')
+    || normalized.includes('rate limit');
+}
+
+function startRetryCooldown(button, defaultText, seconds = 60) {
+  if (!button) return;
+  let remaining = seconds;
+
+  const tick = () => {
+    button.disabled = true;
+    button.textContent = `Tente novamente em ${remaining}s`;
+    remaining -= 1;
+
+    if (remaining < 0) {
+      clearInterval(timer);
+      button.disabled = false;
+      button.textContent = defaultText;
+    }
+  };
+
+  tick();
+  const timer = setInterval(tick, 1000);
+}
+
 function getAuthMode() {
   if (hasPasswordRecoveryIntent()) return 'recovery';
   if (isResetRequestMode) return 'forgot';
@@ -400,8 +427,12 @@ export function renderAuth(container) {
 
     const res = await signUpUser(email, password, name, selectedRole, { whatsapp });
     if (!res.success) {
-      showAuthMessage(res.error || 'Nao foi possivel criar a conta.');
+      const message = res.error || 'Nao foi possivel criar a conta.';
+      showAuthMessage(message);
       setLoading(btn, false, defaultText);
+      if (isEmailRateLimitError(message)) {
+        startRetryCooldown(btn, defaultText, 60);
+      }
       return;
     }
 

@@ -91,7 +91,7 @@ function translateAuthError(message = '') {
     },
     {
       match: ['email rate limit exceeded', 'rate limit', 'security purposes'],
-      text: 'Muitas tentativas em pouco tempo. Aguarde alguns instantes e tente novamente.',
+      text: 'O envio de e-mails atingiu o limite temporario. Aguarde alguns minutos antes de tentar de novo.',
     },
     {
       match: ['database error saving new user', 'database error'],
