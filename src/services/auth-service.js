@@ -35,6 +35,13 @@ function getEmailRedirectTo(role = 'buyer') {
   return `${getPublicAppUrl()}/#/auth?${params.toString()}`;
 }
 
+function getPasswordRecoveryRedirectTo() {
+  const params = new URLSearchParams({
+    reset: '1',
+  });
+  return `${getPublicAppUrl()}/#/auth?${params.toString()}`;
+}
+
 export function getHomePathForRole(role = 'buyer') {
   if (role === 'admin') return '#/admin';
   if (role === 'seller') return '#/seller';
@@ -65,6 +72,14 @@ function translateAuthError(message = '') {
     {
       match: ['password should be at least', 'weak password'],
       text: 'A senha precisa ter pelo menos 6 caracteres.',
+    },
+    {
+      match: ['same password', 'different from the old password'],
+      text: 'Use uma senha diferente da senha atual.',
+    },
+    {
+      match: ['password recovery', 'recovery session', 'session missing', 'auth session missing'],
+      text: 'Abra novamente o link enviado por e-mail para redefinir sua senha.',
     },
     {
       match: ['unable to validate email address', 'invalid email'],
@@ -189,6 +204,31 @@ export async function signInUser(email, password) {
     };
   } catch (err) {
     console.error('Sign in error:', err.message);
+    return { success: false, error: translateAuthError(err.message) };
+  }
+}
+
+export async function requestPasswordReset(email) {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: getPasswordRecoveryRedirectTo(),
+    });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Password reset request error:', err.message);
+    return { success: false, error: translateAuthError(err.message) };
+  }
+}
+
+export async function updateUserPassword(password) {
+  try {
+    const { data, error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    return { success: true, data };
+  } catch (err) {
+    console.error('Password update error:', err.message);
     return { success: false, error: translateAuthError(err.message) };
   }
 }

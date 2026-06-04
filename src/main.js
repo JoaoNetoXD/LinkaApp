@@ -656,7 +656,10 @@ async function handleRoute() {
     setPageTitle('auth');
     renderAuth(app);
     resetAppScroll(app);
-    if (session) {
+    const authQuery = (window.location.hash.split('?')[1] || '').split('#')[0];
+    const isPasswordResetRoute = window.location.hash.startsWith('#/auth')
+      && new URLSearchParams(authQuery).get('reset') === '1';
+    if (session && !isPasswordResetRoute) {
       const profile = await loadProfileForSession(session);
       if (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth')) {
         window.location.hash = getHomePathForRole(getSessionRole(session, profile));
@@ -688,6 +691,12 @@ async function handleRoute() {
 // Listen to auth changes
 onAuthStateChange(async (event, session) => {
   globalSession = session;
+  if (event === 'PASSWORD_RECOVERY' && session) {
+    sessionStorage.setItem('linka_password_recovery_active', '1');
+    window.location.hash = '#/auth?reset=1';
+    return;
+  }
+
   if (event === 'SIGNED_IN' && session) {
     try {
       globalProfile = await getCurrentProfile(session.user.id);

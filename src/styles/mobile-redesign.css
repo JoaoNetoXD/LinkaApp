@@ -3576,6 +3576,39 @@ html[data-theme="dark"] .btn-mp {
   }
 }
 
+.auth-wrapper .auth-inline-action {
+  align-self: flex-end;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--lk-accent);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  margin: -4px 0 2px;
+  padding: 4px 2px;
+  text-align: right;
+  transition: color var(--duration) var(--ease), opacity var(--duration) var(--ease);
+}
+
+.auth-wrapper .auth-inline-action:hover,
+.auth-wrapper .auth-inline-action:focus-visible {
+  color: var(--lk-text);
+  outline: none;
+}
+
+.auth-wrapper .auth-reset-note {
+  background: rgba(200, 241, 53, 0.08);
+  border: 1px solid rgba(200, 241, 53, 0.18);
+  border-radius: 16px;
+  color: var(--lk-text-muted);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 14px 16px;
+}
+
 /* Buyer/auth polish: more breathing room, cleaner empty states and no cramped desktop shell */
 html:has(.auth-wrapper),
 body:has(.auth-wrapper),
