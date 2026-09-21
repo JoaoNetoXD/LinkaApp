@@ -9,6 +9,7 @@ import { getCategories } from '../services/category-service.js';
 import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { hasVisibleDiscount } from '../utils/pricing.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -847,6 +848,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           const timer = getCountdownInfo(p.expiresAt, p.expiresIn);
           const slots = getSlotsInfo(p.slots.used, p.slots.total);
           const isSoldOut = p.slots.used >= p.slots.total;
+          const hasDiscount = hasVisibleDiscount(p);
           
           return `
           <div class="product-card ${isSoldOut ? 'sold-out' : ''}" data-product-card="${p.id}" role="button" tabindex="0" aria-label="Ver detalhes de ${escapeHTML(p.title)}" style="cursor:pointer;">
@@ -855,7 +857,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               <div class="cat-badge">${catIcon} ${escapeHTML(catName)}</div>
               ${isSoldOut 
                 ? `<div class="discount-badge soldout-badge">ESGOTADO</div>`
-                : `<div class="discount-badge">−${p.discount}%</div>`
+                : hasDiscount ? `<div class="discount-badge">−${p.discount}%</div>` : ''
               }
             </div>
             
@@ -865,7 +867,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
               <div class="card-price-row">
                 <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
-                <span class="price-original">${formatCurrency(p.originalPrice)}</span>
+                ${hasDiscount ? `<span class="price-original">${formatCurrency(p.originalPrice)}</span>` : ''}
               </div>
               
               <div class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
@@ -1044,7 +1046,7 @@ async function renderCategories(container) {
   const totalOffers = allProducts.length;
   const stats = categories.map((category) => {
     const categoryProducts = allProducts.filter(product => product.category === category.id);
-    const bestDeal = categoryProducts.reduce((best, product) => {
+    const bestDeal = categoryProducts.filter(hasVisibleDiscount).reduce((best, product) => {
       if (!best) return product;
       return Number(product.discount || 0) > Number(best.discount || 0) ? product : best;
     }, null);
@@ -1094,7 +1096,7 @@ async function renderCategories(container) {
               <div class="category-app-image">
                 <img src="${escapeHTML(getCategoryCover(category.id))}" alt="${escapeHTML(category.name)}" loading="lazy" decoding="async">
                 <span class="category-cover-icon">${icons[category.id] || icons.others}</span>
-                ${category.bestDeal ? `<span class="category-deal-pill">Até -${Number(category.bestDeal.discount || 0)}%</span>` : ''}
+                ${hasVisibleDiscount(category.bestDeal) ? `<span class="category-deal-pill">Até -${Number(category.bestDeal.discount)}%</span>` : ''}
               </div>
               <div class="category-app-copy">
                 <span class="category-app-icon">${icons[category.id] || icons.others}</span>
@@ -2038,6 +2040,7 @@ function renderProductDetail(container) {
     const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
     const timer = getCountdownInfo(p.expiresAt, p.expiresIn || '24h 00min');
     const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
+    const hasDiscount = hasVisibleDiscount(p);
     const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
     const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
     selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
@@ -2064,7 +2067,7 @@ function renderProductDetail(container) {
             <div class="cat-badge detail-category-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
             ${isSoldOut
               ? '<div class="discount-badge soldout-badge detail-discount-badge">ESGOTADO</div>'
-              : `<div class="discount-badge detail-discount-badge">−${p.discount}%</div>`
+              : hasDiscount ? `<div class="discount-badge detail-discount-badge">−${p.discount}%</div>` : ''
             }
             ${images.length > 1 ? `
               <div class="detail-gallery-dots" id="detailGalleryDots" aria-hidden="true">
@@ -2094,8 +2097,7 @@ function renderProductDetail(container) {
 
             <div class="detail-price-row">
               <span class="detail-price-current">${formatCurrency(p.discountPrice)}</span>
-              <span class="detail-price-original">${formatCurrency(p.originalPrice)}</span>
-              <span class="detail-price-discount">-${p.discount}%</span>
+              ${hasDiscount ? `<span class="detail-price-original">${formatCurrency(p.originalPrice)}</span><span class="detail-price-discount">-${p.discount}%</span>` : ''}
             </div>
 
             <div class="detail-trust-grid">
