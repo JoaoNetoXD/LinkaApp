@@ -9028,8 +9028,10 @@ body.first-run-tour-lock {
   position: fixed;
   inset: 0;
   z-index: 900;
-  display: grid;
-  place-items: end center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
   padding: 18px;
   background: rgba(13, 13, 18, 0.82);
   backdrop-filter: blur(16px);
@@ -9044,6 +9046,8 @@ body.first-run-tour-lock {
 .first-run-tour-card {
   width: min(100%, 430px);
   min-height: 520px;
+  flex: 0 0 auto;
+  margin-top: auto;
   display: grid;
   align-content: start;
   gap: 16px;
@@ -9334,9 +9338,16 @@ body.first-run-tour-lock {
   width: 74px;
   height: 70px;
   border-radius: 14px;
-  background:
-    radial-gradient(circle at 28% 24%, rgba(200, 241, 53, 0.44), transparent 30%),
-    linear-gradient(135deg, #22222d, #101016);
+  overflow: hidden;
+  background: var(--lk-surface);
+}
+
+.tour-offer-image img,
+.tour-product-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .tour-offer-info,
@@ -9489,8 +9500,8 @@ body.first-run-tour-lock {
 }
 
 @media (min-width: 560px) {
-  .first-run-tour-shell {
-    place-items: center;
+  .first-run-tour-card {
+    margin-bottom: auto;
   }
 }
 

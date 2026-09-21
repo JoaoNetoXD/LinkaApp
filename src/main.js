@@ -184,22 +184,28 @@ const mockImages = {
   pulseira: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400&q=80'
 };
 
-// Product image placeholder generator — handles mock keys, real URLs, and blob URLs
-export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
-  // Real URL (Supabase Storage, Unsplash, or blob preview)
-  if (imageKey && (imageKey.startsWith('http') || imageKey.startsWith('blob:'))) {
-    const src = sanitizeUrl(imageKey);
-    return `<img src="${src}" alt="Produto" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
-  }
-  // Mock image key lookup
-  if (mockImages[imageKey]) {
-    return `<img src="${sanitizeUrl(mockImages[imageKey])}" alt="${escapeHTML(imageKey)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
-  }
-  // Placeholder with category icon
-  const iconSvg = placeholderIcons[categoryId] || placeholderIcons.others;
-  const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%231A1A24'/%3E%3C/svg%3E")`;
-  return `<div style="width:100%;height:100%;background-color:#161620;background-image:${dotGrid};background-size:18px 18px;display:flex;align-items:center;justify-content:center;opacity:0.8;">${iconSvg}</div>`;
+function renderProductImagePlaceholder(categoryId, width) {
+  const icon = Object.hasOwn(placeholderIcons, categoryId) ? placeholderIcons[categoryId] : placeholderIcons.others;
+  const iconSvg = icon.replaceAll('#2A2A40', '#a6abbb');
+  const label = width >= 160 ? '<span style="font-size:11px;font-weight:700;color:#a6abbb;">Imagem indisponível</span>' : '';
+  const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%232a2a36'/%3E%3C/svg%3E")`;
+  return `<div style="width:100%;height:100%;background-color:#1e1e28;background-image:${dotGrid};background-size:18px 18px;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;">${iconSvg}${label}</div>`;
 }
+
+// Product image renderer — handles mock keys, real URLs, and blob URLs.
+export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
+  const src = typeof imageKey === 'string' && (imageKey.startsWith('http') || imageKey.startsWith('blob:'))
+    ? sanitizeUrl(imageKey)
+    : sanitizeUrl(Object.hasOwn(mockImages, imageKey) ? mockImages[imageKey] : '');
+  if (!src) return renderProductImagePlaceholder(categoryId, width);
+  return `<img src="${escapeHTML(src)}" alt="Foto do produto" data-product-image data-image-category="${escapeHTML(categoryId)}" data-image-width="${width}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
+}
+
+document.addEventListener('error', (event) => {
+  const image = event.target;
+  if (!(image instanceof HTMLImageElement) || !image.hasAttribute('data-product-image')) return;
+  image.outerHTML = renderProductImagePlaceholder(image.dataset.imageCategory, Number(image.dataset.imageWidth));
+}, true);
 
 // Format currency
 export function formatCurrency(value) {
@@ -363,14 +369,14 @@ const firstRunTourSteps = [
   {
     scene: 'feed',
     kicker: 'Bem-vindo',
-    title: 'Ofertas reais, direto no app',
-    text: 'Abra o Linka, veja fotos, preço e oferta aprovada sem precisar procurar em grupos ou conversas soltas.',
+    title: 'Encontre ofertas no Linka',
+    text: 'Confira fotos, preços e detalhes das ofertas em um só lugar.',
   },
   {
     scene: 'checkout',
     kicker: 'Comprar',
     title: 'Escolha, pague e receba o cupom',
-    text: 'O pagamento acontece pelo Mercado Pago do vendedor. Depois, o cupom fica salvo na sua conta.',
+    text: 'Em ofertas habilitadas, pague pelo Mercado Pago do vendedor. Após a aprovação, o cupom fica na sua conta.',
   },
   {
     scene: 'coupon',
@@ -395,10 +401,10 @@ function renderFirstRunTourScene(scene = 'feed') {
           <strong>Comprar cupom</strong>
         </div>
         <div class="tour-product-row">
-          <span class="tour-product-thumb"></span>
-          <span><b>Bolo no pote</b><small>Oferta aprovada</small></span>
+          <span class="tour-product-thumb">${getProductImage('brownie', 74, 70, 'food')}</span>
+          <span><b>Brownie artesanal</b><small>Exemplo de oferta</small></span>
         </div>
-        <div class="tour-price-row"><span>Total</span><strong>R$ 9,00</strong></div>
+        <div class="tour-price-row"><span>Total</span><strong>R$ 10,20</strong></div>
         <div class="tour-action-pill">${icons.check} Pagar e receber cupom</div>
       </div>
     `;
@@ -446,11 +452,11 @@ function renderFirstRunTourScene(scene = 'feed') {
         <strong>Vitrine Linka</strong>
       </div>
       <div class="tour-offer-card">
-        <span class="tour-offer-image"></span>
+        <span class="tour-offer-image">${getProductImage('brownie', 74, 70, 'food')}</span>
         <span class="tour-offer-info">
-          <b>Camiseta básica</b>
-          <small>Aprovado pela Linka</small>
-          <strong>R$ 33,75</strong>
+          <b>Brownie artesanal</b>
+          <small>Exemplo de oferta</small>
+          <strong>R$ 10,20</strong>
         </span>
       </div>
       <div class="tour-action-pill">${icons.tag} Pegar cupom</div>
