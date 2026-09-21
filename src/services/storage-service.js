@@ -15,8 +15,13 @@ export async function uploadProductImage(file, sellerId) {
   if (file.size > MAX_FILE_SIZE) return { success: false, error: 'Arquivo muito grande. Máximo 5MB.' };
 
   try {
-    const ext = file.name.split('.').pop().toLowerCase();
-    const fileName = `${sellerId}/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const ext = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    }[file.type];
+    const fileName = `${sellerId}/${crypto.randomUUID()}.${ext}`;
 
     const { data, error } = await supabase.storage.from(BUCKET_NAME).upload(fileName, file, {
       cacheControl: '3600', upsert: false, contentType: file.type,
@@ -63,17 +68,25 @@ export async function compressImage(file, maxWidth = 800, quality = 0.8) {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
+    const previewUrl = URL.createObjectURL(file);
     img.onload = () => {
+      URL.revokeObjectURL(previewUrl);
+      if (!ctx) return resolve(file);
       let w = img.width, h = img.height;
       if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
       canvas.width = w; canvas.height = h;
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
-        resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+        if (!blob) return resolve(file);
+        const jpegName = `${file.name.replace(/\.[^.]+$/, '')}.jpg`;
+        resolve(new File([blob], jpegName, { type: 'image/jpeg', lastModified: Date.now() }));
       }, 'image/jpeg', quality);
     };
-    img.onerror = () => resolve(file);
-    img.src = URL.createObjectURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(previewUrl);
+      resolve(file);
+    };
+    img.src = previewUrl;
   });
 }
 

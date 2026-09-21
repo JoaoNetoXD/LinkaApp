@@ -795,3 +795,5 @@ EXECUTE FUNCTION public.prevent_coupon_reuse();
 --   - Public: true
 --   - File size limit: 5MB
 --   - Allowed MIME types: image/jpeg, image/png, image/webp, image/gif
+-- Depois, execute scripts/product-images-storage-policies.sql para permitir
+-- upload e exclusao apenas na pasta do proprio vendedor autenticado.
