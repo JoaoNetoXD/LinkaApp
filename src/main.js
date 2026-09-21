@@ -1,7 +1,3 @@
-import { renderBuyer } from './pages/buyer.js';
-import { renderSeller } from './pages/seller.js';
-import { renderAdmin } from './pages/admin.js';
-import { renderAuth } from './pages/auth.js';
 import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
 import { resetAppScroll } from './utils/scroll.js';
 // Import all styles via JS for Vite HMR support
@@ -603,10 +599,11 @@ export async function refreshCurrentProfile() {
 }
 
 function getSessionRole(session, profile = globalProfile) {
-  return profile?.role || session?.user?.user_metadata?.role || 'buyer';
+  return profile?.role || 'buyer';
 }
 
 // Simple client-side routing (supports both hash and path)
+let routeVersion = 0;
 async function handleRoute() {
   const rawRoute = window.location.hash.slice(1) || window.location.pathname;
   const [path] = rawRoute.split('?');
@@ -615,12 +612,14 @@ async function handleRoute() {
   if (window.location.hash && !window.location.hash.startsWith('#/')) {
     return;
   }
+  const currentRoute = ++routeVersion;
 
   // Clear any open modals when navigating between pages
   const modalRoot = document.getElementById('modal-root');
   if (modalRoot) modalRoot.innerHTML = '';
 
   const session = await getCurrentSession();
+  if (currentRoute !== routeVersion) return;
   globalSession = session;
   if (!session?.user?.id) {
     globalProfile = null;
@@ -654,6 +653,8 @@ async function handleRoute() {
 
   if (path.startsWith('/auth') || path === 'auth') {
     setPageTitle('auth');
+    const { renderAuth } = await import('./pages/auth.js');
+    if (currentRoute !== routeVersion) return;
     renderAuth(app);
     resetAppScroll(app);
     const authQuery = (window.location.hash.split('?')[1] || '').split('#')[0];
@@ -669,20 +670,28 @@ async function handleRoute() {
     const parts = path.split('/').filter(Boolean);
     const subPage = parts[1]?.split('?')[0];
     setPageTitle(subPage || 'buyer');
+    const { renderBuyer } = await import('./pages/buyer.js');
+    if (currentRoute !== routeVersion) return;
     renderBuyer(app, subPage);
   } else if (path.startsWith('/seller') || path === 'seller') {
     const parts = path.split('/').filter(Boolean);
     setPageTitle('seller');
+    const { renderSeller } = await import('./pages/seller.js');
+    if (currentRoute !== routeVersion) return;
     renderSeller(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/admin') || path === 'admin') {
     const parts = path.split('/').filter(Boolean);
     setPageTitle('admin');
+    const { renderAdmin } = await import('./pages/admin.js');
+    if (currentRoute !== routeVersion) return;
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
     window.location.hash = '#/buyer';
     return;
   } else {
     setPageTitle('buyer');
+    const { renderBuyer } = await import('./pages/buyer.js');
+    if (currentRoute !== routeVersion) return;
     renderBuyer(app);
   }
   maybeShowFirstRunTour(path);

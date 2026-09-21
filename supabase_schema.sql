@@ -143,6 +143,8 @@ CREATE TABLE IF NOT EXISTS payment_oauth_states (
   used_at TIMESTAMP WITH TIME ZONE
 );
 
+ALTER TABLE payment_oauth_states ADD COLUMN IF NOT EXISTS code_verifier TEXT;
+
 -- Ajustes para o fluxo real de pagamentos
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS mercado_pago_id TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS preference_id TEXT;
@@ -165,6 +167,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS payments_preference_id_idx
   ON payments (preference_id) WHERE preference_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS payments_external_reference_idx
   ON payments (external_reference) WHERE external_reference IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS coupons_payment_id_unique_idx
+  ON coupons (payment_id) WHERE payment_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS seller_payment_accounts_provider_idx ON seller_payment_accounts(provider);
 CREATE INDEX IF NOT EXISTS payment_oauth_states_state_idx ON payment_oauth_states(state);
 CREATE INDEX IF NOT EXISTS payment_oauth_states_seller_idx ON payment_oauth_states(seller_id);
@@ -186,6 +190,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+REVOKE EXECUTE ON FUNCTION public.increment_clicks(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_clicks(uuid) TO service_role;
+
 -- Função para incrementar slots usados
 CREATE OR REPLACE FUNCTION increment_slots(product_id UUID)
 RETURNS void AS $$
@@ -193,6 +200,9 @@ BEGIN
   UPDATE products SET slots_used = slots_used + 1 WHERE id = product_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+REVOKE EXECUTE ON FUNCTION public.increment_slots(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.increment_slots(uuid) TO service_role;
 
 -- Atualiza o timestamp automaticamente
 CREATE OR REPLACE FUNCTION touch_updated_at()
@@ -324,6 +334,12 @@ BEGIN
     RAISE EXCEPTION 'Produto não encontrado';
   END IF;
 
+  IF v_product.status <> 'active' OR v_product.deleted_at IS NOT NULL
+     OR (v_product.expires_at IS NOT NULL AND v_product.expires_at <= now())
+     OR COALESCE(v_product.slots_used, 0) >= COALESCE(v_product.slots_total, 5) THEN
+    RAISE EXCEPTION 'Produto indisponível';
+  END IF;
+
   SELECT * INTO v_profile
   FROM profiles
   WHERE id = auth.uid();
@@ -358,6 +374,13 @@ BEGIN
   LIMIT 1;
 
   IF FOUND THEN
+    IF v_payment.buyer_id <> auth.uid() OR v_payment.product_id <> p_product_id THEN
+      RAISE EXCEPTION 'Intencao de pagamento pertence a outro comprador ou produto';
+    END IF;
+    IF v_payment.status <> 'pending' THEN
+      RETURN v_payment;
+    END IF;
+
     UPDATE payments
     SET
       buyer_name = COALESCE(v_payment.buyer_name, v_profile.name),
@@ -423,6 +446,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 REVOKE ALL ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.register_payment_intent(uuid, text, text, text, text, text, text) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.reject_cross_owner_payment_intent()
+RETURNS trigger AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND
+    (NEW.buyer_id IS DISTINCT FROM auth.uid() OR NEW.product_id IS DISTINCT FROM OLD.product_id) THEN
+    RAISE EXCEPTION 'Intencao de pagamento pertence a outro comprador ou produto';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY INVOKER SET search_path = public, auth;
+
+DROP TRIGGER IF EXISTS reject_cross_owner_payment_intent ON public.payments;
+CREATE TRIGGER reject_cross_owner_payment_intent
+BEFORE UPDATE ON public.payments
+FOR EACH ROW EXECUTE FUNCTION public.reject_cross_owner_payment_intent();
 
 -- Emite cupom quando o pagamento é confirmado
 CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id UUID)
@@ -514,8 +553,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE ALL ON FUNCTION public.issue_coupon_for_payment(uuid) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.issue_coupon_for_payment(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO service_role;
 
 
 -- ====================================================================
@@ -616,26 +655,17 @@ CREATE POLICY "Payments are viewable by participants" ON payments
     OR (select auth.role()) = 'service_role'
   );
 
--- Buyers can insert their own payments (via SECURITY DEFINER fn, but also needed for direct insert fallback)
+-- Payment creation is only allowed through register_payment_intent.
 DROP POLICY IF EXISTS "Buyers insert own payments" ON payments;
-CREATE POLICY "Buyers insert own payments" ON payments
-  FOR INSERT TO authenticated
-  WITH CHECK ((select auth.uid()) = buyer_id);
 
 -- service_role can insert/update payments (webhooks, server)
 DROP POLICY IF EXISTS "Service role manages payments" ON payments;
 CREATE POLICY "Service role manages payments" ON payments
   FOR ALL USING ((select auth.role()) = 'service_role');
 
--- Buyers/sellers can update their own payments (status sync)
+-- Only the backend may confirm or change payment status.
 DROP POLICY IF EXISTS "Participants update own payments" ON payments;
-CREATE POLICY "Participants update own payments" ON payments
-  FOR UPDATE USING (
-    buyer_id = (select auth.uid())
-    OR seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
-    OR (select auth.role()) = 'service_role'
-  );
+REVOKE INSERT, UPDATE, DELETE ON public.payments FROM anon, authenticated;
 
 CREATE POLICY "Coupons are viewable by participants" ON coupons
   FOR SELECT USING (
@@ -676,7 +706,7 @@ BEGIN
   user_domain := '@' || split_part(new.email, '@', 2);
   
   -- Find institution by domain
-  SELECT id INTO inst_id FROM institutions WHERE domain = user_domain LIMIT 1;
+  SELECT id INTO inst_id FROM public.institutions WHERE domain = user_domain LIMIT 1;
   user_name := COALESCE(NULLIF(new.raw_user_meta_data->>'full_name', ''), split_part(new.email, '@', 1), 'Usuário');
   user_role := LOWER(COALESCE(NULLIF(new.raw_user_meta_data->>'role', ''), 'buyer'));
   IF user_role NOT IN ('buyer', 'seller') THEN

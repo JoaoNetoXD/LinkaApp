@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
+import { isValidPaymentReference, paymentMatchesIntent } from './payment-security.js';
 
 dotenv.config();
 
@@ -124,12 +125,6 @@ if (!WEBHOOK_URL) {
   console.warn('AVISO: WEBHOOK_URL nao configurada. Mercado Pago nao chamara o webhook automaticamente.');
 }
 
-const mpClient = new MercadoPagoConfig({
-  accessToken: MP_ACCESS_TOKEN || 'TEST-dummy-token',
-  options: { timeout: 5000 },
-});
-const mpPayment = new Payment(mpClient);
-
 function createMercadoPagoClients(accessToken) {
   const client = new MercadoPagoConfig({
     accessToken,
@@ -139,6 +134,12 @@ function createMercadoPagoClients(accessToken) {
     payment: new Payment(client),
     preference: new Preference(client),
   };
+}
+
+function getSellerWebhookUrl(sellerId) {
+  const url = new URL(WEBHOOK_URL);
+  url.searchParams.set('seller_id', sellerId);
+  return url.toString();
 }
 
 function requireSupabaseAdmin() {
@@ -424,8 +425,8 @@ function createUserClient(token) {
 
 function getBearerToken(req) {
   const header = req.headers.authorization || '';
-  if (!header.startsWith('Bearer ')) return null;
-  return header.slice(7);
+  const match = /^Bearer\s+([^\s]+)$/i.exec(header);
+  return match?.[1] || null;
 }
 
 async function getAuthContext(req, res) {
@@ -468,7 +469,7 @@ app.post('/api/profile/become-seller', async (req, res) => {
     if (!auth) return;
 
     const admin = requireSupabaseAdmin();
-    const currentRole = auth.profile?.role || auth.user.user_metadata?.role || 'buyer';
+    const currentRole = auth.profile?.role || 'buyer';
     if (currentRole === 'admin') {
       return res.json({ success: true, profile: auth.profile });
     }
@@ -520,7 +521,7 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     if (!auth) return;
     requireMercadoPagoOAuthConfig();
     const admin = requireSupabaseAdmin();
-    if (!['seller', 'admin'].includes(auth.profile?.role || auth.user.user_metadata?.role || 'buyer')) {
+    if (!['seller', 'admin'].includes(auth.profile?.role || 'buyer')) {
       return res.status(403).json({ success: false, error: 'Apenas vendedores podem conectar Mercado Pago.' });
     }
 
@@ -642,6 +643,7 @@ async function loadProduct(client, productId) {
 
   if (error || !data) throw new Error('Produto nao encontrado');
   if (data.status !== 'active') throw new Error('Produto indisponivel');
+  if (data.expires_at && new Date(data.expires_at) <= new Date()) throw new Error('Produto expirado');
   if ((data.slots_used || 0) >= (data.slots_total || 5)) throw new Error('Produto esgotado');
   return data;
 }
@@ -675,10 +677,6 @@ function mapPaymentRow(row) {
   };
 }
 
-function getPaymentClient(client) {
-  return client || null;
-}
-
 async function checkDatabaseReadiness() {
   if (!supabaseAdmin) {
     return {
@@ -695,6 +693,10 @@ async function checkDatabaseReadiness() {
     {
       name: 'payment_oauth_states',
       run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id,code_verifier').limit(1),
+    },
+    {
+      name: 'product-images bucket',
+      run: () => supabaseAdmin.storage.getBucket('product-images'),
     },
     {
       name: 'payments marketplace columns',
@@ -725,7 +727,7 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
   const admin = requireSupabaseAdmin();
   const { data: product, error } = await admin
     .from('products')
-    .select('id,title,status,seller_id,slots_total,slots_used,deleted_at')
+    .select('id,title,status,seller_id,slots_total,slots_used,deleted_at,expires_at')
     .eq('id', productId)
     .maybeSingle();
 
@@ -738,6 +740,9 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
   }
   if (requireActive && product.status !== 'active') {
     return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'Produto ainda nao esta ativo para venda.' };
+  }
+  if (product.expires_at && new Date(product.expires_at) <= new Date()) {
+    return { ready: false, code: 'PRODUCT_EXPIRED', message: 'Produto expirado.' };
   }
   if ((product.slots_used || 0) >= (product.slots_total || 5)) {
     return { ready: false, code: 'PRODUCT_SOLD_OUT', message: 'Produto esgotado.' };
@@ -868,16 +873,8 @@ async function registerPaymentIntent(client, payload) {
   return data;
 }
 
-async function issueCouponForPayment(client, paymentId) {
-  const { data, error } = await client.rpc('issue_coupon_for_payment', {
-    p_payment_id: paymentId,
-  });
-  if (error) throw error;
-  return data;
-}
-
 function generateCouponCode() {
-  return `LK${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  return `LK${randomBytes(5).toString('hex').toUpperCase()}`;
 }
 
 async function resolveCouponValidityHours(client, paymentRow) {
@@ -922,6 +919,7 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
   const validUntil = new Date(Date.now() + validHours * 60 * 60 * 1000).toISOString();
 
   let coupon = null;
+  let createdCoupon = false;
   let lastError = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = generateCouponCode();
@@ -941,11 +939,21 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
 
     if (!error) {
       coupon = data;
+      createdCoupon = true;
       break;
     }
 
     lastError = error;
     if (error.code !== '23505') break;
+    const { data: concurrentCoupon } = await client
+      .from('coupons')
+      .select('*')
+      .eq('payment_id', paymentRow.id)
+      .maybeSingle();
+    if (concurrentCoupon) {
+      coupon = concurrentCoupon;
+      break;
+    }
   }
 
   if (!coupon) throw lastError || new Error('Nao foi possivel emitir cupom');
@@ -955,86 +963,64 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
     coupon_code: coupon.code,
   }).eq('id', paymentRow.id);
 
-  try {
-    await client.rpc('increment_slots', { product_id: paymentRow.product_id });
-  } catch (err) {
-    console.warn('Nao foi possivel atualizar slots do produto:', err.message);
+  if (createdCoupon) {
+    // The database's unique payment_id index prevents issuing a second coupon.
+    const { error: slotsError } = await client.rpc('increment_slots', { product_id: paymentRow.product_id });
+    if (slotsError) console.warn('Nao foi possivel atualizar slots do produto:', slotsError.message);
   }
 
   return coupon;
 }
 
-async function syncPaymentByReference(client, paymentRef) {
-  const { data: localPayment } = await client
-    .from('payments')
-    .select('*')
-    .or(`mercado_pago_id.eq.${paymentRef},preference_id.eq.${paymentRef},external_reference.eq.${paymentRef}`)
-    .maybeSingle();
-
+async function syncPaymentByReference(client, localPayment) {
+  const paymentRef = localPayment.mercado_pago_id;
   let mpData = null;
-  try {
-    if (localPayment?.seller_id) {
+  if (paymentRef && localPayment.seller_id) {
+    try {
       const sellerAccount = await getSellerPaymentAccount(localPayment.seller_id);
       if (sellerAccount?.access_token) {
         mpData = await createMercadoPagoClients(sellerAccount.access_token).payment.get({ id: paymentRef });
       }
-    } else {
-      mpData = await mpPayment.get({ id: paymentRef });
+    } catch {
+      mpData = null;
     }
-  } catch {
-    mpData = null;
+  }
+  if (mpData && !paymentMatchesIntent(mpData, localPayment)) {
+    throw makeHttpError('Pagamento retornado nao corresponde ao pedido.', 409, 'PAYMENT_MISMATCH');
   }
 
-  if (!localPayment && !mpData) {
-    throw new Error('Pagamento nao encontrado');
-  }
-
-  let paymentRow = localPayment;
-  if (!paymentRow && mpData?.external_reference) {
-    const { data: byReference } = await client
-      .from('payments')
-      .select('*')
-      .eq('external_reference', mpData.external_reference)
-      .maybeSingle();
-    paymentRow = byReference || null;
-  }
-
-  const status = mpData?.status || paymentRow?.status || 'pending';
+  const status = mpData?.status || localPayment.status || 'pending';
   const updates = {
-    status: status === 'approved' ? 'paid' : status === 'cancelled' || status === 'rejected' || status === 'expired' ? 'expired' : 'pending',
-    paid_at: status === 'approved' ? new Date().toISOString() : paymentRow?.paid_at || null,
+    status: status === 'approved' || localPayment.status === 'paid' ? 'paid' : status === 'cancelled' || status === 'rejected' || status === 'expired' ? 'expired' : 'pending',
+    paid_at: status === 'approved' ? new Date().toISOString() : localPayment.paid_at || null,
   };
 
   if (mpData) {
-    updates.mercado_pago_id = mpData.id?.toString?.() || paymentRef;
-    updates.external_reference = mpData.external_reference || paymentRow?.external_reference || null;
-    updates.qr_code_string = mpData.point_of_interaction?.transaction_data?.qr_code || paymentRow?.qr_code_string || null;
-    updates.method = mpData.payment_method_id === 'pix' ? 'pix' : paymentRow?.method || 'credit_card';
-  }
-
-  if (paymentRow) {
+    updates.mercado_pago_id = String(mpData.id || paymentRef);
+    updates.qr_code_string = mpData.point_of_interaction?.transaction_data?.qr_code || localPayment.qr_code_string || null;
+    updates.method = mpData.payment_method_id === 'pix' ? 'pix' : localPayment.method || 'credit_card';
     const { error } = await client
       .from('payments')
       .update(updates)
-      .eq('id', paymentRow.id);
+      .eq('id', localPayment.id);
     if (error) throw error;
   }
 
   const { data: refreshed } = await client
     .from('payments')
     .select('*')
-    .or(`mercado_pago_id.eq.${paymentRef},preference_id.eq.${paymentRef},external_reference.eq.${paymentRef}`)
+    .eq('id', localPayment.id)
     .maybeSingle();
 
   if (refreshed?.status === 'paid' && refreshed?.buyer_id) {
     try {
-      await issueCouponForPayment(client, refreshed.id);
+      await issueCouponFromPaymentRow(client, refreshed);
     } catch (error) {
       console.warn('Nao foi possivel emitir cupom:', error.message);
     }
   }
 
-  return mapPaymentRow(refreshed || paymentRow);
+  return mapPaymentRow(refreshed || localPayment);
 }
 
 app.post('/api/pix', async (req, res) => {
@@ -1062,7 +1048,7 @@ app.post('/api/pix', async (req, res) => {
           email: auth.user.email,
           first_name: auth.profile?.name?.split(' ')[0] || auth.user.user_metadata?.full_name || 'Comprador',
         },
-        notification_url: WEBHOOK_URL || undefined,
+        notification_url: getSellerWebhookUrl(product.seller_id),
         external_reference: externalReference,
       },
       requestOptions: { idempotencyKey: externalReference },
@@ -1141,31 +1127,40 @@ app.get('/api/payment/:id', async (req, res) => {
     if (!auth) return;
 
     const paymentRef = req.params.id;
-    const syncClient = supabaseAdmin || auth.client;
-    const synced = await syncPaymentByReference(syncClient, paymentRef);
-    if (!synced) {
+    if (!isValidPaymentReference(paymentRef)) {
+      return res.status(400).json({ success: false, error: 'Referencia de pagamento invalida' });
+    }
+
+    let ownedPayment = null;
+    if (uuidPattern.test(paymentRef)) {
+      const { data, error } = await auth.client.from('payments').select('*').eq('id', paymentRef).maybeSingle();
+      if (error) throw error;
+      ownedPayment = data;
+    }
+    if (!ownedPayment) {
+      const { data, error } = await auth.client.from('payments').select('*')
+        .or(`mercado_pago_id.eq.${paymentRef},preference_id.eq.${paymentRef},external_reference.eq.${paymentRef}`)
+        .maybeSingle();
+      if (error) throw error;
+      ownedPayment = data;
+    }
+    if (!ownedPayment) {
       return res.status(404).json({ success: false, error: 'Pagamento nao encontrado' });
     }
 
     const canViewPayment = auth.profile?.role === 'admin'
-      || synced.buyerId === auth.user.id
-      || synced.sellerId === auth.user.id;
+      || ownedPayment.buyer_id === auth.user.id
+      || ownedPayment.seller_id === auth.user.id;
     if (!canViewPayment) {
       return res.status(403).json({ success: false, error: 'Acesso negado' });
     }
 
-    if (synced.status === 'paid') {
-      try {
-        await issueCouponForPayment(auth.client, synced.paymentRowId);
-      } catch (error) {
-        console.warn('Cupom nao emitido no polling:', error.message);
-      }
-    }
+    const synced = await syncPaymentByReference(requireSupabaseAdmin(), ownedPayment);
 
     const { data: updated } = await auth.client
       .from('payments')
       .select('*')
-      .eq('id', synced.paymentRowId)
+      .eq('id', ownedPayment.id)
       .maybeSingle();
 
     res.json({
@@ -1217,7 +1212,7 @@ app.post('/api/preference', async (req, res) => {
           pending: `${FRONTEND_URL}/#/buyer`,
         },
         auto_return: 'approved',
-        notification_url: WEBHOOK_URL || undefined,
+        notification_url: getSellerWebhookUrl(product.seller_id),
         external_reference: externalReference,
       },
     });
@@ -1263,63 +1258,42 @@ app.post('/api/webhook', async (req, res) => {
     }
 
     const mpId = data.id.toString();
-    let paymentRow = null;
-    let mpData = null;
-
-    const { data: paymentById } = await supabaseAdmin
+    const { data: paymentById, error: lookupError } = await supabaseAdmin
       .from('payments')
       .select('*')
       .eq('mercado_pago_id', mpId)
       .maybeSingle();
-
-    paymentRow = paymentById || null;
-
-    if (paymentRow?.seller_id) {
-      const sellerAccount = await getSellerPaymentAccount(paymentRow.seller_id);
-      if (sellerAccount?.access_token) {
-        mpData = await createMercadoPagoClients(sellerAccount.access_token).payment.get({ id: mpId });
-      }
-    }
-
-    if (!mpData) {
-      const { data: accounts } = await supabaseAdmin
-        .from('seller_payment_accounts')
-        .select('seller_id, access_token');
-      for (const account of accounts || []) {
-        try {
-          mpData = await createMercadoPagoClients(account.access_token).payment.get({ id: mpId });
-          if (mpData) break;
-        } catch {
-          mpData = null;
-        }
-      }
-    }
+    if (lookupError) throw lookupError;
+    let paymentRow = paymentById || null;
+    const sellerId = paymentRow?.seller_id || String(req.query.seller_id || '');
+    if (!uuidPattern.test(sellerId)) return res.sendStatus(200);
+    const sellerAccount = await getSellerPaymentAccount(sellerId);
+    if (!sellerAccount?.access_token) return res.sendStatus(200);
+    const mpData = await createMercadoPagoClients(sellerAccount.access_token).payment.get({ id: mpId });
 
     const reference = mpData?.external_reference || null;
     if (!paymentRow && reference) {
-      const { data: byReference } = await supabaseAdmin
+      const { data: byReference, error: referenceError } = await supabaseAdmin
         .from('payments')
         .select('*')
-        .or(`mercado_pago_id.eq.${mpId},external_reference.eq.${reference},preference_id.eq.${mpId}`)
+        .eq('external_reference', reference)
         .maybeSingle();
+      if (referenceError) throw referenceError;
       paymentRow = byReference || null;
     }
 
-    if (!paymentRow) {
-      return res.sendStatus(200);
-    }
-
-    if (!mpData) {
+    if (!paymentRow || paymentRow.seller_id !== sellerId || !paymentMatchesIntent(mpData, paymentRow)) {
       return res.sendStatus(200);
     }
 
     const updates = {
       mercado_pago_id: mpId,
-      status: mpData.status === 'approved' ? 'paid' : mpData.status === 'cancelled' || mpData.status === 'rejected' ? 'expired' : 'pending',
+      status: mpData.status === 'approved' || paymentRow.status === 'paid' ? 'paid' : mpData.status === 'cancelled' || mpData.status === 'rejected' ? 'expired' : 'pending',
       paid_at: mpData.status === 'approved' ? new Date().toISOString() : paymentRow.paid_at || null,
     };
 
-    await supabaseAdmin.from('payments').update(updates).eq('id', paymentRow.id);
+    const { error: updateError } = await supabaseAdmin.from('payments').update(updates).eq('id', paymentRow.id);
+    if (updateError) throw updateError;
     if (mpData.status === 'approved') {
       try {
         await issueCouponFromPaymentRow(supabaseAdmin, {
@@ -1334,7 +1308,7 @@ app.post('/api/webhook', async (req, res) => {
     return res.sendStatus(200);
   } catch (error) {
     console.error('Erro no webhook:', error);
-    return res.sendStatus(200);
+    return res.sendStatus(500);
   }
 });
 
@@ -1695,8 +1669,9 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
 app.get('/api/health', async (req, res) => {
   const missingProductionConfig = getMissingProductionConfig();
   const database = await checkDatabaseReadiness();
-  res.json({
-    status: 'ok',
+  const readyForProduction = missingProductionConfig.length === 0 && database.schemaReady;
+  res.status(readyForProduction ? 200 : 503).json({
+    status: readyForProduction ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     ...configStatus,
     ...database,
@@ -1705,7 +1680,7 @@ app.get('/api/health', async (req, res) => {
     expectedMercadoPagoRedirectUri: CANONICAL_MP_REDIRECT_URI,
     mercadoPagoRedirectUriOverridden: MP_REDIRECT_URI_OVERRIDDEN,
     missingProductionConfig,
-    readyForProduction: missingProductionConfig.length === 0 && database.schemaReady,
+    readyForProduction,
   });
 });
 

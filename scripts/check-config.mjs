@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 
 const isProductionCheck = process.argv.includes('--production');
+const isOnlineCheck = process.argv.includes('--online');
 const siteUrl = (process.env.FRONTEND_URL || process.env.URL || '').replace(/\/$/, '');
 
 if (siteUrl) {
@@ -99,6 +100,21 @@ for (const group of groups) {
   }
 
   console.log(`[ok] ${group.label}: ${found.key}`);
+}
+
+if (isOnlineCheck) {
+  const config = readValue(['VITE_SUPABASE_URL', 'SUPABASE_URL']);
+  if (config) {
+    try {
+      const endpoint = new URL('/auth/v1/health', config.value);
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      console.log('[ok] Supabase reachable');
+    } catch (error) {
+      hasError = true;
+      console.error(`[unreachable] Supabase: ${error.message}`);
+    }
+  }
 }
 
 if (hasError) {

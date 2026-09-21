@@ -6,17 +6,19 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"node server.js\"",
     "check:config": "node scripts/check-config.mjs",
+    "check:config:online": "node scripts/check-config.mjs --online",
     "check:config:prod": "node scripts/check-config.mjs --production",
-    "verify": "npm run check:config && npm run build && npm audit --omit=dev --cache .npm-cache",
+    "test": "node --test",
+    "verify": "npm run check:config && npm test && node --check server.js && npm run build && npm audit --omit=dev --cache .npm-cache",
     "build": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "vite": "^8.0.10"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
-    "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

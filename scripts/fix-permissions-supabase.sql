@@ -21,16 +21,15 @@ GRANT EXECUTE ON FUNCTION public.increment_slots(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.increment_clicks(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.increment_clicks(uuid) TO service_role;
 
--- Grants basicos de tabela. RLS continua decidindo o que cada usuario pode ver/alterar.
-GRANT SELECT, INSERT, UPDATE ON public.payments TO authenticated, service_role;
+-- Compradores consultam pagamentos, mas nunca inserem ou alteram status diretamente.
+GRANT SELECT ON public.payments TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.payments FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.payments TO service_role;
 GRANT SELECT, INSERT, UPDATE ON public.coupons TO authenticated, service_role;
 GRANT SELECT, UPDATE ON public.products TO authenticated, service_role;
 
--- Policies idempotentes para participantes do pagamento.
+-- Apenas a service role escreve pagamentos; a RPC SECURITY DEFINER cria intencoes.
 DROP POLICY IF EXISTS "Buyers insert own payments" ON public.payments;
-CREATE POLICY "Buyers insert own payments" ON public.payments
-  FOR INSERT TO authenticated
-  WITH CHECK ((select auth.uid()) = buyer_id);
 
 DROP POLICY IF EXISTS "Service role manages payments" ON public.payments;
 CREATE POLICY "Service role manages payments" ON public.payments
@@ -39,25 +38,3 @@ CREATE POLICY "Service role manages payments" ON public.payments
   WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Participants update own payments" ON public.payments;
-CREATE POLICY "Participants update own payments" ON public.payments
-  FOR UPDATE TO authenticated
-  USING (
-    buyer_id = (select auth.uid())
-    OR seller_id = (select auth.uid())
-    OR EXISTS (
-      SELECT 1
-      FROM public.profiles p
-      WHERE p.id = (select auth.uid())
-        AND p.role = 'admin'
-    )
-  )
-  WITH CHECK (
-    buyer_id = (select auth.uid())
-    OR seller_id = (select auth.uid())
-    OR EXISTS (
-      SELECT 1
-      FROM public.profiles p
-      WHERE p.id = (select auth.uid())
-        AND p.role = 'admin'
-    )
-  );
