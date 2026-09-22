@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   email TEXT UNIQUE NOT NULL,
   whatsapp TEXT,
   avatar TEXT,
-  role TEXT DEFAULT 'buyer' CHECK (role IN ('buyer', 'seller', 'admin')),
+  role TEXT DEFAULT 'buyer' CHECK (role IN ('buyer', 'seller', 'admin', 'superadmin')),
   course TEXT,
   semester TEXT,
   verified BOOLEAN DEFAULT false,
@@ -227,10 +227,10 @@ DECLARE
   is_privileged_context BOOLEAN := caller_uid IS NULL AND request_role NOT IN ('anon', 'authenticated');
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW.role NOT IN ('buyer', 'seller', 'admin') THEN
+    IF NEW.role NOT IN ('buyer', 'seller', 'admin', 'superadmin') THEN
       NEW.role := 'buyer';
     END IF;
-    IF NEW.role = 'admin' AND request_role <> 'service_role' AND NOT is_privileged_context THEN
+    IF NEW.role IN ('admin', 'superadmin') AND request_role <> 'service_role' AND NOT is_privileged_context THEN
       NEW.role := 'buyer';
     END IF;
     IF NEW.name IS NULL OR NEW.name = '' THEN
@@ -241,13 +241,6 @@ BEGIN
 
   IF TG_OP = 'UPDATE' AND NEW.role IS DISTINCT FROM OLD.role THEN
     IF request_role = 'service_role' OR is_privileged_context THEN
-      RETURN NEW;
-    END IF;
-
-    IF EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = caller_uid AND role = 'admin'
-    ) THEN
       RETURN NEW;
     END IF;
 
@@ -264,7 +257,7 @@ RETURNS trigger AS $$
 DECLARE
   caller_role TEXT := COALESCE(auth.role(), '');
   is_admin BOOLEAN := EXISTS (
-    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'superadmin')
   );
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -471,7 +464,7 @@ DECLARE
   v_coupon coupons%ROWTYPE;
   v_code TEXT;
   v_is_admin BOOLEAN := EXISTS (
-    SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'
+    SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'superadmin')
   );
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -619,11 +612,9 @@ CREATE POLICY "Users can insert own profile" ON profiles
 CREATE POLICY "Users can manage own profile" ON profiles
   FOR UPDATE TO authenticated USING (
     (select auth.uid()) = id
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
   )
   WITH CHECK (
     (select auth.uid()) = id
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
   );
 
 CREATE POLICY "Categories are viewable by everyone" ON categories
@@ -633,7 +624,8 @@ CREATE POLICY "Products are viewable by audience" ON products
   FOR SELECT USING (
     status = 'active'
     OR seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid())
+      AND (p.role = 'superadmin' OR (p.role = 'admin' AND p.institution_id = products.institution_id)))
     OR (select auth.role()) = 'service_role'
   );
 
@@ -643,7 +635,8 @@ CREATE POLICY "Sellers can insert products" ON products
 CREATE POLICY "Products are writable by owner or admin" ON products
   FOR UPDATE USING (
     seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid())
+      AND (p.role = 'superadmin' OR (p.role = 'admin' AND p.institution_id = products.institution_id)))
     OR (select auth.role()) = 'service_role'
   );
 
@@ -651,7 +644,9 @@ CREATE POLICY "Payments are viewable by participants" ON payments
   FOR SELECT USING (
     buyer_id = (select auth.uid())
     OR seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid())
+      AND (p.role = 'superadmin' OR (p.role = 'admin' AND EXISTS (
+        SELECT 1 FROM products pr WHERE pr.id = payments.product_id AND pr.institution_id = p.institution_id))))
     OR (select auth.role()) = 'service_role'
   );
 
@@ -671,14 +666,18 @@ CREATE POLICY "Coupons are viewable by participants" ON coupons
   FOR SELECT USING (
     buyer_id = (select auth.uid())
     OR seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid())
+      AND (p.role = 'superadmin' OR (p.role = 'admin' AND EXISTS (
+        SELECT 1 FROM products pr WHERE pr.id = coupons.product_id AND pr.institution_id = p.institution_id))))
     OR (select auth.role()) = 'service_role'
   );
 
 CREATE POLICY "Coupons are writable by seller or admin" ON coupons
   FOR UPDATE USING (
     seller_id = (select auth.uid())
-    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid()) AND p.role = 'admin')
+    OR EXISTS (SELECT 1 FROM profiles p WHERE p.id = (select auth.uid())
+      AND (p.role = 'superadmin' OR (p.role = 'admin' AND EXISTS (
+        SELECT 1 FROM products pr WHERE pr.id = coupons.product_id AND pr.institution_id = p.institution_id))))
     OR (select auth.role()) = 'service_role'
   );
 

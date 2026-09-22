@@ -5,6 +5,7 @@ import { createHash, randomBytes, randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 import { isValidPaymentReference, paymentMatchesIntent } from './payment-security.js';
+import { isAdminRole, canSuperadminEditProfile } from './access-control.js';
 
 dotenv.config();
 
@@ -158,8 +159,24 @@ function assertUuid(value, label = 'ID') {
 }
 
 function assertAdmin(auth) {
-  if (auth.profile?.role !== 'admin') {
+  if (!isAdminRole(auth.profile?.role)) {
     throw makeHttpError('Acesso restrito a administradores.', 403, 'ADMIN_REQUIRED');
+  }
+  if (auth.profile.role === 'admin' && !auth.profile.institution_id) {
+    throw makeHttpError('Admin sem instituicao vinculada.', 403, 'ADMIN_WITHOUT_INSTITUTION');
+  }
+}
+
+function assertSuperadmin(auth) {
+  if (auth.profile?.role !== 'superadmin') {
+    throw makeHttpError('Acesso restrito ao superadmin.', 403, 'SUPERADMIN_REQUIRED');
+  }
+}
+
+function assertAdminInstitution(auth, institutionId) {
+  if (auth.profile?.role === 'superadmin') return;
+  if (!institutionId || auth.profile?.institution_id !== institutionId) {
+    throw makeHttpError('Instituicao fora do seu acesso.', 403, 'INSTITUTION_FORBIDDEN');
   }
 }
 
@@ -470,7 +487,7 @@ app.post('/api/profile/become-seller', async (req, res) => {
 
     const admin = requireSupabaseAdmin();
     const currentRole = auth.profile?.role || 'buyer';
-    if (currentRole === 'admin') {
+    if (isAdminRole(currentRole)) {
       return res.json({ success: true, profile: auth.profile });
     }
 
@@ -521,7 +538,7 @@ app.post('/api/mercadopago/oauth/start', async (req, res) => {
     if (!auth) return;
     requireMercadoPagoOAuthConfig();
     const admin = requireSupabaseAdmin();
-    if (!['seller', 'admin'].includes(auth.profile?.role || 'buyer')) {
+    if (!['seller', 'admin', 'superadmin'].includes(auth.profile?.role || 'buyer')) {
       return res.status(403).json({ success: false, error: 'Apenas vendedores podem conectar Mercado Pago.' });
     }
 
@@ -787,7 +804,11 @@ async function loadProductForSellerMutation(admin, productId) {
 }
 
 function assertCanManageSellerProduct(auth, product) {
-  if (auth.profile?.role === 'admin') return;
+  if (isAdminRole(auth.profile?.role)) {
+    assertAdmin(auth);
+    assertAdminInstitution(auth, product.institution_id);
+    return;
+  }
   if (product.seller_id === auth.user.id) return;
   throw makeHttpError('Voce nao tem permissao para alterar este produto.', 403, 'PRODUCT_FORBIDDEN');
 }
@@ -1148,9 +1169,13 @@ app.get('/api/payment/:id', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Pagamento nao encontrado' });
     }
 
-    const canViewPayment = auth.profile?.role === 'admin'
-      || ownedPayment.buyer_id === auth.user.id
-      || ownedPayment.seller_id === auth.user.id;
+    let canViewPayment = ownedPayment.buyer_id === auth.user.id || ownedPayment.seller_id === auth.user.id;
+    if (!canViewPayment && auth.profile?.role === 'superadmin') canViewPayment = true;
+    if (!canViewPayment && auth.profile?.role === 'admin' && auth.profile.institution_id) {
+      const { data: paymentProduct } = await requireSupabaseAdmin().from('products')
+        .select('institution_id').eq('id', ownedPayment.product_id).maybeSingle();
+      canViewPayment = paymentProduct?.institution_id === auth.profile.institution_id;
+    }
     if (!canViewPayment) {
       return res.status(403).json({ success: false, error: 'Acesso negado' });
     }
@@ -1318,8 +1343,13 @@ app.get('/api/seller/:sellerId/payments', async (req, res) => {
     if (!auth) return;
 
     const { sellerId } = req.params;
-    if (auth.profile?.role !== 'admin' && auth.user.id !== sellerId) {
+    if (!isAdminRole(auth.profile?.role) && auth.user.id !== sellerId) {
       return res.status(403).json({ success: false, error: 'Acesso negado' });
+    }
+    if (auth.profile?.role === 'admin' && auth.user.id !== sellerId) {
+      const { data: seller } = await requireSupabaseAdmin().from('profiles')
+        .select('institution_id').eq('id', sellerId).maybeSingle();
+      assertAdminInstitution(auth, seller?.institution_id);
     }
 
     const { data, error } = await auth.client
@@ -1441,10 +1471,12 @@ app.get('/api/admin/categories', async (req, res) => {
     assertAdmin(auth);
 
     const admin = requireSupabaseAdmin();
-    const { data, error } = await admin
+    let query = admin
       .from('categories')
       .select('*')
       .order('name', { ascending: true });
+    if (auth.profile.role === 'admin') query = query.eq('institution_id', auth.profile.institution_id);
+    const { data, error } = await query;
 
     if (error) throw error;
     res.json({ success: true, categories: data || [] });
@@ -1463,6 +1495,7 @@ app.post('/api/admin/categories', async (req, res) => {
     const admin = requireSupabaseAdmin();
     const { id, updates } = normalizeCategoryPayload(req.body || {});
     const institutionId = await resolveAdminInstitutionId(admin, auth);
+    if (auth.profile.role === 'admin') assertAdminInstitution(auth, institutionId);
 
     const { data, error } = await admin
       .from('categories')
@@ -1496,6 +1529,7 @@ app.patch('/api/admin/categories/:categoryId', async (req, res) => {
 
     const admin = requireSupabaseAdmin();
     const category = await loadCategoryForMutation(admin, req.params.categoryId);
+    assertAdminInstitution(auth, category.institution_id);
     const { updates } = normalizeCategoryPayload(req.body || {}, { partial: true });
 
     const { data, error } = await admin
@@ -1531,6 +1565,7 @@ app.delete('/api/admin/categories/:categoryId', async (req, res) => {
 
     const admin = requireSupabaseAdmin();
     const category = await loadCategoryForMutation(admin, req.params.categoryId);
+    assertAdminInstitution(auth, category.institution_id);
     const { count, error: countError } = await admin
       .from('products')
       .select('id', { count: 'exact', head: true })
@@ -1592,14 +1627,14 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
     assertUuid(req.params.institutionId, 'Instituicao');
 
     const admin = requireSupabaseAdmin();
-    if (auth.profile?.institution_id && auth.profile.institution_id !== req.params.institutionId) {
+    if (auth.profile?.role !== 'superadmin' && auth.profile?.institution_id && auth.profile.institution_id !== req.params.institutionId) {
       return res.status(403).json({
         success: false,
         code: 'INSTITUTION_FORBIDDEN',
         error: 'Voce so pode editar a instituicao vinculada ao seu perfil admin.',
       });
     }
-    if (!auth.profile?.institution_id) {
+    if (auth.profile?.role !== 'superadmin' && !auth.profile?.institution_id) {
       const { count, error: countError } = await admin.from('institutions').select('id', { count: 'exact', head: true });
       if (countError) throw countError;
       if ((count || 0) !== 1) {
@@ -1641,6 +1676,9 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
     if (!auth) return;
     assertAdmin(auth);
 
+    const product = await loadProductForSellerMutation(requireSupabaseAdmin(), req.params.productId);
+    assertAdminInstitution(auth, product.institution_id);
+
     const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: false });
     if (!readiness.ready) {
       return res.status(409).json({
@@ -1663,6 +1701,100 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
   } catch (error) {
     console.error('Erro ao aprovar produto:', error);
     res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_APPROVE_ERROR', error: error.message || 'Erro ao aprovar produto' });
+  }
+});
+
+app.get('/api/superadmin/users', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertSuperadmin(auth);
+
+    const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
+    const limit = 25;
+    const admin = requireSupabaseAdmin();
+    const search = String(req.query.search || '').trim().replace(/[^a-z0-9@._ -]/gi, '').slice(0, 80);
+    let query = admin.from('profiles')
+      .select('id,name,email,role,institution_id,created_at,verified', { count: 'exact' })
+      .order('created_at', { ascending: false });
+    if (search) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    const { data, count, error } = await query.range((page - 1) * limit, page * limit - 1);
+    if (error) throw error;
+    res.json({ success: true, users: data || [], page, limit, total: count || 0 });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SUPERADMIN_USERS_ERROR', error: error.message });
+  }
+});
+
+app.patch('/api/superadmin/users/:userId', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertSuperadmin(auth);
+    assertUuid(req.params.userId, 'Usuario');
+
+    const admin = requireSupabaseAdmin();
+    const { data: target, error: targetError } = await admin.from('profiles')
+      .select('id,role,institution_id').eq('id', req.params.userId).maybeSingle();
+    if (targetError) throw targetError;
+    if (!target) throw makeHttpError('Usuario nao encontrado.', 404, 'USER_NOT_FOUND');
+
+    const body = req.body || {};
+    const updates = {};
+    if (Object.prototype.hasOwnProperty.call(body, 'role')) {
+      if (!['buyer', 'seller', 'admin'].includes(body.role)) {
+        throw makeHttpError('Papel invalido.', 400, 'INVALID_ROLE');
+      }
+      updates.role = body.role;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'institutionId')) {
+      if (body.institutionId !== null) assertUuid(body.institutionId, 'Instituicao');
+      updates.institution_id = body.institutionId;
+    }
+    if (!Object.keys(updates).length) throw makeHttpError('Nenhuma alteracao valida.', 400, 'EMPTY_UPDATE');
+    if (!canSuperadminEditProfile(auth.profile, target, updates)) {
+      throw makeHttpError('Nao e permitido alterar uma conta superadmin.', 403, 'PROTECTED_ACCOUNT');
+    }
+    if (updates.role === 'admin' && !(updates.institution_id ?? target.institution_id)) {
+      throw makeHttpError('Selecione uma instituicao para o admin.', 400, 'ADMIN_INSTITUTION_REQUIRED');
+    }
+    if (updates.institution_id) {
+      const { data: institution, error: institutionError } = await admin.from('institutions')
+        .select('id').eq('id', updates.institution_id).maybeSingle();
+      if (institutionError) throw institutionError;
+      if (!institution) throw makeHttpError('Instituicao nao encontrada.', 404, 'INSTITUTION_NOT_FOUND');
+    }
+
+    const { data, error } = await admin.from('profiles').update(updates)
+      .eq('id', target.id)
+      .neq('role', 'superadmin')
+      .select('id,name,email,role,institution_id,created_at,verified').maybeSingle();
+    if (error) throw error;
+    if (!data) throw makeHttpError('Conta protegida ou alterada durante a operacao.', 409, 'PROTECTED_ACCOUNT');
+    res.json({ success: true, user: data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SUPERADMIN_USER_UPDATE_ERROR', error: error.message });
+  }
+});
+
+app.post('/api/superadmin/institutions', async (req, res) => {
+  try {
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
+    assertSuperadmin(auth);
+    const updates = normalizeInstitutionUpdates(req.body || {});
+    if (!updates.name || !updates.full_name || !updates.domain) {
+      throw makeHttpError('Nome, nome completo e dominio sao obrigatorios.', 400, 'INSTITUTION_FIELDS_REQUIRED');
+    }
+    const admin = requireSupabaseAdmin();
+    const { data, error } = await admin.from('institutions').insert(updates).select('*').single();
+    if (error) {
+      if (error.code === '23505') throw makeHttpError('Dominio ja cadastrado.', 409, 'INSTITUTION_EXISTS');
+      throw error;
+    }
+    res.status(201).json({ success: true, institution: data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SUPERADMIN_INSTITUTION_CREATE_ERROR', error: error.message });
   }
 });
 

@@ -5,6 +5,7 @@ import { getInstitutionStats, updateInstitution, getInstitution, getAllInstituti
 import { signOutUser } from '../services/auth-service.js';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { getPlatformUsers, updatePlatformUser, createPlatformInstitution } from '../services/superadmin-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -20,6 +21,13 @@ let categoryStatusFilter = 'all';
 const ADMIN_DATA_TTL_MS = 30000;
 let adminDataLoadedAt = 0;
 let adminDataPromise = null;
+let platformUsers = [];
+let platformUsersTotal = 0;
+let platformUsersPage = 1;
+let platformUsersSearch = '';
+let platformUsersError = '';
+let platformInstitutions = [];
+const isSuperadmin = () => globalProfile?.role === 'superadmin';
 
 function invalidateAdminData() {
   adminDataLoadedAt = 0;
@@ -73,7 +81,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  if (globalSession?.user?.id && (globalProfile?.role || globalSession?.user?.user_metadata?.role) === 'admin') {
+  if (globalSession?.user?.id && ['admin', 'superadmin'].includes(globalProfile?.role)) {
     const institutions = await getAllInstitutions();
     if (institutions.length === 1) {
       activeInstitution = institutions[0];
@@ -106,9 +114,9 @@ async function loadAdminData({ force = false } = {}) {
       categoriesResult,
     ] = await Promise.allSettled([
       getPendingProducts(),
-      getInstitutionStats(activeInstitution?.id || null),
+      getInstitutionStats(isSuperadmin() ? null : activeInstitution?.id || null),
       getAllProducts(),
-      getCategoryStats(activeInstitution?.id || null),
+      getCategoryStats(isSuperadmin() ? null : activeInstitution?.id || null),
       getCategories(),
     ]);
 
@@ -141,14 +149,29 @@ export function renderAdmin(container, subpage) {
 
 async function renderAdminPage(container, options = {}) {
   await loadAdminData({ force: Boolean(options.forceRefresh) });
+  if (isSuperadmin() && adminView === 'users') {
+    try {
+      const result = await getPlatformUsers(platformUsersPage, platformUsersSearch);
+      platformUsers = result.users;
+      platformUsersTotal = result.total;
+      platformUsersError = '';
+      platformInstitutions = await getAllInstitutions();
+    } catch (error) {
+      platformUsersError = error.message;
+    }
+  }
+  if (isSuperadmin() && adminView === 'institutions') {
+    platformInstitutions = await getAllInstitutions();
+  }
+  if (!isSuperadmin() && ['users', 'institutions'].includes(adminView)) adminView = 'dashboard';
   container.innerHTML = `
     <div class="page admin-page">
       <header class="app-header admin-main-header">
         <div class="admin-header-brand">
-          <div class="avatar admin-header-avatar">AD</div>
+          <div class="avatar admin-header-avatar">${isSuperadmin() ? 'SA' : 'AD'}</div>
           <div class="admin-header-copy">
-            <div class="admin-header-title">Painel Admin</div>
-            <div class="admin-header-subtitle">${escapeHTML(activeInstitution.fullName)}</div>
+            <div class="admin-header-title">${isSuperadmin() ? 'Superadmin' : 'Painel Admin'}</div>
+            <div class="admin-header-subtitle">${isSuperadmin() ? 'Linka · Visão global' : escapeHTML(activeInstitution.fullName)}</div>
           </div>
         </div>
         <div class="admin-header-actions">
@@ -169,6 +192,10 @@ async function renderAdminPage(container, options = {}) {
             <button class="tab ${adminView === 'categories' ? 'active' : ''}" data-admin-tab="categories">Categorias</button>
             <button class="tab ${adminView === 'reports' ? 'active' : ''}" data-admin-tab="reports">Relatórios</button>
             <button class="tab ${adminView === 'settings' ? 'active' : ''}" data-admin-tab="settings">Config</button>
+            ${isSuperadmin() ? `
+              <button class="tab ${adminView === 'users' ? 'active' : ''}" data-admin-tab="users">Usuários</button>
+              <button class="tab ${adminView === 'institutions' ? 'active' : ''}" data-admin-tab="institutions">Instituições</button>
+            ` : ''}
           </div>
         </div>
         <div id="admin-content">
@@ -181,6 +208,7 @@ async function renderAdminPage(container, options = {}) {
         <div class="nav-item ${adminView === 'categories' ? 'active' : ''}" data-nav="categories">${icons.grid}<span>Categorias</span></div>
         <div class="nav-item ${adminView === 'reports' ? 'active' : ''}" data-nav="reports">${icons.chart}<span>Relatórios</span></div>
         <div class="nav-item ${adminView === 'settings' ? 'active' : ''}" data-nav="settings">${icons.settings}<span>Config</span></div>
+        ${isSuperadmin() ? `<div class="nav-item ${adminView === 'users' ? 'active' : ''}" data-nav="users">${icons.user}<span>Usuários</span></div>` : ''}
       </nav>
     </div>
   `;
@@ -193,8 +221,78 @@ function getAdminContent() {
     case 'categories': return renderCategories();
     case 'reports': return renderReports();
     case 'settings': return renderSettings();
+    case 'users': return isSuperadmin() ? renderPlatformUsers() : renderAdminDashboard();
+    case 'institutions': return isSuperadmin() ? renderPlatformInstitutions() : renderAdminDashboard();
     default: return renderAdminDashboard();
   }
+}
+
+function renderPlatformUsers() {
+  const institutions = platformInstitutions || [];
+  const options = (selected) => `
+    <option value="" ${!selected ? 'selected' : ''}>Sem instituição</option>
+    ${institutions.map((item) => `<option value="${escapeHTML(item.id)}" ${item.id === selected ? 'selected' : ''}>${escapeHTML(item.name)}</option>`).join('')}`;
+  const roleLabels = { buyer: 'Comprador', seller: 'Vendedor', admin: 'Admin', superadmin: 'Superadmin' };
+  return `
+    <section class="admin-section platform-section">
+      <div class="admin-section-header">
+        <div><h3 class="admin-section-title">Usuários da plataforma</h3><p class="admin-section-subtitle">${platformUsersTotal} contas cadastradas</p></div>
+      </div>
+      <form id="platform-user-search" class="platform-toolbar">
+        <input class="input-field" type="search" name="search" aria-label="Buscar usuários" placeholder="Buscar por nome ou e-mail" value="${escapeHTML(platformUsersSearch)}" />
+        <button class="btn btn-secondary btn-sm" type="submit">Buscar</button>
+      </form>
+      ${platformUsersError ? `<p class="platform-error" role="alert">${escapeHTML(platformUsersError)}</p>` : ''}
+      <div class="platform-user-list">
+        ${platformUsers.map((user) => `
+          <form class="platform-user-row" data-platform-user="${escapeHTML(user.id)}">
+            <div class="platform-user-identity">
+              <strong>${escapeHTML(user.name || 'Usuário')}</strong>
+              <span>${escapeHTML(user.email)}</span>
+            </div>
+            <label>Papel
+              <select class="input-field" name="role" ${user.role === 'superadmin' ? 'disabled' : ''}>
+                ${Object.entries(roleLabels).filter(([role]) => role !== 'superadmin' || user.role === 'superadmin').map(([role, label]) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${label}</option>`).join('')}
+              </select>
+            </label>
+            <label>Instituição
+              <select class="input-field" name="institutionId" ${user.role === 'superadmin' ? 'disabled' : ''}>${options(user.institution_id)}</select>
+            </label>
+            ${user.role === 'superadmin' ? '<span class="platform-protected">Conta protegida</span>' : '<button class="btn btn-secondary btn-sm" type="submit">Salvar</button>'}
+          </form>
+        `).join('') || '<p class="empty-state">Nenhum usuário encontrado.</p>'}
+      </div>
+      <div class="platform-pagination">
+        <button class="btn btn-secondary btn-sm" type="button" data-platform-page="prev" ${platformUsersPage <= 1 ? 'disabled' : ''}>Anterior</button>
+        <span>Página ${platformUsersPage} de ${Math.max(1, Math.ceil(platformUsersTotal / 25))}</span>
+        <button class="btn btn-secondary btn-sm" type="button" data-platform-page="next" ${platformUsersPage * 25 >= platformUsersTotal ? 'disabled' : ''}>Próxima</button>
+      </div>
+    </section>`;
+}
+
+function renderPlatformInstitutions() {
+  return `
+    <section class="admin-section platform-section">
+      <div class="admin-section-header"><div><h3 class="admin-section-title">Instituições</h3><p class="admin-section-subtitle">${platformInstitutions.length} cadastradas</p></div></div>
+      <div class="platform-institution-list">
+        ${platformInstitutions.map((item) => `
+          <form class="platform-institution-row" data-platform-institution="${escapeHTML(item.id)}">
+            <label>Nome curto<input class="input-field" name="name" required value="${escapeHTML(item.name)}" /></label>
+            <label>Nome completo<input class="input-field" name="fullName" required value="${escapeHTML(item.fullName)}" /></label>
+            <label>Domínio<input class="input-field" name="domain" required value="${escapeHTML(item.domain)}" /></label>
+            <label>Plano<select class="input-field" name="plan">${['basic', 'pro', 'enterprise'].map((plan) => `<option value="${plan}" ${item.plan === plan ? 'selected' : ''}>${plan}</option>`).join('')}</select></label>
+            <button class="btn btn-secondary btn-sm" type="submit">Salvar</button>
+          </form>`).join('') || '<p class="empty-state">Nenhuma instituição cadastrada.</p>'}
+      </div>
+      <h3 class="admin-section-title platform-create-title">Nova instituição</h3>
+      <form id="platform-institution-create" class="platform-institution-row">
+        <label>Nome curto<input class="input-field" name="name" required maxlength="80" /></label>
+        <label>Nome completo<input class="input-field" name="fullName" required maxlength="160" /></label>
+        <label>Domínio<input class="input-field" name="domain" required placeholder="@exemplo.edu.br" /></label>
+        <label>Plano<select class="input-field" name="plan"><option value="basic">basic</option><option value="pro">pro</option><option value="enterprise">enterprise</option></select></label>
+        <button class="btn btn-primary btn-sm" type="submit">Criar</button>
+      </form>
+    </section>`;
 }
 
 function renderAdminDashboard() {
@@ -1213,6 +1311,75 @@ async function handleAdminMetric(metric, container) {
 }
 
 function bindAdminEvents(container) {
+  container.querySelector('#platform-user-search')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    platformUsersSearch = String(new FormData(event.currentTarget).get('search') || '').trim();
+    platformUsersPage = 1;
+    await renderAdminPage(container);
+  });
+
+  container.querySelectorAll('[data-platform-page]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      platformUsersPage += button.dataset.platformPage === 'next' ? 1 : -1;
+      await renderAdminPage(container);
+    });
+  });
+
+  container.querySelectorAll('[data-platform-user]').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      const values = new FormData(form);
+      const role = String(values.get('role'));
+      const institutionId = String(values.get('institutionId') || '') || null;
+      if (role === 'admin' && !institutionId) {
+        showToast('Selecione a instituição desse admin.', 'error');
+        return;
+      }
+      button.disabled = true;
+      try {
+        await updatePlatformUser(form.dataset.platformUser, { role, institutionId });
+        showToast('Usuário atualizado.', 'success');
+        await renderAdminPage(container);
+      } catch (error) {
+        showToast(error.message, 'error');
+        button.disabled = false;
+      }
+    });
+  });
+
+  container.querySelector('#platform-institution-create')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await createPlatformInstitution(Object.fromEntries(new FormData(form)));
+      showToast('Instituição criada.', 'success');
+      await renderAdminPage(container);
+    } catch (error) {
+      showToast(error.message, 'error');
+      button.disabled = false;
+    }
+  });
+
+  container.querySelectorAll('[data-platform-institution]').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        const result = await updateInstitution(form.dataset.platformInstitution, Object.fromEntries(new FormData(form)));
+        if (!result.success) throw new Error(result.error);
+        showToast('Instituição atualizada.', 'success');
+        await renderAdminPage(container);
+      } catch (error) {
+        showToast(error.message, 'error');
+        button.disabled = false;
+      }
+    });
+  });
+
   // Tabs
   container.querySelectorAll('[data-admin-tab]').forEach(tab => {
     tab.addEventListener('click', async () => {

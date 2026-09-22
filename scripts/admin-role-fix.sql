@@ -14,11 +14,11 @@ DECLARE
   is_privileged_context BOOLEAN := caller_uid IS NULL AND request_role NOT IN ('anon', 'authenticated');
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF NEW.role NOT IN ('buyer', 'seller', 'admin') THEN
+    IF NEW.role NOT IN ('buyer', 'seller', 'admin', 'superadmin') THEN
       NEW.role := 'buyer';
     END IF;
 
-    IF NEW.role = 'admin' AND request_role <> 'service_role' AND NOT is_privileged_context THEN
+    IF NEW.role IN ('admin', 'superadmin') AND request_role <> 'service_role' AND NOT is_privileged_context THEN
       NEW.role := 'buyer';
     END IF;
 
@@ -31,14 +31,6 @@ BEGIN
 
   IF TG_OP = 'UPDATE' AND NEW.role IS DISTINCT FROM OLD.role THEN
     IF request_role = 'service_role' OR is_privileged_context THEN
-      RETURN NEW;
-    END IF;
-
-    IF EXISTS (
-      SELECT 1
-      FROM public.profiles
-      WHERE id = caller_uid AND role = 'admin'
-    ) THEN
       RETURN NEW;
     END IF;
 
@@ -64,19 +56,9 @@ CREATE POLICY "Users can manage own profile" ON public.profiles
   FOR UPDATE TO authenticated
   USING (
     (select auth.uid()) = id
-    OR EXISTS (
-      SELECT 1
-      FROM public.profiles p
-      WHERE p.id = (select auth.uid()) AND p.role = 'admin'
-    )
   )
   WITH CHECK (
     (select auth.uid()) = id
-    OR EXISTS (
-      SELECT 1
-      FROM public.profiles p
-      WHERE p.id = (select auth.uid()) AND p.role = 'admin'
-    )
   );
 
 -- Depois de rodar a correcao acima, substitua o email abaixo e execute

@@ -645,12 +645,12 @@ async function handleRoute() {
     const wantsAdmin = path.startsWith('/admin') || path === 'admin';
     const wantsSeller = path.startsWith('/seller') || path === 'seller';
 
-    if ((wantsSeller && !['seller', 'admin'].includes(role)) || (wantsAdmin && role !== 'admin')) {
+    if ((wantsSeller && !['seller', 'admin', 'superadmin'].includes(role)) || (wantsAdmin && !['admin', 'superadmin'].includes(role))) {
       await loadProfileForSession(session, { force: true });
       role = getSessionRole(session);
     }
 
-    if ((wantsAdmin && role !== 'admin') || (wantsSeller && !['seller', 'admin'].includes(role))) {
+    if ((wantsAdmin && !['admin', 'superadmin'].includes(role)) || (wantsSeller && !['seller', 'admin', 'superadmin'].includes(role))) {
       window.location.hash = '#/buyer';
       showToast('Acesso restrito ao seu perfil.', 'error');
       return;

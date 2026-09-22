@@ -43,13 +43,13 @@ function getPasswordRecoveryRedirectTo() {
 }
 
 export function getHomePathForRole(role = 'buyer') {
-  if (role === 'admin') return '#/admin';
+  if (role === 'admin' || role === 'superadmin') return '#/admin';
   if (role === 'seller') return '#/seller';
   return '#/buyer';
 }
 
 function normalizeRole(role) {
-  return role === 'seller' || role === 'admin' ? role : 'buyer';
+  return role === 'seller' || role === 'admin' || role === 'superadmin' ? role : 'buyer';
 }
 
 function translateAuthError(message = '') {
@@ -119,7 +119,7 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
       id: user.id,
       email: user.email,
       name: extra.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario',
-      role: role === 'admin' ? 'buyer' : role,
+      role: role === 'admin' || role === 'superadmin' ? 'buyer' : role,
       whatsapp: extra.whatsapp || user.user_metadata?.whatsapp || null,
     };
 
