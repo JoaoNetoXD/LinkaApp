@@ -27,7 +27,15 @@ let platformUsersPage = 1;
 let platformUsersSearch = '';
 let platformUsersError = '';
 let platformInstitutions = [];
+let adminRenderId = 0;
 const isSuperadmin = () => globalProfile?.role === 'superadmin';
+
+function isAdminRoute() {
+  const path = window.location.hash.startsWith('#/')
+    ? window.location.hash.slice(1)
+    : window.location.pathname;
+  return path === '/admin' || path.startsWith('/admin/') || path.startsWith('/admin?');
+}
 
 function invalidateAdminData() {
   adminDataLoadedAt = 0;
@@ -144,11 +152,15 @@ async function loadAdminData({ force = false } = {}) {
 export function renderAdmin(container, subpage) {
   if (subpage) adminView = subpage;
   else adminView = 'dashboard';
-  renderAdminPage(container).then(() => resetAppScroll(container));
+  renderAdminPage(container).then((rendered) => {
+    if (rendered) resetAppScroll(container);
+  });
 }
 
 async function renderAdminPage(container, options = {}) {
+  const renderId = ++adminRenderId;
   await loadAdminData({ force: Boolean(options.forceRefresh) });
+  if (renderId !== adminRenderId || !isAdminRoute()) return false;
   if (isSuperadmin() && adminView === 'users') {
     try {
       const result = await getPlatformUsers(platformUsersPage, platformUsersSearch);
@@ -163,6 +175,7 @@ async function renderAdminPage(container, options = {}) {
   if (isSuperadmin() && adminView === 'institutions') {
     platformInstitutions = await getAllInstitutions();
   }
+  if (renderId !== adminRenderId || !isAdminRoute()) return false;
   if (!isSuperadmin() && ['users', 'institutions'].includes(adminView)) adminView = 'dashboard';
   container.innerHTML = `
     <div class="page admin-page">
@@ -213,6 +226,7 @@ async function renderAdminPage(container, options = {}) {
     </div>
   `;
   bindAdminEvents(container);
+  return true;
 }
 
 function getAdminContent() {
@@ -1311,6 +1325,7 @@ async function handleAdminMetric(metric, container) {
 }
 
 function bindAdminEvents(container) {
+  const pageRoot = container.querySelector('.admin-page');
   container.querySelector('#platform-user-search')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     platformUsersSearch = String(new FormData(event.currentTarget).get('search') || '').trim();
@@ -1398,7 +1413,7 @@ function bindAdminEvents(container) {
     });
   });
 
-  container.addEventListener('click', async (event) => {
+  pageRoot.addEventListener('click', async (event) => {
     const metricBtn = event.target.closest?.('[data-admin-metric]');
     if (metricBtn) {
       event.preventDefault();
@@ -1453,7 +1468,7 @@ function bindAdminEvents(container) {
     }
   }, true);
 
-  container.addEventListener('keydown', (event) => {
+  pageRoot.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const moderationDetail = event.target.closest?.('[data-admin-product-detail]');
     if (!moderationDetail) return;
@@ -1461,7 +1476,7 @@ function bindAdminEvents(container) {
     showAdminProductDetails(moderationDetail.dataset.adminProductDetail, container);
   });
 
-  container.addEventListener('click', async (event) => {
+  pageRoot.addEventListener('click', async (event) => {
     const createCategoryBtn = event.target.closest?.('[data-category-create]');
     if (createCategoryBtn) {
       event.preventDefault();

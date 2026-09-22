@@ -151,6 +151,15 @@ const buyerProductsCache = new Map();
 const buyerProductsRequests = new Map();
 const unreadCountCache = new Map();
 const buyerCouponsCache = new Map();
+let buyerRenderId = 0;
+let buyerHomeRenderId = 0;
+
+function isBuyerRoute() {
+  const path = window.location.hash.startsWith('#/')
+    ? window.location.hash.slice(1)
+    : window.location.pathname;
+  return path === '/' || path === '/buyer' || path.startsWith('/buyer/') || path.startsWith('/buyer?');
+}
 
 // Intersection Observer for card entrance animation
 let observer = null;
@@ -298,7 +307,6 @@ async function loadBuyerProducts({ categoryId = activeCategory, search = searchQ
   const cacheKey = getProductsCacheKey({ categoryId, search });
   const cached = buyerProductsCache.get(cacheKey);
   if (!force && cached && Date.now() - cached.loadedAt < BUYER_PRODUCTS_TTL_MS) {
-    cachedProducts = cached.products;
     return cached.products;
   }
 
@@ -309,7 +317,6 @@ async function loadBuyerProducts({ categoryId = activeCategory, search = searchQ
   const request = getActiveProducts({ categoryId, search })
     .then((rows) => {
       const products = Array.isArray(rows) ? rows : [];
-      cachedProducts = products;
       buyerProductsCache.set(cacheKey, { products, loadedAt: Date.now() });
       return products;
     })
@@ -446,6 +453,7 @@ function initObserver() {
 }
 
 async function renderBuyerPage(container) {
+  const renderId = ++buyerRenderId;
   stopBuyerCountdowns();
 
   if (currentView === 'home' && !container.querySelector('.buyer-wrapper')) {
@@ -454,6 +462,7 @@ async function renderBuyerPage(container) {
   }
 
   await loadBuyerShellData();
+  if (renderId !== buyerRenderId || !isBuyerRoute()) return;
 
   if (currentView !== 'home' && container.querySelector('.buyer-home-loading')) {
     return renderBuyerPage(container);
@@ -461,6 +470,7 @@ async function renderBuyerPage(container) {
 
   if (currentView === 'home') {
     await renderHome(container);
+    if (renderId !== buyerRenderId || !isBuyerRoute()) return;
     initObserver();
     if (focusCategoriesAfterRender) {
       focusCategoriesAfterRender = false;
@@ -702,19 +712,21 @@ function renderBuyerBottomNav(activeTab) {
 }
 
 function renderEmptyProductsState() {
+  const hasFilters = Boolean(searchQuery.trim() || activeCategory !== 'all' || Number(minDiscount) > 0);
   return `
     <div class="market-empty-state">
       <div class="market-empty-icon">${icons.package}</div>
-      <h3>As primeiras ofertas estão chegando</h3>
-      <p>Os vendedores da sua instituição ainda estão preparando as ofertas. Volte em breve!</p>
+      <h3>${hasFilters ? 'Nenhuma oferta encontrada' : 'As primeiras ofertas estão chegando'}</h3>
+      <p>${hasFilters ? 'Tente outra busca ou remova os filtros.' : 'Os vendedores da sua instituição ainda estão preparando as ofertas. Volte em breve!'}</p>
       <div class="market-empty-actions">
-        ${!isAuthenticated() ? `<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>` : ''}
+        ${hasFilters ? '<button class="btn-primary" id="btnClearBuyerFilters" type="button">Limpar filtros</button>' : !isAuthenticated() ? '<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>' : ''}
       </div>
     </div>
   `;
 }
 
 async function renderHome(container, { skipFetch = false, loading = false } = {}) {
+  const renderId = ++buyerHomeRenderId;
   // Load products from Supabase (or mock fallback)
   let products;
   if (skipFetch) {
@@ -723,9 +735,13 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     products = await loadBuyerProducts({ categoryId: activeCategory, search: searchQuery });
   }
 
-  if (!loading && (!products || products.length === 0)) {
-    products = USE_MOCKS ? (cachedProducts || mockProducts) : [];
-  }
+  if (renderId !== buyerHomeRenderId || currentView !== 'home' || !isBuyerRoute()) return;
+  const activeSearch = container.querySelector('#searchInput');
+  const restoreSearchFocus = document.activeElement === activeSearch;
+  if (restoreSearchFocus && activeSearch.value !== searchQuery) return;
+  const selectionStart = restoreSearchFocus ? activeSearch.selectionStart : null;
+  const selectionEnd = restoreSearchFocus ? activeSearch.selectionEnd : null;
+  if (!loading) cachedProducts = products;
 
   const filteredProducts = applyBuyerFeedFilters(products);
   const searchSuggestions = getSearchSuggestions(cachedProducts || products);
@@ -899,6 +915,14 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     ${renderBuyerBottomNav(currentView === 'coupons' ? 'coupons' : buyerNavFocus === 'cats' ? 'cats' : 'home')}
   `;
 
+  if (restoreSearchFocus) {
+    const nextSearch = container.querySelector('#searchInput');
+    nextSearch?.focus({ preventScroll: true });
+    if (selectionStart !== null && selectionEnd !== null) {
+      nextSearch?.setSelectionRange(selectionStart, selectionEnd);
+    }
+  }
+
   // Animate progress bars after render
   setTimeout(() => {
     container.querySelectorAll('.slots-bar-fill').forEach(bar => {
@@ -958,6 +982,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
   container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
+  });
+  container.querySelector('#btnClearBuyerFilters')?.addEventListener('click', () => {
+    searchQuery = '';
+    activeCategory = 'all';
+    minDiscount = '0';
+    renderBuyerPage(container);
   });
 
   const instBannerTimer = container.querySelector('.inst-banner')
@@ -1042,6 +1072,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 async function renderCategories(container) {
   const products = await loadBuyerProducts({ categoryId: 'all', search: '' });
   const allProducts = Array.isArray(products) ? products : [];
+  cachedProducts = allProducts;
   const categories = getMarketCategories(false);
   const totalOffers = allProducts.length;
   const stats = categories.map((category) => {
