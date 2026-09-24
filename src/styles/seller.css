@@ -1263,13 +1263,21 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
   flex: 1;
   min-width: 0;
 }
-.seller-insight-main strong,
+/* Offer names get two lines before they are cut; the status line stays on one. */
+.seller-insight-main strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-14);
+  font-weight: 600;
+  line-height: 1.3;
+}
 .seller-insight-main small {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.seller-insight-main strong { font-size: var(--fs-14); font-weight: 600; }
 .seller-insight-main small { font-size: var(--fs-12); color: var(--ink-mute); }
 
 .seller-insight-metric {

@@ -8,6 +8,7 @@ import { getCouponCodeCandidates } from '../utils/coupon-code.js';
 import { resetAppScroll } from '../utils/scroll.js';
 import { navigate, goBack, getHashParams, offerShareUrl } from '../utils/navigation.js';
 import { shareLink, offerShareText } from '../utils/share.js';
+import { countByDay } from '../utils/week.js';
 import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
@@ -401,13 +402,6 @@ function getSellerCategoryName(categoryId) {
   return getSellerCategories().find(c => c.id === categoryId)?.name || categoryId || 'Sem categoria';
 }
 
-function formatSellerDate(value) {
-  if (!value) return 'Sem data';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Sem data';
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-}
-
 function renderSellerStatCard({ icon, value, label, hint, attrs, detail = '', featured = false }) {
   const accessibleLabel = [`${label}: ${value}`, detail, hint].filter(Boolean).join('. ');
   return `
@@ -663,10 +657,15 @@ function renderSellerAdsManager() {
   `;
 }
 
+function getWeeklyCoupons(coupons = getSellerCouponData()) {
+  return countByDay(coupons, (coupon) => coupon.createdAtRaw || coupon.createdAt);
+}
+
 function renderSellerInsights() {
   const ads = getSellerAdsData();
   const coupons = getSellerCouponData();
   const stats = getSellerComputedStats(ads, coupons);
+  const weekTotal = getWeeklyCoupons(coupons).reduce((sum, day) => sum + day.count, 0);
   const topAds = [...ads]
     .sort((a, b) => (b.clicks || 0) - (a.clicks || 0))
     .slice(0, 6);
@@ -702,9 +701,15 @@ function renderSellerInsights() {
       <section class="card seller-panel seller-insights-chart" aria-labelledby="seller-chart-title">
         <div class="seller-panel-head">
           <h2 class="seller-panel-title" id="seller-chart-title">Cupons retirados</h2>
-          <span class="t-eyebrow">Últimos 7 dias</span>
+          <span class="t-eyebrow">${weekTotal ? `${weekTotal} nos últimos 7 dias` : 'Últimos 7 dias'}</span>
         </div>
-        <canvas id="seller-chart" class="seller-chart-canvas" height="200" role="img" aria-label="Gráfico de cupons retirados nos últimos 7 dias"></canvas>
+        ${weekTotal
+          ? `<canvas id="seller-chart" class="seller-chart-canvas" height="200" role="img" aria-label="Gráfico de cupons retirados nos últimos 7 dias: ${weekTotal} no total"></canvas>`
+          : renderEmptyState({
+            icon: icons.chart,
+            title: 'Nenhum cupom retirado nesta semana',
+            text: 'Compartilhe o link das suas ofertas ativas no WhatsApp e no Instagram para chegar a mais alunos.',
+          })}
       </section>
 
       <section class="card seller-panel" aria-labelledby="seller-top-ads-title">
@@ -718,7 +723,7 @@ function renderSellerInsights() {
               <span class="seller-insight-thumb">${getProductImage(ad.images?.[0], 80, 80, ad.category)}</span>
               <span class="seller-insight-main">
                 <strong>${escapeHTML(ad.title)}</strong>
-                <small>${escapeHTML(getSellerCategoryName(ad.category))} · ${escapeHTML(formatSellerDate(ad.createdAt))}</small>
+                <small>${escapeHTML(getOfferStatusMeta(ad).label)} · ${pluralize(ad.couponsGenerated || 0, 'cupom', 'cupons')}</small>
               </span>
               <span class="seller-insight-metric">${ad.clicks || 0}<small>cliques</small></span>
             </button>
@@ -1576,7 +1581,7 @@ function bindSellerEvents(container) {
   // Simple chart
   setTimeout(() => {
     const canvas = container.querySelector('#seller-chart');
-    if (canvas) drawSimpleChart(canvas, loadedCoupons || []);
+    if (canvas) drawSimpleChart(canvas, getSellerCouponData());
   }, 100);
 
   // Bottom nav: links to each screen; the tab picks a fresh filter on the way.
@@ -1744,27 +1749,7 @@ function drawSimpleChart(canvas, coupons = []) {
   canvas.style.width = rect.width + 'px';
   canvas.style.height = rect.height + 'px';
 
-  const now = new Date();
-  const buckets = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(now);
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() - (6 - index));
-    return {
-      key: day.toISOString().slice(0, 10),
-      label: day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
-      count: 0,
-    };
-  });
-  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
-  coupons.forEach((coupon) => {
-    const rawDate = coupon.createdAtRaw || coupon.createdAt;
-    if (!rawDate) return;
-    const day = new Date(rawDate);
-    if (Number.isNaN(day.getTime())) return;
-    day.setHours(0, 0, 0, 0);
-    const bucket = bucketMap.get(day.toISOString().slice(0, 10));
-    if (bucket) bucket.count += 1;
-  });
+  const buckets = getWeeklyCoupons(coupons);
   const data = buckets.map((bucket) => bucket.count);
   const labels = buckets.map((bucket) => bucket.label);
   const w = rect.width;

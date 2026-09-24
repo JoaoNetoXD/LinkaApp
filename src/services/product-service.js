@@ -5,6 +5,7 @@
 
 import { supabase } from '../lib/supabase.js';
 import { products as mockProducts, sellerAds as mockSellerAds, categories as mockCategories } from '../data/mock.js';
+import { toSearchTerm } from '../utils/search.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const QUERY_TIMEOUT_MS = 3500;
@@ -53,8 +54,9 @@ export async function getActiveProducts({ categoryId = 'all', search = '', insti
     if (institutionId) {
       query = query.eq('institution_id', institutionId);
     }
-    if (search && search.trim()) {
-      query = query.or(`title.ilike.%${search.trim()}%,description.ilike.%${search.trim()}%`);
+    const term = toSearchTerm(search);
+    if (term) {
+      query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
     }
 
     const { data, error } = await withTimeout(query);
@@ -399,7 +401,7 @@ export async function requestProductAdjustment(productId, reason, note = '') {
   const details = [reason, note].filter(Boolean).join(' - ');
   return updateProduct(productId, {
     status: 'rejected',
-    rejectionReason: `Ajuste solicitado: ${details || 'Revise as informacoes do anuncio.'}`,
+    rejectionReason: `Ajuste solicitado: ${details || 'Revise as informações da oferta.'}`,
   });
 }
 

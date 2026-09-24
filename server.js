@@ -211,7 +211,7 @@ function normalizeInstitutionUpdates(body = {}) {
   if (Object.prototype.hasOwnProperty.call(body, 'domain')) {
     const domain = String(body.domain || '').trim().toLowerCase();
     if (!/^@[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
-      throw makeHttpError('Informe um dominio no formato @escola.com.', 400, 'INVALID_INSTITUTION_DOMAIN');
+      throw makeHttpError('Informe um domínio no formato @escola.edu.br.', 400, 'INVALID_INSTITUTION_DOMAIN');
     }
     updates.domain = domain;
   }
@@ -283,7 +283,7 @@ function normalizeCategoryPayload(body = {}, { partial = false } = {}) {
   if (!partial || has('durationHours') || has('duration_hours')) {
     const durationHours = Number.parseInt(body.durationHours ?? body.duration_hours ?? 24, 10);
     if (!Number.isInteger(durationHours) || durationHours < 1 || durationHours > 720) {
-      throw makeHttpError('A duracao precisa ficar entre 1 e 720 horas.', 400, 'INVALID_CATEGORY_DURATION');
+      throw makeHttpError('A duração precisa ficar entre 1 e 720 horas.', 400, 'INVALID_CATEGORY_DURATION');
     }
     updates.duration_hours = durationHours;
   }
@@ -685,7 +685,7 @@ async function loadProduct(client, productId) {
     .single();
 
   if (error || !data) throw new Error('Produto não encontrado');
-  if (data.status !== 'active') throw new Error('Produto indisponivel');
+  if (data.status !== 'active') throw new Error('Produto indisponível');
   if (data.expires_at && new Date(data.expires_at) <= new Date()) throw new Error('Produto expirado');
   if ((data.slots_used || 0) >= (data.slots_total || 5)) throw new Error('Produto esgotado');
   return data;
@@ -865,7 +865,7 @@ function normalizeSellerProductUpdate(body, product) {
   if (has('title')) {
     const title = String(body.title || '').trim();
     if (title.length < 3 || title.length > 60) {
-      throw makeHttpError('O titulo precisa ter entre 3 e 60 caracteres.', 400, 'INVALID_PRODUCT_TITLE');
+      throw makeHttpError('O título precisa ter entre 3 e 60 caracteres.', 400, 'INVALID_PRODUCT_TITLE');
     }
     updates.title = title;
   }
@@ -873,7 +873,7 @@ function normalizeSellerProductUpdate(body, product) {
   if (has('description')) {
     const description = String(body.description || '').trim();
     if (description.length < 10 || description.length > 200) {
-      throw makeHttpError('A descricao precisa ter entre 10 e 200 caracteres.', 400, 'INVALID_PRODUCT_DESCRIPTION');
+      throw makeHttpError('A descrição precisa ter entre 10 e 200 caracteres.', 400, 'INVALID_PRODUCT_DESCRIPTION');
     }
     updates.description = description;
   }
@@ -909,7 +909,7 @@ function normalizeSellerProductUpdate(body, product) {
 
   if (has('images')) {
     if (!Array.isArray(body.images) || body.images.length > 3) {
-      throw makeHttpError('Envie no maximo 3 imagens.', 400, 'INVALID_PRODUCT_IMAGES');
+      throw makeHttpError('Envie no máximo 3 imagens.', 400, 'INVALID_PRODUCT_IMAGES');
     }
     const images = body.images.map((url) => String(url || '').trim()).filter(Boolean);
     if (images.some((url) => url.length > 1000 || !/^https?:\/\//i.test(url))) {
@@ -1676,7 +1676,7 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
       return res.status(403).json({
         success: false,
         code: 'INSTITUTION_FORBIDDEN',
-        error: 'Você so pode editar a instituição vinculada ao seu perfil admin.',
+        error: 'Você só pode editar a instituição vinculada ao seu perfil de admin.',
       });
     }
     if (auth.profile?.role !== 'superadmin' && !auth.profile?.institution_id) {
@@ -1686,7 +1686,7 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
         return res.status(403).json({
           success: false,
           code: 'ADMIN_WITHOUT_INSTITUTION',
-          error: 'Vincule este admin a uma instituição no Supabase antes de editar configuracoes.',
+          error: 'Vincule este admin a uma instituição no Supabase antes de editar as configurações.',
         });
       }
     }
@@ -1758,7 +1758,8 @@ app.get('/api/superadmin/users', async (req, res) => {
     const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
     const limit = 25;
     const admin = requireSupabaseAdmin();
-    const search = String(req.query.search || '').trim().replace(/[^a-z0-9@._ -]/gi, '').slice(0, 80);
+    // Letters of any alphabet ("João"), digits and e-mail punctuation; nothing that alters the filter.
+    const search = String(req.query.search || '').normalize('NFC').replace(/[^\p{L}\p{N}@._ -]/gu, '').trim().slice(0, 80);
     let query = admin.from('profiles')
       .select('id,name,email,role,institution_id,created_at,verified', { count: 'exact' })
       .order('created_at', { ascending: false });
@@ -1796,9 +1797,9 @@ app.patch('/api/superadmin/users/:userId', async (req, res) => {
       if (body.institutionId !== null) assertUuid(body.institutionId, 'Instituição');
       updates.institution_id = body.institutionId;
     }
-    if (!Object.keys(updates).length) throw makeHttpError('Nenhuma alteracao válida.', 400, 'EMPTY_UPDATE');
+    if (!Object.keys(updates).length) throw makeHttpError('Nenhuma alteração válida.', 400, 'EMPTY_UPDATE');
     if (!canSuperadminEditProfile(auth.profile, target, updates)) {
-      throw makeHttpError('Não e permitido alterar uma conta superadmin.', 403, 'PROTECTED_ACCOUNT');
+      throw makeHttpError('Não é permitido alterar uma conta superadmin.', 403, 'PROTECTED_ACCOUNT');
     }
     if (updates.role === 'admin' && !(updates.institution_id ?? target.institution_id)) {
       throw makeHttpError('Selecione uma instituição para o admin.', 400, 'ADMIN_INSTITUTION_REQUIRED');
@@ -1815,7 +1816,7 @@ app.patch('/api/superadmin/users/:userId', async (req, res) => {
       .neq('role', 'superadmin')
       .select('id,name,email,role,institution_id,created_at,verified').maybeSingle();
     if (error) throw error;
-    if (!data) throw makeHttpError('Conta protegida ou alterada durante a operacao.', 409, 'PROTECTED_ACCOUNT');
+    if (!data) throw makeHttpError('Conta protegida ou alterada durante a operação.', 409, 'PROTECTED_ACCOUNT');
     res.json({ success: true, user: data });
   } catch (error) {
     res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SUPERADMIN_USER_UPDATE_ERROR', error: error.message });
@@ -1834,7 +1835,7 @@ app.post('/api/superadmin/institutions', async (req, res) => {
     const admin = requireSupabaseAdmin();
     const { data, error } = await admin.from('institutions').insert(updates).select('*').single();
     if (error) {
-      if (error.code === '23505') throw makeHttpError('Dominio já cadastrado.', 409, 'INSTITUTION_EXISTS');
+      if (error.code === '23505') throw makeHttpError('Domínio já cadastrado.', 409, 'INSTITUTION_EXISTS');
       throw error;
     }
     res.status(201).json({ success: true, institution: data });

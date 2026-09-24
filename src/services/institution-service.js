@@ -143,7 +143,7 @@ export async function updateInstitution(institutionId, updates) {
     if (hasOwn(updates, 'settings')) dbUpdates.settings = updates.settings || {};
 
     if (Object.keys(dbUpdates).length === 0) {
-      throw new Error('Nenhum campo valido para salvar.');
+      throw new Error('Nenhum campo válido para salvar.');
     }
 
     const headers = await getAuthHeaders();
@@ -165,12 +165,12 @@ export async function updateInstitution(institutionId, updates) {
       .update(dbUpdates).eq('id', institutionId).select().maybeSingle();
     if (error) throw error;
     if (!data) {
-      throw new Error('Nada foi salvo. Verifique se seu usuário admin tem permissão/RLS para editar esta instituição.');
+      throw new Error('Nada foi salvo. Confira se sua conta de admin está vinculada a esta instituição.');
     }
     return { success: true, institution: transformInstitution(data) };
   } catch (err) {
     const message = err.message === 'AUTH_REQUIRED'
-      ? 'Sua sessao expirou. Entre novamente para salvar.'
+      ? 'Sua sessão expirou. Entre novamente para salvar.'
       : err.message;
     return { success: false, error: message };
   }

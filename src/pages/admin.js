@@ -6,6 +6,7 @@ import { signOutUser } from '../services/auth-service.js';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
 import { navigate } from '../utils/navigation.js';
+import { countByDay } from '../utils/week.js';
 import { formatPhoneBR } from '../utils/phone.js';
 import { getPlatformUsers, updatePlatformUser, createPlatformInstitution } from '../services/superadmin-service.js';
 
@@ -520,8 +521,13 @@ function renderPlatformInstitutions() {
   `;
 }
 
+function getWeeklyNewOffers() {
+  return countByDay(loadedAllProducts || [], (product) => product.createdAt);
+}
+
 function renderAdminDashboard() {
   const s = loadedStats || (USE_MOCKS ? adminStats : {});
+  const newOffersThisWeek = getWeeklyNewOffers().reduce((sum, day) => sum + day.count, 0);
   const realAlerts = buildAdminAlerts();
   const topSellers = buildTopSellers();
   const stats = [
@@ -581,9 +587,11 @@ function renderAdminDashboard() {
               <p class="admin-section-subtitle">Ofertas criadas nos últimos 7 dias.</p>
             </div>
           </div>
-          <div class="card chart-container">
-            <canvas id="admin-chart" height="200" role="img" aria-label="Gráfico de ofertas criadas nos últimos 7 dias"></canvas>
-          </div>
+          ${newOffersThisWeek
+            ? `<div class="card chart-container">
+                <canvas id="admin-chart" height="200" role="img" aria-label="Gráfico de ofertas criadas nos últimos 7 dias: ${newOffersThisWeek} no total"></canvas>
+              </div>`
+            : renderAdminEmpty({ icon: icons.chart, title: 'Nenhuma oferta nova', text: 'Nenhuma empresa criou oferta nos últimos 7 dias.' })}
         </section>
       </div>
 
@@ -2198,26 +2206,7 @@ function drawAdminChart(canvas) {
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
 
-  const now = new Date();
-  const buckets = Array.from({ length: 7 }, (_, index) => {
-    const day = new Date(now);
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() - (6 - index));
-    return {
-      key: day.toISOString().slice(0, 10),
-      label: day.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
-      count: 0,
-    };
-  });
-  const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
-  (loadedAllProducts || []).forEach((product) => {
-    if (!product.createdAt) return;
-    const day = new Date(product.createdAt);
-    if (Number.isNaN(day.getTime())) return;
-    day.setHours(0, 0, 0, 0);
-    const bucket = bucketMap.get(day.toISOString().slice(0, 10));
-    if (bucket) bucket.count += 1;
-  });
+  const buckets = getWeeklyNewOffers();
   const data = buckets.map((bucket) => bucket.count);
   const labels = buckets.map((bucket) => bucket.label);
   const w = rect.width, h = rect.height;
