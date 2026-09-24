@@ -461,8 +461,9 @@ function renderPlatformUsers() {
 }
 
 function renderPlatformInstitutions() {
-  const planOptions = (selected) => ['basic', 'pro', 'enterprise']
-    .map((plan) => `<option value="${plan}" ${selected === plan ? 'selected' : ''}>${plan.charAt(0).toUpperCase()}${plan.slice(1)}</option>`)
+  const PLAN_LABELS = { basic: 'Básico', pro: 'Pro', enterprise: 'Empresarial' };
+  const planOptions = (selected) => Object.entries(PLAN_LABELS)
+    .map(([plan, label]) => `<option value="${plan}" ${selected === plan ? 'selected' : ''}>${label}</option>`)
     .join('');
   return `
     ${renderViewHeader({
@@ -707,13 +708,12 @@ function renderModerationCard(ad) {
         <div class="moderation-info">
           <h3 class="moderation-title">${escapeHTML(ad.title)}</h3>
           <p class="moderation-meta">
-            <span class="moderation-meta-item">${icons.user} ${escapeHTML(seller.name || 'Empresa sem perfil')}</span>
-            ${sellerStudy ? `<span class="moderation-meta-item">${escapeHTML(sellerStudy)}</span>` : ''}
-            <span class="moderation-meta-item">${icons.tag} ${escapeHTML(getCategoryLabel(ad.category))}</span>
+            <span class="moderation-meta-item">${icons.user}<span>${escapeHTML(seller.name || 'Empresa sem perfil')}${sellerStudy ? ` · ${escapeHTML(sellerStudy)}` : ''}</span></span>
+            <span class="moderation-meta-item">${icons.tag}<span>${escapeHTML(getCategoryLabel(ad.category))}</span></span>
           </p>
           <p class="moderation-foot">
             <span class="moderation-wait">${icons.clock} Aguardando há ${escapeHTML(ad.waitTime || 'pouco tempo')}</span>
-            ${ad.sellerHistory ? `<span class="moderation-history">${escapeHTML(ad.sellerHistory.approved)} aprovadas · ${escapeHTML(ad.sellerHistory.rejected)} recusadas</span>` : ''}
+            ${ad.sellerHistory ? `<span class="moderation-history">${escapeHTML(ad.sellerHistory.approved)} ${Number(ad.sellerHistory.approved) === 1 ? 'aprovada' : 'aprovadas'} · ${escapeHTML(ad.sellerHistory.rejected)} ${Number(ad.sellerHistory.rejected) === 1 ? 'recusada' : 'recusadas'}</span>` : ''}
           </p>
         </div>
         <div class="moderation-pricing">
@@ -906,7 +906,7 @@ function renderCategories() {
                   <span>${cat.clicks} ${cat.clicks === 1 ? 'clique' : 'cliques'}</span>
                 </div>
               </div>
-              <p class="category-rule-line">${Number(cat.maxSlots || 5)} cupons por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
+              <p class="category-rule-line">${Number(cat.maxSlots || 5)}&nbsp;cupons por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
               ${getCategoryRules(cat.id) ? `<p class="category-rule-preview">${escapeHTML(getCategoryRules(cat.id))}</p>` : ''}
               <div class="category-heat-actions">
                 <button class="btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver ofertas</button>
@@ -926,14 +926,15 @@ function renderCategories() {
           <div class="category-management-copy">
             <span class="t-eyebrow">Categoria selecionada</span>
             <h2>${escapeHTML(selectedCategory?.name || 'Categoria')}</h2>
-            <p>${selectedCategory?.total || 0} ${selectedCategory?.total === 1 ? 'oferta' : 'ofertas'} · ${selectedCategory?.active || 0} ${selectedCategory?.active === 1 ? 'ativa' : 'ativas'} · ${selectedCategory?.queue || 0} em análise · ${Number(selectedCategory?.maxSlots || 5)} cupons por oferta</p>
+            <p>${selectedCategory?.total || 0} ${selectedCategory?.total === 1 ? 'oferta' : 'ofertas'} · ${selectedCategory?.active || 0} ${selectedCategory?.active === 1 ? 'ativa' : 'ativas'} · ${selectedCategory?.queue || 0} em análise · ${Number(selectedCategory?.maxSlots || 5)}&nbsp;cupons por oferta</p>
           </div>
         </div>
         <div class="category-management-actions">
           <button class="btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras e cupons</button>
           <button class="btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Ver fila de aprovação</button>
-          <button class="btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled title="Só é possível excluir categorias sem ofertas"' : ''}>Excluir categoria</button>
+          <button class="btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled aria-describedby="category-delete-hint"' : ''}>Excluir categoria</button>
         </div>
+        ${selectedCategory?.total ? '<p class="category-delete-hint" id="category-delete-hint">Só dá para excluir uma categoria sem ofertas.</p>' : ''}
       </div>
       ${selectedCategory ? `
         <div class="category-rule-detail">
@@ -1001,7 +1002,7 @@ function renderReports() {
       <button class="card report-action-card" type="button" data-admin-tab="categories"><span class="admin-kpi-label is-success">Ofertas ativas</span><strong class="admin-kpi-value">${activeProducts}</strong><small class="admin-kpi-hint">Visíveis para os alunos</small></button>
       <button class="card report-action-card" type="button" data-admin-tab="moderation"><span class="admin-kpi-label is-warning">Pendentes</span><strong class="admin-kpi-value">${pendingProducts}</strong><small class="admin-kpi-hint">Aguardando aprovação</small></button>
       <button class="card report-action-card" type="button" data-admin-metric="clicks"><span class="admin-kpi-label">Cliques</span><strong class="admin-kpi-value">${totalClicks}</strong><small class="admin-kpi-hint">Interações com as ofertas</small></button>
-      <button class="card report-action-card" type="button" data-admin-metric="couponsGenerated"><span class="admin-kpi-label">Cupons retirados</span><strong class="admin-kpi-value">${escapeHTML(String(s.couponsGenerated?.value ?? 0))}</strong><small class="admin-kpi-hint">Códigos retirados pelos alunos</small></button>
+      <button class="card report-action-card" type="button" data-admin-metric="couponsGenerated"><span class="admin-kpi-label">Retirados</span><strong class="admin-kpi-value">${escapeHTML(String(s.couponsGenerated?.value ?? 0))}</strong><small class="admin-kpi-hint">Códigos retirados pelos alunos</small></button>
       <button class="card report-action-card" type="button" data-admin-metric="conversion"><span class="admin-kpi-label">Taxa de uso</span><strong class="admin-kpi-value">${escapeHTML(String(s.conversionRate?.value ?? '0%'))}</strong><small class="admin-kpi-hint">${escapeHTML(usageHint)}</small></button>
     </div>
 
@@ -1387,7 +1388,7 @@ function showDeleteProductModal(productId, container) {
         ${product ? `<div class="delete-product-summary"><strong>${escapeHTML(product.title)}</strong><span>${formatCurrency(product.discountPrice)}</span></div>` : ''}
         <div class="modal-actions">
           <button class="btn-secondary" type="button" id="cancel-delete-product">Cancelar</button>
-          <button class="btn-danger" type="button" id="confirm-delete-product">Excluir da vitrine</button>
+          <button class="btn-danger btn-danger--solid" type="button" id="confirm-delete-product">Excluir da vitrine</button>
         </div>
       </div>
     </div>
@@ -1539,7 +1540,7 @@ function showDeleteCategoryModal(categoryId, container) {
         <p class="modal-description">A categoria "${escapeHTML(category.name)}" será removida do banco. Só dá para excluir categorias sem ofertas vinculadas.</p>
         <div class="modal-actions">
           <button class="btn-secondary" type="button" id="cancel-delete-category">Cancelar</button>
-          <button class="btn-danger" type="button" id="confirm-delete-category">Excluir categoria</button>
+          <button class="btn-danger btn-danger--solid" type="button" id="confirm-delete-category">Excluir categoria</button>
         </div>
       </div>
     </div>
@@ -2224,7 +2225,7 @@ function showRejectModal(adId, container) {
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" type="button" id="cancel-reject">Cancelar</button>
-          <button class="btn-danger" type="button" id="confirm-reject">Recusar oferta</button>
+          <button class="btn-danger btn-danger--solid" type="button" id="confirm-reject">Recusar oferta</button>
         </div>
       </div>
     </div>

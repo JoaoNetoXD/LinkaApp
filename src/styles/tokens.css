@@ -32,6 +32,7 @@
   --ink-soft:       #465070;   /* secondary text */
   --ink-mute:       #5E6580;   /* captions, placeholders, metadata (4.5:1 on the canvas) */
   --ink-faint:      #A5AABB;   /* disabled, decorative strokes */
+  --ink-placeholder: #6E7589;  /* input placeholders: readable (4.6:1 on white), lighter than typed text */
   --rule:           #E4E6EE;   /* hairlines */
   --rule-strong:    #CFD3DE;   /* input borders, emphasized dividers */
 

@@ -314,15 +314,14 @@
   position: absolute;
   top: 16px;
   right: 12px;
-  padding: 3px 7px;
-  border: 1.5px solid var(--ink);
+  padding: 4px 7px;
   border-radius: var(--r-xs);
+  background: var(--ink);
   font-family: var(--font-mono);
   font-size: var(--fs-11);
   font-weight: 600;
   line-height: 1.2;
-  color: var(--ink);
-  transform: rotate(-5deg);
+  color: #fff;
 }
 
 .category-app-copy {

@@ -137,7 +137,7 @@
   color: var(--ink);
   text-align: left;
 }
-.search-bar input::placeholder { color: var(--ink-faint); }
+.search-bar input::placeholder { color: var(--ink-placeholder); }
 .search-bar input::-webkit-search-cancel-button { display: none; }
 
 .buyer-filter-btn {
@@ -174,15 +174,16 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 44px;
-  padding: 0 10px;
+  min-height: 48px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   font-size: var(--fs-14);
   text-align: left;
   color: var(--ink);
 }
 .suggestion-item svg { width: 15px; height: 15px; color: var(--ink-faint); }
-.suggestion-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestion-text { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.suggestion-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .suggestion-item:hover { background: var(--paper-sunken); }
 .suggestion-cat { font-family: var(--font-mono); font-size: var(--fs-11); color: var(--ink-mute); }
 
@@ -255,7 +256,7 @@
 .buyer-featured-strip {
   position: relative;
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) 78px;
+  grid-template-columns: 76px minmax(0, 1fr) 88px;
   align-items: stretch;
   width: 100%;
   margin-top: 6px;
@@ -294,17 +295,20 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.9);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .buyer-featured-copy strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: var(--fs-15);
   font-weight: 600;
   line-height: 1.25;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* The old price drops to its own line on narrow phones instead of running into the stub. */
@@ -788,6 +792,12 @@
   text-decoration-color: var(--ink-faint);
 }
 
+/* Sold out reads as sold out: grey photo, muted price, no accent bar. */
+.detail-page.is-sold-out .detail-carousel-slide .product-image { filter: grayscale(1); opacity: 0.85; }
+.detail-page.is-sold-out .detail-price-current .hl { color: var(--ink-mute); }
+.detail-page.is-sold-out .detail-price-current .hl::after { display: none; }
+.detail-page.is-sold-out .detail-buy-summary strong { color: var(--on-navy-mute); }
+
 .detail-facts {
   display: flex;
   flex-direction: column;
@@ -899,6 +909,7 @@
     transform: none;
     box-shadow: var(--shadow-2);
   }
+  .buyer-featured-strip { max-width: 720px; }
   /* Short band: photo and ticket both straddle it, the ticket's notches stay below. */
   .detail-container::before { height: 150px; }
   /* Sticks exactly where it starts (header 64px + 6px), so it lines up with the ticket. */

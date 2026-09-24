@@ -626,13 +626,14 @@ function renderBuyerBottomNav(activeTab) {
 
 function renderEmptyProductsState() {
   const hasFilters = Boolean(searchQuery.trim() || activeCategory !== 'all' || Number(minDiscount) > 0);
+  const onlySearch = Boolean(searchQuery.trim()) && activeCategory === 'all' && !(Number(minDiscount) > 0);
   return `
     <div class="market-empty-state">
       <div class="market-empty-icon">${icons.package}</div>
       <h3>${hasFilters ? 'Nenhuma oferta encontrada' : 'Os primeiros cupons estão chegando'}</h3>
       <p>${hasFilters ? 'Tente outra busca ou remova os filtros.' : 'As empresas dos alunos estão preparando as ofertas. Volte em breve.'}</p>
       <div class="market-empty-actions">
-        ${hasFilters ? '<button class="btn-primary" id="btnClearBuyerFilters" type="button">Limpar filtros</button>' : !isAuthenticated() ? '<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>' : ''}
+        ${hasFilters ? `<button class="btn-primary" id="btnClearBuyerFilters" type="button">${onlySearch ? 'Limpar busca' : 'Limpar filtros'}</button>` : !isAuthenticated() ? '<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>' : ''}
       </div>
     </div>
   `;
@@ -721,8 +722,10 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               ${searchSuggestions.map((suggestion) => `
                 <button class="suggestion-item" type="button" data-search-suggestion="${escapeHTML(suggestion.label)}">
                   ${icons.search}
-                  <span>${escapeHTML(suggestion.label)}</span>
-                  <small class="suggestion-cat">${escapeHTML(suggestion.category)}</small>
+                  <span class="suggestion-text">
+                    <span class="suggestion-name">${escapeHTML(suggestion.label)}</span>
+                    <small class="suggestion-cat">${escapeHTML(suggestion.category)}</small>
+                  </span>
                 </button>
               `).join('')}
             </div>
@@ -765,7 +768,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque: ${escapeHTML(featuredProduct.title)}">
             <span class="buyer-featured-media">${getProductImage(featuredProduct.images?.[0], 240, 240, featuredProduct.category)}</span>
             <span class="buyer-featured-copy">
-              <span class="buyer-featured-badge">Maior desconto de hoje</span>
+              <span class="buyer-featured-badge">Maior desconto</span>
               <strong>${escapeHTML(featuredProduct.title)}</strong>
               <span class="buyer-featured-price">
                 <span class="buyer-featured-now">${formatCurrency(featuredProduct.discountPrice)}</span>
@@ -836,7 +839,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       </div>
     </div>
 
-    ${renderBuyerBottomNav(currentView === 'coupons' ? 'coupons' : buyerNavFocus === 'cats' ? 'cats' : 'home')}
+    ${renderBuyerBottomNav(currentView === 'coupons' ? 'coupons' : 'home')}
   `;
 
   if (restoreSearchFocus) {
@@ -879,11 +882,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Notification button
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
-    if (!isAuthenticated()) {
-      showToast('Entre para ver suas notificações.', 'info');
-      window.location.hash = '#/auth';
-      return;
-    }
     currentView = 'notifications';
     renderBuyerPage(container);
   });
@@ -1022,7 +1020,7 @@ async function renderCategories(container) {
       <section class="category-section" aria-labelledby="categorySectionTitle">
         <div class="acct-section-head category-section-head">
           <h2 class="acct-section-title" id="categorySectionTitle">Todas as categorias</h2>
-          <span class="acct-count">${categories.length} ${categories.length === 1 ? 'área' : 'áreas'}</span>
+          <span class="acct-count">${categories.length} ${categories.length === 1 ? 'categoria' : 'categorias'}</span>
         </div>
         <div class="category-app-grid">
           ${stats.map(category => `
@@ -1500,7 +1498,7 @@ function renderProfileHelpPanel() {
         <button type="button" class="profile-row profile-row--link profile-tour-btn" id="btnReplayTour">
           <span class="profile-row-icon">${icons.ticket}</span>
           <span class="profile-row-copy">
-            <strong>Como funciona o Empreende iCEV</strong>
+            <strong>Como funciona o Empreende&nbsp;iCEV</strong>
             <small>Rever a apresentação rápida do app</small>
           </span>
           <span class="profile-row-chevron">${chevron}</span>
@@ -1709,7 +1707,7 @@ function renderProductDetail(container) {
     const ownedCoupon = getActiveCouponForProduct(p.id);
 
     container.innerHTML = `
-      <div class="page buyer-wrapper detail-page">
+      <div class="page buyer-wrapper detail-page${isSoldOut ? ' is-sold-out' : ''}">
         <header class="detail-header">
           <button class="icon-btn" id="btnBackHome" type="button" aria-label="Voltar para ofertas">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -1760,10 +1758,10 @@ function renderProductDetail(container) {
                 ${hasDiscount ? `<s class="detail-price-original">${formatCurrency(p.originalPrice)}</s>` : ''}
               </div>
               <ul class="detail-facts">
-                <li class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
+                ${isSoldOut ? '' : `<li class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                   <span class="timer-icon">${icons.clock}</span>
                   <span data-countdown-label>${escapeHTML(timer.text)}</span>
-                </li>
+                </li>`}
                 <li>
                   ${icons.ticket}
                   <span>${isSoldOut ? 'Sem cupons disponíveis' : `${slotsLeft} ${slotsLeft === 1 ? 'cupom disponível' : 'cupons disponíveis'}`}</span>
@@ -1797,7 +1795,7 @@ function renderProductDetail(container) {
 
           <div class="detail-buy-bar">
             <div class="detail-buy-summary">
-              <span>Com o cupom</span>
+              <span>${isSoldOut ? 'Esgotado' : 'Com o cupom'}</span>
               <strong>${formatCurrency(p.discountPrice)}</strong>
             </div>
             <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>

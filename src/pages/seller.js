@@ -36,10 +36,10 @@ const OFFER_STATUS = {
 // `pending` only exists on codes issued before the coupon-only model; they are never valid.
 // A note only appears where it prevents a mistake (accepting a code that no longer counts).
 const COUPON_STATUS = {
-  active: { label: 'Ativo', tone: 'info', note: '' },
+  active: { label: 'Ativo', tone: 'success', note: '' },
   pending: { label: 'Pendente', tone: 'warning', note: 'Este código não foi liberado e não vale para compra.' },
-  used: { label: 'Usado', tone: 'success', note: '' },
-  expired: { label: 'Expirado', tone: 'neutral', note: 'Fora do prazo. Não aceite este código.' },
+  used: { label: 'Usado', tone: 'neutral', note: '' },
+  expired: { label: 'Expirado', tone: 'danger', note: 'Fora do prazo. Não aceite este código.' },
 };
 
 // Status label with a semantic tint: success | warning | danger | info | neutral
@@ -422,7 +422,7 @@ function renderDashboard() {
 
     ${renderSellerOnboarding(ads, user)}
 
-    <section class="seller-section" aria-labelledby="seller-overview-title">
+    <section class="seller-section seller-section--lead" aria-labelledby="seller-overview-title">
       <div class="seller-section-head">
         <h2 class="seller-section-title" id="seller-overview-title">Visão geral</h2>
       </div>
@@ -595,19 +595,17 @@ function renderAdsByStatus() {
 }
 
 function renderSellerAdsTabs(statusCounts) {
-  const tab = (id, label, count) => `
-    <button class="tab ${activeTab === id ? 'active' : ''}" type="button" aria-pressed="${activeTab === id}" data-tab="${id}">${label} <span class="tab-count">${count}</span></button>
+  const chip = (id, label, count) => `
+    <button type="button" class="chip ${activeTab === id ? 'active' : ''}" aria-pressed="${activeTab === id}" data-tab="${id}">${label} <span class="seller-chip-count">${count}</span></button>
   `;
   return `
-    <div class="seller-tabs-container" id="seller-ads-section">
-      <div class="tabs" role="group" aria-label="Filtrar ofertas por status">
-        ${tab('all', 'Todas', statusCounts.all)}
-        ${tab('active', 'Ativas', statusCounts.active)}
-        ${tab('pending', 'Em aprovação', statusCounts.pending)}
-        ${statusCounts.queue > 0 ? tab('queue', 'Na fila', statusCounts.queue) : ''}
-        ${tab('expired', 'Expiradas', statusCounts.expired)}
-        ${tab('rejected', 'Recusadas', statusCounts.rejected)}
-      </div>
+    <div class="seller-chip-row" id="seller-ads-section" role="group" aria-label="Filtrar ofertas por status">
+      ${chip('all', 'Todas', statusCounts.all)}
+      ${chip('active', 'Ativas', statusCounts.active)}
+      ${chip('pending', 'Em aprovação', statusCounts.pending)}
+      ${statusCounts.queue > 0 ? chip('queue', 'Na fila', statusCounts.queue) : ''}
+      ${chip('expired', 'Expiradas', statusCounts.expired)}
+      ${chip('rejected', 'Recusadas', statusCounts.rejected)}
     </div>
   `;
 }
@@ -623,13 +621,13 @@ function renderSellerAdsManager() {
       eyebrow: 'Gestão de ofertas',
       title: 'Ofertas da empresa',
       text: 'Suas ofertas separadas por status. Edite, renove ou tire da vitrine quando precisar.',
-      action: `<button class="btn-primary new-ad-trigger seller-view-cta" type="button">${icons.plus} Nova oferta</button>`,
+      action: `<button class="btn-primary new-ad-trigger seller-view-cta" type="button">${icons.plus} Criar oferta</button>`,
     })}
 
     <div class="seller-ledger">
       ${renderLedgerCell({ label: 'Total', value: statusCounts.all, caption: 'Cadastradas', attrs: 'data-tab-shortcut="all"' })}
       ${renderLedgerCell({ label: 'Ativas', value: statusCounts.active, caption: 'Na vitrine', attrs: 'data-tab-shortcut="active"' })}
-      ${renderLedgerCell({ label: 'Em análise', value: statusCounts.pending + statusCounts.queue, caption: 'Aguardando a equipe', attrs: 'data-tab-shortcut="pending"' })}
+      ${renderLedgerCell({ label: 'Em aprovação', value: statusCounts.pending, caption: 'Aguardando a equipe', attrs: 'data-tab-shortcut="pending"' })}
       ${renderLedgerCell({ label: 'Expiradas', value: statusCounts.expired, caption: 'Fora da vitrine', attrs: 'data-tab-shortcut="expired"' })}
     </div>
 
@@ -979,11 +977,10 @@ function renderEditProductForm() {
       <div class="seller-view-copy">
         <p class="t-eyebrow">Gerenciar oferta</p>
         <h1 class="seller-view-title">${escapeHTML(ad.title || 'Oferta')}</h1>
-        <p class="seller-view-text">Alterações voltam para aprovação antes de aparecer na vitrine.</p>
+        <p class="seller-view-text">${needsReview ? 'Ao salvar, a oferta sai da vitrine por um tempo e volta para aprovação.' : 'Alterações voltam para aprovação antes de aparecer na vitrine.'}</p>
       </div>
       <div class="seller-view-action">${renderStatusPill(status.label, status.tone)}</div>
     </header>
-    ${needsReview ? `<div class="alert alert-warning seller-edit-warning">${icons.alertTriangle}<span>Ao salvar, esta oferta sai da vitrine por um tempo e volta para aprovação.</span></div>` : ''}
     ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="alert alert-danger seller-edit-warning">${icons.alertTriangle}<span>${escapeHTML(ad.rejectionReason)}</span></div>` : ''}
     <form class="create-ad-form seller-form" id="edit-ad-form" data-ad-id="${escapeHTML(ad.id)}">
       <fieldset class="seller-form-section">
@@ -1117,9 +1114,9 @@ function renderSellerCoupons() {
         </div>
       </form>
       <div class="seller-ledger seller-coupon-summary">
-        ${renderLedgerCell({ label: 'Ativos', value: counts.active, caption: 'Prontos para usar' })}
-        ${renderLedgerCell({ label: 'Usados', value: counts.used, caption: 'Já confirmados' })}
-        ${renderLedgerCell({ label: 'Expirados', value: counts.expired, caption: 'Fora do prazo' })}
+        ${renderLedgerCell({ label: 'Ativos', value: counts.active, caption: 'Para usar' })}
+        ${renderLedgerCell({ label: 'Usados', value: counts.used, caption: 'Confirmados' })}
+        ${renderLedgerCell({ label: 'Expirados', value: counts.expired, caption: 'Vencidos' })}
       </div>
     </div>
 

@@ -271,7 +271,7 @@
   font-size: var(--fs-16);
   transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
 }
-.auth-input::placeholder { color: var(--ink-faint); }
+.auth-input::placeholder { color: var(--ink-placeholder); }
 
 .auth-field-hint {
   font-size: var(--fs-13);

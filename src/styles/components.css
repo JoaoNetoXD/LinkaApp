@@ -88,6 +88,9 @@
   border-color: transparent;
 }
 .btn-danger:hover:not(:disabled) { background: #FBDADF; }
+/* Final confirmation of a destructive action (inside a dialog). */
+.btn-danger--solid { background: var(--danger); color: #fff; }
+.btn-danger--solid:hover:not(:disabled) { background: #B8232F; }
 
 .btn-success {
   background: var(--success);
@@ -169,7 +172,7 @@
 
 .input-field::placeholder,
 .form-input::placeholder,
-.profile-input::placeholder { color: var(--ink-faint); }
+.profile-input::placeholder { color: var(--ink-placeholder); }
 
 .input-field:hover,
 .filter-select:hover,

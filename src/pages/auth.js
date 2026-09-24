@@ -234,7 +234,7 @@ function renderAuthForm(mode) {
 
       <div class="auth-form-group">
         <label for="authPassword">Senha</label>
-        <input type="password" id="authPassword" class="auth-input" placeholder="Mínimo de 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
+        <input type="password" id="authPassword" class="auth-input" placeholder="${isLoginMode ? 'Sua senha' : 'Mínimo de 6 caracteres'}" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
       </div>
 
       ${isLoginMode ? `

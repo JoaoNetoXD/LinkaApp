@@ -134,12 +134,22 @@
 
 /* The first card after the header straddles the navy edge, like the tickets on
    the vitrine. It needs position: relative to paint above the positioned header. */
-.seller-view-header.canopy:has(+ :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form)) {
+.seller-view-header.canopy:has(+ :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form, .seller-section--lead)) {
   padding-bottom: 62px;
 }
-.seller-view-header.canopy + :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form) {
+.seller-view-header.canopy + :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form, .seller-section--lead) {
   position: relative;
   margin-top: -38px;
+}
+/* Straddling the canopy, the overview's title would sit on navy: keep it for
+   screen readers only. */
+.seller-view-header.canopy + .seller-section--lead .seller-section-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 .seller-view-header.canopy + .seller-edit-warning { margin-top: 18px; }
 
@@ -267,7 +277,8 @@
 .seller-stat-card.is-featured {
   grid-column: span 2;
   border-color: transparent;
-  background: var(--brand-gradient);
+  background: var(--brand-gradient-warm);
+  background-origin: border-box;
   color: var(--paper);
   box-shadow: var(--shadow-2);
 }
@@ -502,7 +513,6 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
 
 /* ---------- Ofertas: tabs + list ---------- */
 
-.seller-tabs-container { margin: 24px 0 14px; }
 
 .seller-ad-card {
   display: grid;
