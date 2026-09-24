@@ -923,7 +923,7 @@ function renderCreateForm() {
             <h3 class="card-title is-placeholder" id="preview-title">Título da oferta</h3>
             <div class="card-price-row">
               <span class="price-discount" id="preview-discount">R$ 0,00</span>
-              <span class="price-original" id="preview-original">R$ 0,00</span>
+              <span class="price-original" id="preview-original" hidden></span>
             </div>
           </div>
         </div>
@@ -1361,10 +1361,16 @@ function bindSellerEvents(container) {
       const final = price * (1 - disc / 100);
       if (preview) preview.hidden = false;
       if (finalEl) finalEl.textContent = formatCurrency(final);
-      if (previewOriginal) previewOriginal.textContent = formatCurrency(price);
+      if (previewOriginal) {
+        previewOriginal.textContent = formatCurrency(price);
+        previewOriginal.hidden = false;
+      }
       if (previewDiscount) previewDiscount.textContent = formatCurrency(final);
-    } else if (preview) {
-      preview.hidden = true;
+    } else {
+      // Until the discount is valid the preview shows the plain price, never "R$ 0,00" struck through.
+      if (preview) preview.hidden = true;
+      if (previewOriginal) previewOriginal.hidden = true;
+      if (previewDiscount) previewDiscount.textContent = formatCurrency(price);
     }
 
     // Alert for discount out of range

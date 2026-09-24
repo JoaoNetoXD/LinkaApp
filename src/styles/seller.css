@@ -863,6 +863,8 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
   transition: border-color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 .photo-upload-slot svg { width: 22px; height: 22px; }
+/* The "Capa" tag sits in the corner: nudge the icon and label clear of it. */
+.photo-upload-slot:has(.photo-upload-tag):not(.has-image) { padding-top: 16px; }
 .photo-upload-slot:hover { border-color: var(--ink-faint); background: var(--paper); color: var(--ink); }
 .photo-upload-slot:focus-within { border-color: var(--brand); box-shadow: var(--ring-focus); }
 

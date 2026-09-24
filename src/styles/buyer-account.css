@@ -1227,7 +1227,10 @@
 .product-lightbox-backdrop {
   align-items: center;
   padding: 16px;
-  background: rgba(24, 42, 80, 0.9);
+  /* Deep, blurred scrim: the photo is the only thing to look at. */
+  background: rgba(12, 20, 45, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   /* Re-rendered on every photo change: keep the scrim still. */
   animation: none;
 }
