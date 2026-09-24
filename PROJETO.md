@@ -1,72 +1,46 @@
-# LINKA - Status do Projeto
+# Empreende iCEV — Status do Projeto
 
-Marketplace institucional com fluxo real de compra, venda, aprovação e emissão de cupom.
+**Conexões que geram negócios.** Vitrine de cupons de desconto das empresas criadas por alunos do iCEV.
 
-## Estado Atual
+## Como funciona (fase atual)
 
-- A rota inicial agora cai direto no fluxo funcional do comprador.
-- A tela de divulgação/landing deixou de ser a entrada padrão e ficou acessível apenas em `#/landing`.
-- O comprador entra direto na vitrine real do app.
-- O pagamento usa Pix ou Checkout Pro via backend.
-- O vendedor acessa apenas com perfil `seller`.
-- O admin acessa apenas com perfil `admin`.
-- Os mocks ficaram restritos ao modo DEV.
-- O cliente Supabase falha explicitamente em produção se as variáveis obrigatórias não estiverem configuradas.
-- A configuração agora pode ser verificada com `npm run check:config` e `npm run check:config:prod`.
+- Só alunos do iCEV participam: o cadastro exige e-mail institucional (domínio configurado na tabela `institutions`).
+- Alunos com empresa ("Tenho uma empresa") publicam ofertas com cupom: preço, desconto, quantidade de cupons e validade.
+- A equipe (admin) aprova cada oferta antes de ela aparecer na vitrine.
+- O aluno cliente abre a oferta e toca em **Pegar cupom**: recebe um código único (ex.: `K7QM-4TXP`), guardado em Cupons.
+- A compra acontece **fora da plataforma**, direto com a empresa (normalmente pelo WhatsApp). A empresa confere o código e marca como usado.
+- Não há pagamento dentro do app. O código do Mercado Pago continua no servidor, desligado por `PAYMENTS_ENABLED=false`.
 
-## O Que Foi Reforçado
+## Peças principais
 
-- Validação de rotas por perfil.
-- Remoção de sucesso falso em serviços críticos.
-- Backend com integração real de pagamento.
-- Registro de intenção de pagamento calculado no servidor.
-- Emissão idempotente de cupom no retorno do pagamento e no webhook.
-- Schema com colunas, funções, triggers e políticas para o fluxo real.
-- Cadastro com escolha de papel comprador/vendedor.
-- Upload com erro real em produção quando o storage falha.
-- Auditoria de dependências corrigida.
+- `scripts/coupon-claim-migration.sql`: retirada de cupom (`claim_coupon`), trava de cadastro por domínio, baixa da quantidade de cupons.
+- `src/pages/buyer.js`: vitrine, detalhe da oferta, retirada do cupom, carteira de cupons, perfil.
+- `src/pages/seller.js`: painel "Minha empresa" (ofertas, cupons retirados, validação de código).
+- `src/pages/admin.js`: moderação de ofertas, categorias, relatórios, domínios de e-mail aceitos.
+- `server.js` + `netlify/functions/api.js`: API (admin, empresa, saúde). Rotas de pagamento respondem 410.
+- `DESIGN.md`: identidade visual e regras do sistema. `DEPLOY_NETLIFY.md`: passo a passo de publicação.
 
-## Verificação Local
+## Verificação local
 
-- `npm run build`: passou.
-- `npm audit --omit=dev`: 0 vulnerabilidades.
-- `npm run check:config`: passou para ambiente local.
-- `npm run check:config:prod`: aponta somente as pendências externas.
-- `node --check server.js`: passou.
-- `http://localhost:5173/`: abre direto na vitrine funcional.
-- `#/seller` e `#/admin` sem sessão: redirecionam para autenticação.
-- Backend `GET /api/health`: saudável, com Mercado Pago e Supabase configurados.
-- Alerta atual do ambiente local: `serviceRoleConfigured` e `webhookConfigured` estão `false`.
+```bash
+npm test
+```
 
-## O Que Ainda Falta Para Dizer "100%"
+```bash
+npm run build
+```
 
-### Infraestrutura
+```bash
+npm run check:config
+```
 
-- Publicar o backend em ambiente estável.
-- Configurar `SUPABASE_SERVICE_ROLE_KEY` no servidor de produção.
-- Configurar `WEBHOOK_URL` público do Mercado Pago.
-- Garantir o bucket `product-images` no Supabase Storage.
+Para ver as telas sem backend: `npm run dev` e, para capturas, `node scripts/dev-shot.mjs --path buyer --out vitrine.png` (veja `DESIGN.md`).
 
-### Operação
+## Pendências para produção
 
-- Criar o primeiro usuário admin oficial.
-- Definir o fluxo de promoção de seller/admin para produção.
-- Validar política de expiração de anúncios e cupons em cron real.
-
-### Dados e Segurança
-
-- Aplicar `supabase_schema.sql` no projeto Supabase real.
-- Revisar dados antigos do banco para evitar conflitos de índice.
-- Confirmar que as policies do Supabase estão ativas no projeto real.
-- Validar webhook do Mercado Pago com pagamento real aprovado.
-
-### UX e QA
-
-- Testar login, compra, aprovação, cupom e uso do cupom em navegador mobile real.
-- Testar retorno do Checkout Pro após pagamento aprovado.
-- Testar cenários de rede ruim, sessão expirada e upload falho.
-- Fazer uma passada final de texto, espaçamento e estados vazios com dados reais.
-
-## Resumo Honesto
-
-O núcleo funcional já está muito mais próximo de produção. O que ainda impede chamar de "100%" não é a tela inicial nem o fluxo básico do app, e sim a validação final em ambiente real: secrets de produção, webhook público, schema aplicado no Supabase, primeiro admin e testes ponta a ponta com pagamento real.
+1. Confirmar o domínio de e-mail dos alunos em `public.institutions` e rodar `scripts/coupon-claim-migration.sql` no Supabase de produção.
+2. Atualizar os modelos de e-mail do Supabase com `SUPABASE_AUTH_EMAILS.md`.
+3. Definir `PAYMENTS_ENABLED=false` no Netlify e publicar.
+4. Rodar o teste de ponta a ponta do `DEPLOY_NETLIFY.md` com contas reais do iCEV.
+5. Separar dados públicos de privados em `profiles`: hoje a policy de leitura expõe e-mail e WhatsApp de todos os perfis. O ideal é uma view pública só com nome e contato das empresas.
+6. Renomear o site no Netlify para o nome novo e atualizar `VITE_APP_URL`, `FRONTEND_URL` e as URLs do Supabase Auth (passo a passo em `DEPLOY_NETLIFY.md`). O app não tem mais endereço fixo no código.
