@@ -1002,6 +1002,11 @@ function renderReports() {
   const totalClicks = products.reduce((sum, product) => sum + Number(product.clicks || 0), 0);
   const mostActiveCategory = rows.sort((a, b) => b.active - a.active || b.clicks - a.clicks)[0];
   const topProducts = [...products].sort((a, b) => Number(b.clicks || 0) - Number(a.clicks || 0)).slice(0, 5);
+  // A chart of zeros is 200px of nothing; say it in one line instead.
+  const categoryTotal = (metric) => getAdminCategories(false)
+    .reduce((sum, category) => sum + Number(loadedCategoryStats?.[category.id]?.[metric] || 0), 0);
+  const activeChartTotal = categoryTotal('active');
+  const queueChartTotal = categoryTotal('queue');
   // Stats may arrive localized ("1.234"); keep digits only for the hint.
   const toCount = (value) => Number(String(value ?? 0).replace(/\D/g, '')) || 0;
   const couponsRetrieved = toCount(s.couponsGenerated?.value);
@@ -1059,11 +1064,15 @@ function renderReports() {
     <div class="reports-grid">
       <section class="card chart-container">
         <h2 class="chart-title">Ofertas ativas por categoria</h2>
-        <canvas id="report-chart-1" height="200" role="img" aria-label="Gráfico de ofertas ativas por categoria"></canvas>
+        ${activeChartTotal
+          ? '<canvas id="report-chart-1" height="200" role="img" aria-label="Gráfico de ofertas ativas por categoria"></canvas>'
+          : '<p class="chart-empty-note">Nenhuma oferta ativa agora.</p>'}
       </section>
       <section class="card chart-container">
         <h2 class="chart-title">Ofertas em análise por categoria</h2>
-        <canvas id="report-chart-2" height="200" role="img" aria-label="Gráfico de ofertas em análise por categoria"></canvas>
+        ${queueChartTotal
+          ? '<canvas id="report-chart-2" height="200" role="img" aria-label="Gráfico de ofertas em análise por categoria"></canvas>'
+          : '<p class="chart-empty-note">Nenhuma oferta esperando aprovação.</p>'}
       </section>
     </div>
   `;

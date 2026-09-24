@@ -140,6 +140,9 @@ let selectedProduct = null;
 let selectedProductImageIndex = 0;
 // Offer requested by the #/buyer/offer?id=… address (null when the id is not valid).
 let routeOfferId = null;
+// Offers already counted as opened in this visit: back/forward and the return from
+// sign-in land on the same offer again without adding clicks.
+const countedOfferIds = new Set();
 let cachedProducts = null;
 let activeInstitution = institution;
 let buyerIntroPlayed = false;
@@ -327,7 +330,10 @@ function enterOfferRoute() {
     selectedProductImageIndex = 0;
   }
   currentView = 'detail';
-  if (routeOfferId) incrementProductClicks(routeOfferId);
+  if (routeOfferId && !countedOfferIds.has(routeOfferId)) {
+    countedOfferIds.add(routeOfferId);
+    incrementProductClicks(routeOfferId);
+  }
 }
 
 function findKnownProduct(productId) {
@@ -1846,6 +1852,9 @@ function renderProductDetail(container) {
     selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
     const sellerWhatsappUrl = getWhatsAppUrl(p.seller?.whatsapp, `Oi! Vi a oferta "${p.title}" no Empreende iCEV.`);
     const ownedCoupon = getActiveCouponForProduct(p.id);
+    // The company looking at its own offer: sharing it is the useful action, not taking a coupon.
+    const viewerId = globalSession?.user?.id;
+    const isOwnOffer = Boolean(viewerId) && String(p.sellerId || p.seller?.id || '') === String(viewerId);
 
     container.innerHTML = `
       <div class="page buyer-wrapper detail-page${isSoldOut ? ' is-sold-out' : ''}">
@@ -1925,7 +1934,7 @@ function renderProductDetail(container) {
                 <div class="seller-detail-subtitle">Empresa de aluno do iCEV</div>
               </div>
             </div>
-            ${sellerWhatsappUrl ? `
+            ${sellerWhatsappUrl && !isOwnOffer ? `
               <a href="${escapeHTML(sellerWhatsappUrl)}" target="_blank" rel="noopener" class="btn-secondary seller-whatsapp-button">
                 ${icons.whatsapp} Conversar
               </a>
@@ -1934,12 +1943,16 @@ function renderProductDetail(container) {
 
           <div class="detail-buy-bar">
             <div class="detail-buy-summary">
-              <span>${isSoldOut ? 'Esgotado' : 'Com o cupom'}</span>
+              <span>${isOwnOffer ? 'Sua oferta' : isSoldOut ? 'Esgotado' : 'Com o cupom'}</span>
               <strong>${formatCurrency(p.discountPrice)}</strong>
             </div>
-            <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>
-              ${ownedCoupon ? `${icons.ticket} Ver meu cupom` : isSoldOut ? 'Cupons esgotados' : `${icons.ticket} Pegar cupom`}
-            </button>
+            ${isOwnOffer ? `
+              <button class="btn-primary detail-buy-button" id="btnShareOwnOffer" type="button">${icons.share} Compartilhar oferta</button>
+            ` : `
+              <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>
+                ${ownedCoupon ? `${icons.ticket} Ver meu cupom` : isSoldOut ? 'Cupons esgotados' : `${icons.ticket} Pegar cupom`}
+              </button>
+            `}
           </div>
         </div>
 
@@ -1948,6 +1961,8 @@ function renderProductDetail(container) {
 
     container.querySelector('#btnBackHome').addEventListener('click', () => goBack('#/buyer'));
     container.querySelector('#btnShareOffer')?.addEventListener('click', () => shareOffer(p));
+
+    container.querySelector('#btnShareOwnOffer')?.addEventListener('click', () => shareOffer(p));
 
     container.querySelector('#btnClaimCoupon')?.addEventListener('click', (event) => {
       const existing = getActiveCouponForProduct(p.id);

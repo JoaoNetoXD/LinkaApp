@@ -34,6 +34,8 @@ export const products = [
     originalPrice: 12.00,
     discount: 25,
     discountPrice: 9.00,
+    // Same id as the local preview session (scripts/dev-shot.mjs): Maria Clara's own company.
+    sellerId: '00000000-0000-4000-8000-000000000001',
     seller: { name: 'Maria Clara', course: 'Gastronomia', semester: '3º sem', avatar: 'MC', whatsapp: '5586999112233', verified: true },
     images: ['brownie'],
     expiresIn: '04h 32min',
