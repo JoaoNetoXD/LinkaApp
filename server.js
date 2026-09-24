@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 import { isValidPaymentReference, paymentMatchesIntent } from './payment-security.js';
 import { isAdminRole, canSuperadminEditProfile } from './access-control.js';
+import { isPaymentRoute } from './payment-routes.js';
 
 dotenv.config();
 
@@ -39,7 +40,13 @@ const MP_REDIRECT_URI = getValidatedMercadoPagoRedirectUri(RAW_MP_REDIRECT_URI);
 const MP_REDIRECT_URI_OVERRIDDEN = Boolean(RAW_MP_REDIRECT_URI && RAW_MP_REDIRECT_URI !== MP_REDIRECT_URI);
 const MP_AUTHORIZATION_URL = process.env.MP_AUTHORIZATION_URL || 'https://auth.mercadopago.com/authorization';
 
+// Coupon-only phase: students buy directly from the companies, so the platform
+// processes no payments. The Mercado Pago code stays for a later phase; set
+// PAYMENTS_ENABLED=true to turn those routes back on.
+const PAYMENTS_ENABLED = String(process.env.PAYMENTS_ENABLED || '').trim().toLowerCase() === 'true';
+
 const configStatus = {
+  paymentsEnabled: PAYMENTS_ENABLED,
   mpConfigured: !!MP_ACCESS_TOKEN,
   mpOAuthConfigured: !!MP_CLIENT_ID && !!MP_CLIENT_SECRET && !!MP_REDIRECT_URI,
   supabaseConfigured: !!SUPABASE_URL && !!SUPABASE_ANON_KEY,
@@ -49,11 +56,11 @@ const configStatus = {
 
 function getMissingProductionConfig() {
   return [
-    !configStatus.mpConfigured && 'MP_ACCESS_TOKEN',
-    !configStatus.mpOAuthConfigured && 'MP_CLIENT_ID/MP_CLIENT_SECRET/MP_REDIRECT_URI',
+    PAYMENTS_ENABLED && !configStatus.mpConfigured && 'MP_ACCESS_TOKEN',
+    PAYMENTS_ENABLED && !configStatus.mpOAuthConfigured && 'MP_CLIENT_ID/MP_CLIENT_SECRET/MP_REDIRECT_URI',
     !configStatus.supabaseConfigured && 'VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY',
     !configStatus.serviceRoleConfigured && 'SUPABASE_SERVICE_ROLE_KEY',
-    !configStatus.webhookConfigured && 'WEBHOOK_URL',
+    PAYMENTS_ENABLED && !configStatus.webhookConfigured && 'WEBHOOK_URL',
   ].filter(Boolean);
 }
 
@@ -101,29 +108,38 @@ const supabaseAdmin =
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-    return callback(new Error('Origem nao permitida'));
+    return callback(new Error('Origem não permitida'));
   },
 }));
 app.use(express.json({ limit: '1mb' }));
 
-if (!MP_ACCESS_TOKEN) {
-  console.warn('AVISO: MP_ACCESS_TOKEN nao encontrado no .env.');
+app.use((req, res, next) => {
+  if (PAYMENTS_ENABLED || !isPaymentRoute(req.path)) return next();
+  res.status(410).json({
+    success: false,
+    code: 'PAYMENTS_DISABLED',
+    error: 'A plataforma não processa pagamentos: a compra é combinada direto com a empresa.',
+  });
+});
+
+if (PAYMENTS_ENABLED && !MP_ACCESS_TOKEN) {
+  console.warn('AVISO: MP_ACCESS_TOKEN não encontrado no .env.');
 }
 
 if (!MP_CLIENT_ID || !MP_CLIENT_SECRET) {
-  console.warn('AVISO: MP_CLIENT_ID/MP_CLIENT_SECRET nao configurados. Vendedores nao conseguem conectar Mercado Pago via OAuth.');
+  console.warn('AVISO: MP_CLIENT_ID/MP_CLIENT_SECRET não configurados. Vendedores não conseguem conectar Mercado Pago via OAuth.');
 }
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn('AVISO: Supabase nao configurado no backend.');
+  console.warn('AVISO: Supabase não configurado no backend.');
 }
 
 if (!SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn('AVISO: SUPABASE_SERVICE_ROLE_KEY nao configurada. Webhooks nao conseguem emitir cupons em background.');
+  console.warn('AVISO: SUPABASE_SERVICE_ROLE_KEY não configurada. Webhooks não conseguem emitir cupons em background.');
 }
 
 if (!WEBHOOK_URL) {
-  console.warn('AVISO: WEBHOOK_URL nao configurada. Mercado Pago nao chamara o webhook automaticamente.');
+  console.warn('AVISO: WEBHOOK_URL não configurada. Mercado Pago não chamará o webhook automaticamente.');
 }
 
 function createMercadoPagoClients(accessToken) {
@@ -145,7 +161,7 @@ function getSellerWebhookUrl(sellerId) {
 
 function requireSupabaseAdmin() {
   if (!supabaseAdmin) {
-    throw new Error('Supabase service role nao configurada.');
+    throw new Error('Supabase service role não configurada.');
   }
   return supabaseAdmin;
 }
@@ -154,7 +170,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 function assertUuid(value, label = 'ID') {
   if (!uuidPattern.test(String(value || ''))) {
-    throw makeHttpError(`${label} invalido.`, 400, 'INVALID_ID');
+    throw makeHttpError(`${label} inválido.`, 400, 'INVALID_ID');
   }
 }
 
@@ -163,7 +179,7 @@ function assertAdmin(auth) {
     throw makeHttpError('Acesso restrito a administradores.', 403, 'ADMIN_REQUIRED');
   }
   if (auth.profile.role === 'admin' && !auth.profile.institution_id) {
-    throw makeHttpError('Admin sem instituicao vinculada.', 403, 'ADMIN_WITHOUT_INSTITUTION');
+    throw makeHttpError('Admin sem instituição vinculada.', 403, 'ADMIN_WITHOUT_INSTITUTION');
   }
 }
 
@@ -176,7 +192,7 @@ function assertSuperadmin(auth) {
 function assertAdminInstitution(auth, institutionId) {
   if (auth.profile?.role === 'superadmin') return;
   if (!institutionId || auth.profile?.institution_id !== institutionId) {
-    throw makeHttpError('Instituicao fora do seu acesso.', 403, 'INSTITUTION_FORBIDDEN');
+    throw makeHttpError('Instituição fora do seu acesso.', 403, 'INSTITUTION_FORBIDDEN');
   }
 }
 
@@ -184,12 +200,12 @@ function normalizeInstitutionUpdates(body = {}) {
   const updates = {};
   if (Object.prototype.hasOwnProperty.call(body, 'name')) {
     const name = String(body.name || '').trim();
-    if (!name) throw makeHttpError('Nome curto da instituicao e obrigatorio.', 400, 'INVALID_INSTITUTION_NAME');
+    if (!name) throw makeHttpError('Nome curto da instituição é obrigatório.', 400, 'INVALID_INSTITUTION_NAME');
     updates.name = name;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'fullName')) {
     const fullName = String(body.fullName || '').trim();
-    if (!fullName) throw makeHttpError('Nome da instituicao e obrigatorio.', 400, 'INVALID_INSTITUTION_FULL_NAME');
+    if (!fullName) throw makeHttpError('Nome da instituição é obrigatório.', 400, 'INVALID_INSTITUTION_FULL_NAME');
     updates.full_name = fullName;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'domain')) {
@@ -205,13 +221,13 @@ function normalizeInstitutionUpdates(body = {}) {
   if (Object.prototype.hasOwnProperty.call(body, 'primaryColor')) {
     const primaryColor = String(body.primaryColor || '').trim();
     if (!/^#[0-9a-f]{6}$/i.test(primaryColor)) {
-      throw makeHttpError('Cor principal invalida. Use o formato #2563eb.', 400, 'INVALID_PRIMARY_COLOR');
+      throw makeHttpError('Cor principal inválida. Use o formato #2563eb.', 400, 'INVALID_PRIMARY_COLOR');
     }
     updates.primary_color = primaryColor;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'plan')) {
     const plan = String(body.plan || '').trim();
-    if (!plan) throw makeHttpError('Plano invalido.', 400, 'INVALID_PLAN');
+    if (!plan) throw makeHttpError('Plano inválido.', 400, 'INVALID_PLAN');
     updates.plan = plan;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'settings')) {
@@ -221,7 +237,7 @@ function normalizeInstitutionUpdates(body = {}) {
     updates.settings = body.settings;
   }
   if (Object.keys(updates).length === 0) {
-    throw makeHttpError('Nenhum campo valido para salvar.', 400, 'EMPTY_UPDATE');
+    throw makeHttpError('Nenhum campo válido para salvar.', 400, 'EMPTY_UPDATE');
   }
   return updates;
 }
@@ -252,14 +268,14 @@ function normalizeCategoryPayload(body = {}, { partial = false } = {}) {
   if (!partial) {
     id = slugifyCategoryId(body.id || rawName);
     if (!id || id === 'all' || id.length < 2) {
-      throw makeHttpError('Informe um identificador valido para a categoria.', 400, 'INVALID_CATEGORY_ID');
+      throw makeHttpError('Informe um identificador válido para a categoria.', 400, 'INVALID_CATEGORY_ID');
     }
   }
 
   if (!partial || has('maxSlots') || has('max_slots')) {
     const maxSlots = Number.parseInt(body.maxSlots ?? body.max_slots ?? 5, 10);
     if (!Number.isInteger(maxSlots) || maxSlots < 1 || maxSlots > 99) {
-      throw makeHttpError('As vagas por anuncio precisam ficar entre 1 e 99.', 400, 'INVALID_CATEGORY_SLOTS');
+      throw makeHttpError('As vagas por oferta precisam ficar entre 1 e 99.', 400, 'INVALID_CATEGORY_SLOTS');
     }
     updates.max_slots = maxSlots;
   }
@@ -273,7 +289,7 @@ function normalizeCategoryPayload(body = {}, { partial = false } = {}) {
   }
 
   if (partial && Object.keys(updates).length === 0) {
-    throw makeHttpError('Nenhum campo valido para salvar.', 400, 'EMPTY_CATEGORY_UPDATE');
+    throw makeHttpError('Nenhum campo válido para salvar.', 400, 'EMPTY_CATEGORY_UPDATE');
   }
 
   return { id, updates };
@@ -291,7 +307,7 @@ async function resolveAdminInstitutionId(admin, auth) {
 async function loadCategoryForMutation(admin, categoryId) {
   const id = slugifyCategoryId(categoryId);
   if (!id || id === 'all') {
-    throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+    throw makeHttpError('Categoria inválida.', 400, 'INVALID_PRODUCT_CATEGORY');
   }
 
   const { data, error } = await admin
@@ -302,7 +318,7 @@ async function loadCategoryForMutation(admin, categoryId) {
 
   if (error) throw error;
   if (!data) {
-    throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+    throw makeHttpError('Categoria inválida.', 400, 'INVALID_PRODUCT_CATEGORY');
   }
   return data;
 }
@@ -356,7 +372,7 @@ async function requestMercadoPagoToken(body) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || data.error_description || 'Nao foi possivel autorizar Mercado Pago.');
+    throw new Error(data.message || data.error_description || 'Não foi possível autorizar Mercado Pago.');
   }
   return data;
 }
@@ -423,7 +439,7 @@ async function getSellerPaymentAccount(sellerId, { refresh = true } = {}) {
 async function requireSellerPaymentAccount(sellerId) {
   const account = await getSellerPaymentAccount(sellerId);
   if (!account?.access_token) {
-    throw makeHttpError('Vendedor ainda nao conectou o Mercado Pago. Este produto nao pode receber pagamento ainda.', 409, 'SELLER_MP_NOT_CONNECTED');
+    throw makeHttpError('Vendedor ainda não conectou o Mercado Pago. Este produto não pode receber pagamento ainda.', 409, 'SELLER_MP_NOT_CONNECTED');
   }
   return account;
 }
@@ -449,19 +465,19 @@ function getBearerToken(req) {
 async function getAuthContext(req, res) {
   const token = getBearerToken(req);
   if (!token) {
-    res.status(401).json({ success: false, error: 'Nao autenticado' });
+    res.status(401).json({ success: false, error: 'Não autenticado' });
     return null;
   }
 
   const client = createUserClient(token);
   if (!client) {
-    res.status(500).json({ success: false, error: 'Supabase nao configurado' });
+    res.status(500).json({ success: false, error: 'Supabase não configurado' });
     return null;
   }
 
   const { data, error } = await client.auth.getUser(token);
   if (error || !data?.user) {
-    res.status(401).json({ success: false, error: 'Sessao invalida' });
+    res.status(401).json({ success: false, error: 'Sessão inválida' });
     return null;
   }
 
@@ -491,6 +507,15 @@ app.post('/api/profile/become-seller', async (req, res) => {
       return res.json({ success: true, profile: auth.profile });
     }
 
+    // Offers belong to the seller's institution; without one no student could retrieve them.
+    if (!auth.profile?.institution_id) {
+      return res.status(403).json({
+        success: false,
+        code: 'INSTITUTION_REQUIRED',
+        error: 'Só contas com e-mail institucional do iCEV podem cadastrar empresa.',
+      });
+    }
+
     const { data, error } = await admin
       .from('profiles')
       .update({ role: 'seller' })
@@ -501,8 +526,8 @@ app.post('/api/profile/become-seller', async (req, res) => {
     if (error) throw error;
     res.json({ success: true, profile: data });
   } catch (error) {
-    console.error('Erro ao ativar vendedor:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao ativar modo vendedor' });
+    console.error('Erro ao ativar empresa:', error);
+    res.status(500).json({ success: false, error: error.message || 'Erro ao cadastrar empresa' });
   }
 });
 
@@ -658,7 +683,7 @@ async function loadProduct(client, productId) {
     .is('deleted_at', null)
     .single();
 
-  if (error || !data) throw new Error('Produto nao encontrado');
+  if (error || !data) throw new Error('Produto não encontrado');
   if (data.status !== 'active') throw new Error('Produto indisponivel');
   if (data.expires_at && new Date(data.expires_at) <= new Date()) throw new Error('Produto expirado');
   if ((data.slots_used || 0) >= (data.slots_total || 5)) throw new Error('Produto esgotado');
@@ -702,7 +727,7 @@ async function checkDatabaseReadiness() {
     };
   }
 
-  const checks = [
+  const paymentChecks = [
     {
       name: 'seller_payment_accounts',
       run: () => supabaseAdmin.from('seller_payment_accounts').select('seller_id').limit(1),
@@ -712,16 +737,29 @@ async function checkDatabaseReadiness() {
       run: () => supabaseAdmin.from('payment_oauth_states').select('id,state,seller_id,code_verifier').limit(1),
     },
     {
-      name: 'product-images bucket',
-      run: () => supabaseAdmin.storage.getBucket('product-images'),
-    },
-    {
       name: 'payments marketplace columns',
       run: () => supabaseAdmin
         .from('payments')
         .select('seller_id,product_title,buyer_name,mercado_pago_id,preference_id,coupon_id,coupon_code,platform_fee,seller_amount,product_snapshot,paid_at')
         .limit(1),
     },
+  ];
+
+  const checks = [
+    {
+      name: 'product-images bucket',
+      run: () => supabaseAdmin.storage.getBucket('product-images'),
+    },
+    {
+      // Called without a signed-in student it must refuse with AUTH_REQUIRED;
+      // PGRST202 means scripts/coupon-claim-migration.sql was not applied.
+      name: 'claim_coupon function',
+      run: async () => {
+        const { error } = await supabaseAdmin.rpc('claim_coupon', { p_product_id: '00000000-0000-0000-0000-000000000000' });
+        return { error: error?.code === 'PGRST202' ? error : null };
+      },
+    },
+    ...(PAYMENTS_ENABLED ? paymentChecks : []),
   ];
 
   const missingDatabaseObjects = [];
@@ -750,19 +788,25 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
 
   if (error) throw error;
   if (!product) {
-    return { ready: false, code: 'PRODUCT_NOT_FOUND', message: 'Produto nao encontrado.' };
+    return { ready: false, code: 'PRODUCT_NOT_FOUND', message: 'Oferta não encontrada.' };
   }
   if (product.deleted_at) {
-    return { ready: false, code: 'PRODUCT_DELETED', message: 'Produto removido pelo vendedor.' };
+    return { ready: false, code: 'PRODUCT_DELETED', message: 'Oferta removida pela empresa.' };
   }
   if (requireActive && product.status !== 'active') {
-    return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'Produto ainda nao esta ativo para venda.' };
+    return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'A oferta ainda não está ativa.' };
   }
   if (product.expires_at && new Date(product.expires_at) <= new Date()) {
-    return { ready: false, code: 'PRODUCT_EXPIRED', message: 'Produto expirado.' };
+    return { ready: false, code: 'PRODUCT_EXPIRED', message: 'Oferta expirada.' };
   }
   if ((product.slots_used || 0) >= (product.slots_total || 5)) {
-    return { ready: false, code: 'PRODUCT_SOLD_OUT', message: 'Produto esgotado.' };
+    return { ready: false, code: 'PRODUCT_SOLD_OUT', message: 'Os cupons desta oferta acabaram.' };
+  }
+
+  // Coupon-only phase: companies sell outside the platform, so approving an
+  // offer must not depend on a connected Mercado Pago account.
+  if (!PAYMENTS_ENABLED) {
+    return { ready: true, code: 'READY', message: 'Oferta pronta.' };
   }
 
   try {
@@ -798,7 +842,7 @@ async function loadProductForSellerMutation(admin, productId) {
 
   if (error) throw error;
   if (!data) {
-    throw makeHttpError('Produto nao encontrado.', 404, 'PRODUCT_NOT_FOUND');
+    throw makeHttpError('Oferta não encontrada.', 404, 'PRODUCT_NOT_FOUND');
   }
   return data;
 }
@@ -810,7 +854,7 @@ function assertCanManageSellerProduct(auth, product) {
     return;
   }
   if (product.seller_id === auth.user.id) return;
-  throw makeHttpError('Voce nao tem permissao para alterar este produto.', 403, 'PRODUCT_FORBIDDEN');
+  throw makeHttpError('Você não tem permissão para alterar esta oferta.', 403, 'PRODUCT_FORBIDDEN');
 }
 
 function normalizeSellerProductUpdate(body, product) {
@@ -836,7 +880,7 @@ function normalizeSellerProductUpdate(body, product) {
   if (has('categoryId')) {
     const categoryId = slugifyCategoryId(body.categoryId);
     if (!categoryId) {
-      throw makeHttpError('Categoria invalida.', 400, 'INVALID_PRODUCT_CATEGORY');
+      throw makeHttpError('Categoria inválida.', 400, 'INVALID_PRODUCT_CATEGORY');
     }
     updates.category_id = categoryId;
   }
@@ -846,7 +890,7 @@ function normalizeSellerProductUpdate(body, product) {
 
   if (has('originalPrice')) {
     if (!Number.isFinite(nextOriginalPrice) || nextOriginalPrice < 1 || nextOriginalPrice > 999999) {
-      throw makeHttpError('Informe um preco original valido.', 400, 'INVALID_PRODUCT_PRICE');
+      throw makeHttpError('Informe um preço original válido.', 400, 'INVALID_PRODUCT_PRICE');
     }
     updates.original_price = Math.round(nextOriginalPrice * 100) / 100;
   }
@@ -868,7 +912,7 @@ function normalizeSellerProductUpdate(body, product) {
     }
     const images = body.images.map((url) => String(url || '').trim()).filter(Boolean);
     if (images.some((url) => url.length > 1000 || !/^https?:\/\//i.test(url))) {
-      throw makeHttpError('Imagem invalida.', 400, 'INVALID_PRODUCT_IMAGES');
+      throw makeHttpError('Imagem inválida.', 400, 'INVALID_PRODUCT_IMAGES');
     }
     updates.images = images;
   }
@@ -977,7 +1021,7 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
     }
   }
 
-  if (!coupon) throw lastError || new Error('Nao foi possivel emitir cupom');
+  if (!coupon) throw lastError || new Error('Não foi possível emitir cupom');
 
   await client.from('payments').update({
     coupon_id: coupon.id,
@@ -987,7 +1031,7 @@ async function issueCouponFromPaymentRow(client, paymentRow) {
   if (createdCoupon) {
     // The database's unique payment_id index prevents issuing a second coupon.
     const { error: slotsError } = await client.rpc('increment_slots', { product_id: paymentRow.product_id });
-    if (slotsError) console.warn('Nao foi possivel atualizar slots do produto:', slotsError.message);
+    if (slotsError) console.warn('Não foi possível atualizar slots do produto:', slotsError.message);
   }
 
   return coupon;
@@ -1007,7 +1051,7 @@ async function syncPaymentByReference(client, localPayment) {
     }
   }
   if (mpData && !paymentMatchesIntent(mpData, localPayment)) {
-    throw makeHttpError('Pagamento retornado nao corresponde ao pedido.', 409, 'PAYMENT_MISMATCH');
+    throw makeHttpError('Pagamento retornado não corresponde ao pedido.', 409, 'PAYMENT_MISMATCH');
   }
 
   const status = mpData?.status || localPayment.status || 'pending';
@@ -1037,7 +1081,7 @@ async function syncPaymentByReference(client, localPayment) {
     try {
       await issueCouponFromPaymentRow(client, refreshed);
     } catch (error) {
-      console.warn('Nao foi possivel emitir cupom:', error.message);
+      console.warn('Não foi possível emitir cupom:', error.message);
     }
   }
 
@@ -1051,19 +1095,19 @@ app.post('/api/pix', async (req, res) => {
 
     const { productId, couponCode } = req.body || {};
     if (!productId) {
-      return res.status(400).json({ success: false, error: 'Produto obrigatorio' });
+      return res.status(400).json({ success: false, error: 'Produto obrigatório' });
     }
 
     const product = await loadProduct(auth.client, productId);
     const sellerAccount = await requireSellerPaymentAccount(product.seller_id);
     const sellerMp = createMercadoPagoClients(sellerAccount.access_token);
     const amount = Number(product.discount_price);
-    const externalReference = `linka_${product.id}_${auth.user.id}_${Date.now()}`;
+    const externalReference = `empreende_${product.id}_${auth.user.id}_${Date.now()}`;
 
     const response = await sellerMp.payment.create({
       body: {
         transaction_amount: amount,
-        description: `Compra no Linka: ${product.title}`,
+        description: `Compra no Empreende iCEV: ${product.title}`,
         payment_method_id: 'pix',
         payer: {
           email: auth.user.email,
@@ -1076,7 +1120,7 @@ app.post('/api/pix', async (req, res) => {
     });
 
     const qrData = response.point_of_interaction?.transaction_data;
-    if (!qrData) throw new Error('Nao foi possivel gerar os dados do Pix');
+    if (!qrData) throw new Error('Não foi possível gerar os dados do Pix');
 
     const paymentRow = await registerPaymentIntent(auth.client, {
       p_product_id: product.id,
@@ -1113,7 +1157,7 @@ app.post('/api/products/:productId/click', async (req, res) => {
   try {
     const productId = req.params.productId;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(productId))) {
-      return res.status(400).json({ success: false, error: 'Produto invalido' });
+      return res.status(400).json({ success: false, error: 'Produto inválido' });
     }
 
     const admin = requireSupabaseAdmin();
@@ -1137,7 +1181,7 @@ app.get('/api/products/:productId/payment-ready', async (req, res) => {
       success: false,
       ready: false,
       code: error.code || 'PAYMENT_READY_ERROR',
-      message: error.message || 'Nao foi possivel verificar o pagamento.',
+      message: error.message || 'Não foi possível verificar o pagamento.',
     });
   }
 });
@@ -1149,7 +1193,7 @@ app.get('/api/payment/:id', async (req, res) => {
 
     const paymentRef = req.params.id;
     if (!isValidPaymentReference(paymentRef)) {
-      return res.status(400).json({ success: false, error: 'Referencia de pagamento invalida' });
+      return res.status(400).json({ success: false, error: 'Referência de pagamento inválida' });
     }
 
     let ownedPayment = null;
@@ -1166,7 +1210,7 @@ app.get('/api/payment/:id', async (req, res) => {
       ownedPayment = data;
     }
     if (!ownedPayment) {
-      return res.status(404).json({ success: false, error: 'Pagamento nao encontrado' });
+      return res.status(404).json({ success: false, error: 'Pagamento não encontrado' });
     }
 
     let canViewPayment = ownedPayment.buyer_id === auth.user.id || ownedPayment.seller_id === auth.user.id;
@@ -1205,7 +1249,7 @@ app.post('/api/preference', async (req, res) => {
 
     const { productId, couponCode } = req.body || {};
     if (!productId) {
-      return res.status(400).json({ success: false, error: 'Produto obrigatorio' });
+      return res.status(400).json({ success: false, error: 'Produto obrigatório' });
     }
 
     const product = await loadProduct(auth.client, productId);
@@ -1213,7 +1257,7 @@ app.post('/api/preference', async (req, res) => {
     const sellerMp = createMercadoPagoClients(sellerAccount.access_token);
     const amount = Number(product.discount_price);
 
-    const externalReference = `linka_${product.id}_${auth.user.id}_${Date.now()}`;
+    const externalReference = `empreende_${product.id}_${auth.user.id}_${Date.now()}`;
 
     const response = await sellerMp.preference.create({
       body: {
@@ -1256,7 +1300,7 @@ app.post('/api/preference', async (req, res) => {
       || response.sandboxInitPoint
       || null;
     if (!checkoutUrl) {
-      throw makeHttpError('Mercado Pago nao retornou URL de checkout.', 502, 'MP_CHECKOUT_URL_MISSING');
+      throw makeHttpError('Mercado Pago não retornou URL de checkout.', 502, 'MP_CHECKOUT_URL_MISSING');
     }
 
     res.json({
@@ -1327,7 +1371,7 @@ app.post('/api/webhook', async (req, res) => {
           paid_at: updates.paid_at,
         });
       } catch (error) {
-        console.warn('Nao foi possivel emitir cupom no webhook:', error.message);
+        console.warn('Não foi possível emitir cupom no webhook:', error.message);
       }
     }
     return res.sendStatus(200);
@@ -1401,7 +1445,7 @@ app.patch('/api/seller/products/:productId', async (req, res) => {
     res.json({ success: true, product: data });
   } catch (error) {
     console.error('Erro ao atualizar produto do vendedor:', error);
-    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_UPDATE_ERROR', error: error.message || 'Erro ao atualizar produto' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_UPDATE_ERROR', error: error.message || 'Erro ao atualizar oferta' });
   }
 });
 
@@ -1431,7 +1475,7 @@ app.delete('/api/seller/products/:productId', async (req, res) => {
     res.json({ success: true, product: data });
   } catch (error) {
     console.error('Erro ao remover produto do vendedor:', error);
-    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_DELETE_ERROR', error: error.message || 'Erro ao remover produto' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_DELETE_ERROR', error: error.message || 'Erro ao remover oferta' });
   }
 });
 
@@ -1460,7 +1504,7 @@ app.post('/api/seller/products/:productId/renew', async (req, res) => {
     res.json({ success: true, product: data });
   } catch (error) {
     console.error('Erro ao renovar produto do vendedor:', error);
-    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_RENEW_ERROR', error: error.message || 'Erro ao renovar produto' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'SELLER_PRODUCT_RENEW_ERROR', error: error.message || 'Erro ao renovar oferta' });
   }
 });
 
@@ -1509,7 +1553,7 @@ app.post('/api/admin/categories', async (req, res) => {
 
     if (error) {
       if (error.code === '23505') {
-        throw makeHttpError('Ja existe uma categoria com esse identificador.', 409, 'CATEGORY_ALREADY_EXISTS');
+        throw makeHttpError('Já existe uma categoria com esse identificador.', 409, 'CATEGORY_ALREADY_EXISTS');
       }
       throw error;
     }
@@ -1573,7 +1617,7 @@ app.delete('/api/admin/categories/:categoryId', async (req, res) => {
 
     if (countError) throw countError;
     if ((count || 0) > 0) {
-      throw makeHttpError('Nao e possivel excluir uma categoria com anuncios vinculados.', 409, 'CATEGORY_HAS_PRODUCTS');
+      throw makeHttpError('Não é possível excluir uma categoria com ofertas vinculadas.', 409, 'CATEGORY_HAS_PRODUCTS');
     }
 
     const { error } = await admin.from('categories').delete().eq('id', category.id);
@@ -1624,14 +1668,14 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
     const auth = await getAuthContext(req, res);
     if (!auth) return;
     assertAdmin(auth);
-    assertUuid(req.params.institutionId, 'Instituicao');
+    assertUuid(req.params.institutionId, 'Instituição');
 
     const admin = requireSupabaseAdmin();
     if (auth.profile?.role !== 'superadmin' && auth.profile?.institution_id && auth.profile.institution_id !== req.params.institutionId) {
       return res.status(403).json({
         success: false,
         code: 'INSTITUTION_FORBIDDEN',
-        error: 'Voce so pode editar a instituicao vinculada ao seu perfil admin.',
+        error: 'Você so pode editar a instituição vinculada ao seu perfil admin.',
       });
     }
     if (auth.profile?.role !== 'superadmin' && !auth.profile?.institution_id) {
@@ -1641,7 +1685,7 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
         return res.status(403).json({
           success: false,
           code: 'ADMIN_WITHOUT_INSTITUTION',
-          error: 'Vincule este admin a uma instituicao no Supabase antes de editar configuracoes.',
+          error: 'Vincule este admin a uma instituição no Supabase antes de editar configuracoes.',
         });
       }
     }
@@ -1656,16 +1700,16 @@ app.patch('/api/admin/institutions/:institutionId', async (req, res) => {
 
     if (error) throw error;
     if (!data) {
-      throw makeHttpError('Instituicao nao encontrada para salvar.', 404, 'INSTITUTION_NOT_FOUND');
+      throw makeHttpError('Instituição não encontrada para salvar.', 404, 'INSTITUTION_NOT_FOUND');
     }
 
     res.json({ success: true, institution: data });
   } catch (error) {
-    console.error('Erro ao salvar instituicao:', error);
+    console.error('Erro ao salvar instituição:', error);
     res.status(error.statusCode || 500).json({
       success: false,
       code: error.code || 'ADMIN_INSTITUTION_UPDATE_ERROR',
-      error: error.message || 'Erro ao salvar instituicao.',
+      error: error.message || 'Erro ao salvar instituição.',
     });
   }
 });
@@ -1700,7 +1744,7 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
     res.json({ success: true, product: data });
   } catch (error) {
     console.error('Erro ao aprovar produto:', error);
-    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_APPROVE_ERROR', error: error.message || 'Erro ao aprovar produto' });
+    res.status(error.statusCode || 500).json({ success: false, code: error.code || 'ADMIN_APPROVE_ERROR', error: error.message || 'Erro ao aprovar oferta' });
   }
 });
 
@@ -1731,38 +1775,38 @@ app.patch('/api/superadmin/users/:userId', async (req, res) => {
     const auth = await getAuthContext(req, res);
     if (!auth) return;
     assertSuperadmin(auth);
-    assertUuid(req.params.userId, 'Usuario');
+    assertUuid(req.params.userId, 'Usuário');
 
     const admin = requireSupabaseAdmin();
     const { data: target, error: targetError } = await admin.from('profiles')
       .select('id,role,institution_id').eq('id', req.params.userId).maybeSingle();
     if (targetError) throw targetError;
-    if (!target) throw makeHttpError('Usuario nao encontrado.', 404, 'USER_NOT_FOUND');
+    if (!target) throw makeHttpError('Usuário não encontrado.', 404, 'USER_NOT_FOUND');
 
     const body = req.body || {};
     const updates = {};
     if (Object.prototype.hasOwnProperty.call(body, 'role')) {
       if (!['buyer', 'seller', 'admin'].includes(body.role)) {
-        throw makeHttpError('Papel invalido.', 400, 'INVALID_ROLE');
+        throw makeHttpError('Papel inválido.', 400, 'INVALID_ROLE');
       }
       updates.role = body.role;
     }
     if (Object.prototype.hasOwnProperty.call(body, 'institutionId')) {
-      if (body.institutionId !== null) assertUuid(body.institutionId, 'Instituicao');
+      if (body.institutionId !== null) assertUuid(body.institutionId, 'Instituição');
       updates.institution_id = body.institutionId;
     }
-    if (!Object.keys(updates).length) throw makeHttpError('Nenhuma alteracao valida.', 400, 'EMPTY_UPDATE');
+    if (!Object.keys(updates).length) throw makeHttpError('Nenhuma alteracao válida.', 400, 'EMPTY_UPDATE');
     if (!canSuperadminEditProfile(auth.profile, target, updates)) {
-      throw makeHttpError('Nao e permitido alterar uma conta superadmin.', 403, 'PROTECTED_ACCOUNT');
+      throw makeHttpError('Não e permitido alterar uma conta superadmin.', 403, 'PROTECTED_ACCOUNT');
     }
     if (updates.role === 'admin' && !(updates.institution_id ?? target.institution_id)) {
-      throw makeHttpError('Selecione uma instituicao para o admin.', 400, 'ADMIN_INSTITUTION_REQUIRED');
+      throw makeHttpError('Selecione uma instituição para o admin.', 400, 'ADMIN_INSTITUTION_REQUIRED');
     }
     if (updates.institution_id) {
       const { data: institution, error: institutionError } = await admin.from('institutions')
         .select('id').eq('id', updates.institution_id).maybeSingle();
       if (institutionError) throw institutionError;
-      if (!institution) throw makeHttpError('Instituicao nao encontrada.', 404, 'INSTITUTION_NOT_FOUND');
+      if (!institution) throw makeHttpError('Instituição não encontrada.', 404, 'INSTITUTION_NOT_FOUND');
     }
 
     const { data, error } = await admin.from('profiles').update(updates)
@@ -1789,7 +1833,7 @@ app.post('/api/superadmin/institutions', async (req, res) => {
     const admin = requireSupabaseAdmin();
     const { data, error } = await admin.from('institutions').insert(updates).select('*').single();
     if (error) {
-      if (error.code === '23505') throw makeHttpError('Dominio ja cadastrado.', 409, 'INSTITUTION_EXISTS');
+      if (error.code === '23505') throw makeHttpError('Dominio já cadastrado.', 409, 'INSTITUTION_EXISTS');
       throw error;
     }
     res.status(201).json({ success: true, institution: data });
@@ -1808,6 +1852,7 @@ app.get('/api/health', async (req, res) => {
     ...configStatus,
     ...database,
     frontendUrl: FRONTEND_URL,
+    paymentsEnabled: PAYMENTS_ENABLED,
     mercadoPagoRedirectUri: MP_REDIRECT_URI,
     expectedMercadoPagoRedirectUri: CANONICAL_MP_REDIRECT_URI,
     mercadoPagoRedirectUriOverridden: MP_REDIRECT_URI_OVERRIDDEN,
@@ -1818,7 +1863,7 @@ app.get('/api/health', async (req, res) => {
 
 if (!process.env.NETLIFY) {
   app.listen(PORT, () => {
-    console.log(`Backend Linka escutando na porta ${PORT}`);
+    console.log(`Backend Empreende iCEV escutando na porta ${PORT}`);
   });
 }
 

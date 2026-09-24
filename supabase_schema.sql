@@ -1,5 +1,5 @@
 -- ====================================================================
--- SCRIPT DE BANCO DE DADOS SUPABASE PARA O APP "LINKA" (v1.1)
+-- SCRIPT DE BANCO DE DADOS SUPABASE PARA O APP "EMPREENDE iCEV" (v1.1)
 -- Copie todo este código e cole no "SQL Editor" do seu painel Supabase
 -- e clique em "Run" (Executar).
 -- ====================================================================
@@ -343,7 +343,7 @@ BEGIN
 
   v_amount := COALESCE(v_product.discount_price, v_product.original_price);
   v_seller_amount := v_amount;
-  v_external_reference := COALESCE(p_external_reference, 'linka_' || v_product.id::text || '_' || auth.uid()::text || '_' || FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint::text);
+  v_external_reference := COALESCE(p_external_reference, 'empreende_' || v_product.id::text || '_' || auth.uid()::text || '_' || FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint::text);
   v_snapshot := jsonb_build_object(
     'id', v_product.id,
     'title', v_product.title,

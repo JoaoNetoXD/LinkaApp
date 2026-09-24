@@ -1,4 +1,4 @@
--- Apply to existing Linka projects before enabling checkout.
+-- Apply to existing projects before enabling checkout.
 ALTER TABLE public.payment_oauth_states ADD COLUMN IF NOT EXISTS code_verifier text;
 
 REVOKE EXECUTE ON FUNCTION public.increment_clicks(uuid) FROM PUBLIC, anon, authenticated;

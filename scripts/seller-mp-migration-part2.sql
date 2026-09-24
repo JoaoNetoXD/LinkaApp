@@ -7,7 +7,7 @@
   p_qr_code_string text DEFAULT NULL,
   p_external_reference text DEFAULT NULL
 )
-RETURNS public.payments AS $linka_register_payment_intent$
+RETURNS public.payments AS $register_payment_intent$
 DECLARE
   v_payment public.payments%ROWTYPE;
   v_product public.products%ROWTYPE;
@@ -60,7 +60,7 @@ BEGIN
   v_seller_amount := v_amount;
   v_external_reference := COALESCE(
     p_external_reference,
-    'linka_' || v_product.id::text || '_' || auth.uid()::text || '_' || FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint::text
+    'empreende_' || v_product.id::text || '_' || auth.uid()::text || '_' || FLOOR(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint::text
   );
   v_snapshot := jsonb_build_object(
     'id', v_product.id,
@@ -146,13 +146,13 @@ BEGIN
 
   RETURN v_payment;
 END;
-$linka_register_payment_intent$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$register_payment_intent$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION register_payment_intent(uuid, text, text, text, text, text, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION issue_coupon_for_payment(p_payment_id uuid)
-RETURNS public.coupons AS $linka_issue_coupon_for_payment$
+RETURNS public.coupons AS $issue_coupon_for_payment$
 DECLARE
   v_payment public.payments%ROWTYPE;
   v_coupon public.coupons%ROWTYPE;
@@ -238,7 +238,7 @@ BEGIN
 
   RETURN v_coupon;
 END;
-$linka_issue_coupon_for_payment$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$issue_coupon_for_payment$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION issue_coupon_for_payment(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION issue_coupon_for_payment(uuid) TO authenticated;

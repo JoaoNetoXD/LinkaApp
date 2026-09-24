@@ -1,4 +1,4 @@
--- Linka: add a platform owner role without changing existing users.
+-- Empreende iCEV: add a platform owner role without changing existing users.
 BEGIN;
 
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;

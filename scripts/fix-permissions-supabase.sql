@@ -1,5 +1,5 @@
 -- ============================================================
--- LINKA - Fix de permissoes para Pix, pagamentos e cupons
+-- EMPREENDE iCEV - Fix de permissões para Pix, pagamentos e cupons
 -- Cole no SQL Editor do Supabase e execute uma vez em producao.
 -- Corrige: permission denied for function register_payment_intent
 -- ============================================================

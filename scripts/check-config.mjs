@@ -4,6 +4,8 @@ dotenv.config({ quiet: true });
 
 const isProductionCheck = process.argv.includes('--production');
 const isOnlineCheck = process.argv.includes('--online');
+// Coupon-only phase: Mercado Pago settings are only needed when payments are switched back on.
+const paymentsEnabled = String(process.env.PAYMENTS_ENABLED || '').trim().toLowerCase() === 'true';
 const siteUrl = (process.env.FRONTEND_URL || process.env.URL || '').replace(/\/$/, '');
 
 if (siteUrl) {
@@ -24,17 +26,17 @@ const groups = [
   },
   {
     label: 'Mercado Pago access token',
-    required: true,
+    required: paymentsEnabled,
     keys: ['MP_ACCESS_TOKEN'],
   },
   {
     label: 'Mercado Pago OAuth client id',
-    required: isProductionCheck,
+    required: isProductionCheck && paymentsEnabled,
     keys: ['MP_CLIENT_ID'],
   },
   {
     label: 'Mercado Pago OAuth client secret',
-    required: isProductionCheck,
+    required: isProductionCheck && paymentsEnabled,
     keys: ['MP_CLIENT_SECRET'],
   },
   {
@@ -49,12 +51,12 @@ const groups = [
   },
   {
     label: 'Mercado Pago webhook URL',
-    required: isProductionCheck,
+    required: isProductionCheck && paymentsEnabled,
     keys: ['WEBHOOK_URL', 'DERIVED_WEBHOOK_URL'],
   },
   {
     label: 'Mercado Pago OAuth redirect URL',
-    required: isProductionCheck,
+    required: isProductionCheck && paymentsEnabled,
     keys: ['MP_REDIRECT_URI', 'DERIVED_MP_REDIRECT_URI'],
   },
 ];

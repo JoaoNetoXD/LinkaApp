@@ -1,4 +1,4 @@
--- Linka: correcao do acesso admin e endurecimento do perfil.
+-- Empreende iCEV: correção do acesso admin e endurecimento do perfil.
 -- Rode este arquivo no Supabase Dashboard > SQL Editor.
 
 CREATE OR REPLACE FUNCTION public.enforce_profile_role_rules()
