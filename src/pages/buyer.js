@@ -624,6 +624,24 @@ function renderBuyerBottomNav(activeTab) {
   `;
 }
 
+// Opened from the company panel: the profile keeps the company's dock, so
+// "Cupons" still means validating codes, not the student wallet.
+function renderSellerContextNav() {
+  const item = (href, icon, label) => `<a class="bottom-nav-item" href="${href}">${icon}<span>${label}</span><div class="nav-indicator"></div></a>`;
+  return `
+    <nav class="bottom-nav seller-nav" aria-label="Navegação de Minha empresa">
+      ${item('#/seller', icons.chart, 'Painel')}
+      ${item('#/seller/ads', icons.tag, 'Ofertas')}
+      ${item('#/seller/coupons', icons.ticket, 'Cupons')}
+    </nav>
+  `;
+}
+
+function isSellerContextProfile(role) {
+  const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  return query.get('from') === 'seller' && ['seller', 'admin', 'superadmin'].includes(role);
+}
+
 function renderEmptyProductsState() {
   const hasFilters = Boolean(searchQuery.trim() || activeCategory !== 'all' || Number(minDiscount) > 0);
   const onlySearch = Boolean(searchQuery.trim()) && activeCategory === 'all' && !(Number(minDiscount) > 0);
@@ -1517,11 +1535,17 @@ function renderProfile(container) {
   const email = user.email || '';
   const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
   const whatsappStatus = user.whatsapp ? formatPhoneBR(user.whatsapp) : 'Não informado';
+  const fromSeller = isSellerContextProfile(role);
   const logoutIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page acct-page--narrow profile-page">
       <header class="acct-header canopy">
+        ${fromSeller ? `
+          <div class="acct-topbar">
+            <a class="icon-btn acct-icon-btn" href="#/seller" aria-label="Voltar para Minha empresa"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></a>
+          </div>
+        ` : ''}
         <div class="acct-header-copy">
           <p class="t-eyebrow">${isLoggedIn ? `${brandCaseHTML(activeInstitution.name || 'iCEV')} · ${escapeHTML(roleMeta.label)}` : 'Visitante'}</p>
           <h1 class="acct-title">Perfil</h1>
@@ -1610,7 +1634,7 @@ function renderProfile(container) {
       </div>
     </div>
 
-    ${renderBuyerBottomNav('profile')}
+    ${fromSeller ? renderSellerContextNav() : renderBuyerBottomNav('profile')}
   `;
 
   bindPhoneFormatting(document.getElementById('profileWhatsapp'));

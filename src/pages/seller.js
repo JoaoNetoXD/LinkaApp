@@ -14,7 +14,8 @@ const ICON_ARROW_LEFT = '<svg width="24" height="24" viewBox="0 0 24 24" fill="n
 const ICON_CHEVRON_RIGHT = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
 
 // Students contact the company here; the buyer profile page owns the WhatsApp field.
-const PROFILE_ROUTE = '#/buyer/profile';
+// The shared profile page keeps the company dock when opened from here.
+const PROFILE_ROUTE = '#/buyer/profile?from=seller';
 
 // Coupon validity the company can pick, counted from the moment a student retrieves the code.
 const COUPON_VALIDITY_OPTIONS = [

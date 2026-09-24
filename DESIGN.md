@@ -55,6 +55,17 @@ A fonte da marca é a **Inter** (é a usada no slogan). Títulos em Inter 700–
 - **Carimbo** `.discount-badge`: marinho, mono, canto de 8px.
 - **Bilhete de destaque**: card no degradê quente com canhoto destacável (`.buyer-featured-strip`).
 
+## Estados e padrões
+
+- **Prazo da oferta**: as ofertas duram 24h, então a urgência é em horas: neutro por padrão, âmbar abaixo de 6h, vermelho pulsando só na última hora. Esgotado não mostra prazo: diz "Cupons esgotados", com foto em cinza e preço apagado.
+- **Status de cupom** (igual para aluno e empresa): Ativo verde, Usado cinza, Expirado vermelho. Oferta ativa também é verde.
+- **Filtros de status** são pílulas (`.chip` + contador), nunca a trilha segmentada. Faixas roláveis vão de ponta a ponta com esmaecimento nas bordas e 4 a 6px de respiro interno, para o anel de foco não ser cortado.
+- **Folhas com ação principal** (cupom retirado, detalhe da moderação) fixam o rodapé com a ação no pé da folha; use `--modal-pad-x` e `--modal-pad-bottom` para o rodapé atravessar o espaçamento.
+- **Confirmação destrutiva** dentro de diálogo usa `btn-danger--solid` (vermelho cheio). Botão desativado explica o motivo em texto, não em tooltip.
+- **Avisos (toasts)** são brancos com ícone colorido: eles costumam aparecer sobre o toldo marinho.
+- **Foco de teclado**: anel magenta em superfícies claras, branco sobre o marinho (toldo, barras, dock).
+- **Textos**: números ficam presos à unidade (`&nbsp;`), "e-mail" não quebra em títulos (`.nowrap`), "iCEV" mantém o i minúsculo em rótulos em caixa-alta (`brandCaseHTML`). Telefones aparecem como (86) 99900-1122 (`src/utils/phone.js`).
+
 ## Componentes (`src/styles/components.css`)
 
 Botões (`btn-primary`, `btn-secondary`, `btn-ghost`, `btn-danger`, `btn-success`, `btn-sm`, `btn-lg`, `btn-block`, `icon-btn`), campos (`input-group`, `input-field`, `filter-select`, `toggle`), `chip`, `badge` e `status-pill` com tons `badge-*`, `card`, `stat-card`, `tabs`, avatares, `alert-*`, `progress-bar`, `empty-state`, esqueletos, `modal-backdrop`/`modal-content` (sheet no celular, diálogo a partir de 720px), toasts, `bottom-nav` (dock flutuante marinho) e `.canopy` (o toldo).
@@ -71,4 +82,4 @@ Com `npm run dev` e o Supabase inacessível, o app usa dados de exemplo. Para ve
 node scripts/dev-shot.mjs --path seller --role seller --out painel.png
 ```
 
-Opções: `--role none|buyer|seller|admin|superadmin`, `--width/--height`, `--full`, `--tour`, e `--eval "JS"` (repetível) para clicar e abrir modais. Use o caminho sem barra inicial (o Git Bash reescreve `/seller`). O código de prévia fica só no modo DEV e não entra no build.
+Opções: `--role none|buyer|seller|admin|superadmin`, `--width/--height`, `--full`, `--tour`, `--eval "JS"` (repetível) para clicar e abrir modais, e `--tab N` para apertar Tab de verdade e conferir o anel de foco. Use o caminho sem barra inicial (o Git Bash reescreve `/seller`). O código de prévia fica só no modo DEV e não entra no build.
