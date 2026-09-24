@@ -155,6 +155,8 @@ let loadedCoupons = null;
 let selectedAdId = null;
 let loadedCategories = mockCategories;
 let sellerNavFocus = 'dashboard';
+// Offers or coupons failed to load (offline, timeout): the panel says so instead of showing zeros.
+let sellerDataFailed = false;
 
 const SELLER_SHELL_TTL_MS = 30_000;
 const SELLER_DATA_TTL_MS = 20_000;
@@ -223,6 +225,7 @@ async function loadSellerMainData(user, { force = false } = {}) {
       fetchSellerCoupons(sellerId),
     ]);
 
+    sellerDataFailed = adsResult.status === 'rejected' || couponsResult.status === 'rejected';
     loadedAds = adsResult.status === 'fulfilled' && Array.isArray(adsResult.value)
       ? adsResult.value
       : [];
@@ -234,7 +237,8 @@ async function loadSellerMainData(user, { force = false } = {}) {
     if (loadedCoupons.length === 0 && useMocks) loadedCoupons = sellerCoupons;
 
     enrichAdsWithCouponStats();
-    sellerDataLoadedAt = Date.now();
+    // A failed load is not cached: the next render asks again.
+    sellerDataLoadedAt = sellerDataFailed ? 0 : Date.now();
   })();
 
   try {
@@ -330,7 +334,9 @@ async function renderSellerPage(container, { force = false, keepScroll = false }
       </header>
 
       <div class="app-body seller-body" id="seller-content">
-        ${sellerView === 'create'
+        ${needsMainData && sellerDataFailed
+          ? renderSellerLoadError()
+          : sellerView === 'create'
           ? renderCreateForm()
           : sellerView === 'edit'
             ? renderEditProductForm()
@@ -419,6 +425,20 @@ function renderSellerStatCard({ icon, value, label, hint, attrs, detail = '', fe
 
 // The three newest codes (the list comes newest first), where the company confirms a sale
 // without opening the coupons tab. With offers live but no code yet, a nudge to share them.
+function renderSellerLoadError() {
+  return `
+    ${renderViewHead({ eyebrow: 'Minha empresa', title: 'Sem conexão' })}
+    <div class="seller-section seller-section--lead seller-load-error" role="alert">
+      ${renderEmptyState({
+        icon: icons.refresh,
+        title: 'Não foi possível carregar suas ofertas e cupons',
+        text: 'Nada foi perdido. Confira sua conexão com a internet e tente de novo.',
+        action: `<button class="btn-primary" id="seller-retry" type="button">${icons.refresh} Tentar de novo</button>`,
+      })}
+    </div>
+  `;
+}
+
 function renderRecentCoupons(stats) {
   const coupons = getSellerCouponData();
   if (!coupons.length && !stats.activeAds) return '';
@@ -1194,6 +1214,10 @@ function renderSellerCoupons() {
 
 function bindSellerEvents(container) {
   const openCreateForm = () => navigate('#/seller/create');
+  container.querySelector('#seller-retry')?.addEventListener('click', (event) => {
+    event.currentTarget.disabled = true;
+    renderSellerPage(container, { force: true });
+  });
   container.querySelectorAll('#new-ad-btn, .create-ad-cta, .new-ad-trigger').forEach((btn) => {
     btn.addEventListener('click', openCreateForm);
   });

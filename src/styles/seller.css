@@ -669,6 +669,14 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
   border: 1.5px dashed var(--rule-strong);
   text-align: center;
 }
+/* Straddling the canopy, the "could not load" notice is a solid card, not a dashed outline. */
+.seller-load-error .seller-empty {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-1);
+}
+.seller-load-error .seller-empty-icon { background: var(--paper-sunken); box-shadow: none; }
+
 .seller-empty-icon {
   display: grid;
   place-items: center;

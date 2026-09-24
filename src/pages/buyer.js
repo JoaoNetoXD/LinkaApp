@@ -1403,11 +1403,12 @@ function showBuyerCouponDetail(coupon, { justClaimed = false } = {}) {
 
 async function renderCoupons(container) {
   let userCoupons = [];
+  let loadFailed = false;
   const isLoggedIn = isAuthenticated();
   try {
     userCoupons = isLoggedIn ? await loadBuyerCoupons(globalSession.user.id) : [];
   } catch {
-    userCoupons = [];
+    loadFailed = true;
   }
 
   const activeCoupons = userCoupons.filter(c => c.status === 'active');
@@ -1459,7 +1460,20 @@ async function renderCoupons(container) {
         </div>
       </header>
 
-      ${userCoupons.length === 0 ? `
+      ${loadFailed ? `
+        <div class="coupon-empty-ticket coupons-empty-state" role="alert">
+          <div class="coupon-empty-main">
+            <span class="acct-empty-icon">${icons.refresh}</span>
+            <h2>Não foi possível carregar seus cupons</h2>
+            <p>Seus códigos continuam salvos na sua conta. Confira sua conexão e tente de novo.</p>
+          </div>
+          <div class="perforation" aria-hidden="true"></div>
+          <div class="coupon-empty-stub">
+            <span class="coupon-code coupon-empty-code" aria-hidden="true">······</span>
+            <button class="btn-primary" id="btnCouponsRetry" type="button">${icons.refresh} Tentar de novo</button>
+          </div>
+        </div>
+      ` : userCoupons.length === 0 ? `
         <div class="coupon-empty-ticket coupons-empty-state">
           <div class="coupon-empty-main">
             <span class="acct-empty-icon">${icons.ticket}</span>
@@ -1505,6 +1519,10 @@ async function renderCoupons(container) {
 
   container.querySelector('#btnCouponsExplore')?.addEventListener('click', () => {
     navigate('#/buyer');
+  });
+  container.querySelector('#btnCouponsRetry')?.addEventListener('click', (event) => {
+    event.currentTarget.disabled = true;
+    renderBuyerPage(container);
   });
 
   container.querySelectorAll('.copy-btn').forEach(btn => {

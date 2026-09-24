@@ -121,7 +121,8 @@ export async function getSellerProducts(sellerId) {
       console.warn('getSellerProducts: Supabase unavailable, using mock data.', err.message);
       return mockSellerAds;
     }
-    return [];
+    // "No offers" would push the company to create duplicates; the panel shows a retry instead.
+    throw err;
   }
 }
 

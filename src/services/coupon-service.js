@@ -90,7 +90,9 @@ export async function getBuyerCoupons(buyerId) {
     return (data || []).map(transformCoupon);
   } catch (err) {
     console.warn('getBuyerCoupons: unavailable.', err.message);
-    return USE_MOCKS ? devClaimedCoupons.map(transformCoupon) : [];
+    if (USE_MOCKS) return devClaimedCoupons.map(transformCoupon);
+    // An empty wallet would look like the student lost their codes; let the page say it failed.
+    throw err;
   }
 }
 
@@ -107,7 +109,7 @@ export async function getSellerCoupons(sellerId) {
       console.warn('getSellerCoupons: using mock data.', err.message);
       return mockSellerCoupons;
     }
-    return [];
+    throw err;
   }
 }
 
