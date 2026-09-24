@@ -1,3 +1,4 @@
+import '../styles/admin.css';
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
@@ -720,7 +721,9 @@ function renderModeration() {
 
 function renderModerationCard(ad) {
   const seller = ad.seller || {};
-  const sellerStudy = [seller.course, seller.semester].filter(Boolean).join(' · ');
+  // Each fact stays whole when the line wraps, and a wrapped line never starts with "·".
+  const sellerFacts = [seller.name || 'Empresa sem perfil', seller.course, seller.semester].filter(Boolean)
+    .map((fact, index, all) => `<span class="nowrap">${escapeHTML(fact)}${index < all.length - 1 ? ' ·' : ''}</span>`).join(' ');
   return `
     <article class="moderation-card" data-ad-id="${ad.id}">
       <div class="moderation-card-inner" data-admin-product-detail="${escapeHTML(ad.id)}" role="button" tabindex="0" aria-label="Abrir detalhes de ${escapeHTML(ad.title)}">
@@ -728,7 +731,7 @@ function renderModerationCard(ad) {
         <div class="moderation-info">
           <h3 class="moderation-title">${escapeHTML(ad.title)}</h3>
           <p class="moderation-meta">
-            <span class="moderation-meta-item">${icons.user}<span>${escapeHTML(seller.name || 'Empresa sem perfil')}${sellerStudy ? ` · ${escapeHTML(sellerStudy)}` : ''}</span></span>
+            <span class="moderation-meta-item">${icons.user}<span>${sellerFacts}</span></span>
             <span class="moderation-meta-item">${icons.tag}<span>${escapeHTML(getCategoryLabel(ad.category))}</span></span>
           </p>
           <p class="moderation-foot">

@@ -1,7 +1,10 @@
 {
+  "id": "/",
   "name": "Empreende iCEV",
   "short_name": "Empreende",
   "description": "Cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa.",
+  "lang": "pt-BR",
+  "dir": "ltr",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#182A50",
@@ -10,6 +13,22 @@
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Meus cupons",
+      "short_name": "Cupons",
+      "description": "Códigos que você já pegou",
+      "url": "/#/buyer/coupons",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Categorias",
+      "short_name": "Categorias",
+      "description": "Ofertas por área",
+      "url": "/#/buyer/categories",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ],
   "categories": ["education", "shopping", "business"]
 }

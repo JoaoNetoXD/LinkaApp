@@ -11,7 +11,7 @@ import './styles/buyer.css';
 import './styles/buyer-account.css';
 import './styles/auth.css';
 import './styles/seller.css';
-import './styles/admin.css';
+// admin.css loads with the admin page (src/pages/admin.js): students never download it.
 
 const app = document.getElementById('app');
 
