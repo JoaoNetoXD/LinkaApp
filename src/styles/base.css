@@ -21,6 +21,9 @@
 /* Keeps a word like "e-mail" from breaking at its hyphen. */
 .nowrap { white-space: nowrap; }
 
+/* "iCEV" keeps its lowercase i inside uppercase labels (see brandCaseHTML). */
+.brand-case { text-transform: none; }
+
 .t-display {
   font-family: var(--font-display);
   font-weight: 700;

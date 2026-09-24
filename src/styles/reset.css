@@ -9,6 +9,9 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* The canvas behind the page: overscrolling past the navy top (or the dock)
+     shows navy instead of a lilac gap. The body paints the lilac. */
+  background-color: var(--navy);
 }
 
 body {

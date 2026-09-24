@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
@@ -64,10 +64,6 @@ function getInitials(name, fallback = 'U') {
 }
 
 // The brand always writes "iCEV" with a lowercase i, even inside uppercase labels.
-function brandCaseHTML(value) {
-  return escapeHTML(value).replace(/iCEV/g, '<span class="admin-brand-case">iCEV</span>');
-}
-
 function createFallbackInstitution() {
   return { name: BRAND_NAME, fullName: BRAND_NAME, domain: '', primaryColor: '#C0176B', settings: {} };
 }

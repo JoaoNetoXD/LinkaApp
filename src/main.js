@@ -81,6 +81,11 @@ export function escapeHTML(value) {
     .replaceAll("'", '&#39;');
 }
 
+/** Escapes text and keeps the brand's lowercase i in "iCEV" inside uppercase labels. */
+export function brandCaseHTML(value) {
+  return escapeHTML(value).replace(/iCEV/g, '<span class="brand-case">iCEV</span>');
+}
+
 function sanitizeUrl(value) {
   if (!value) return '';
   try {

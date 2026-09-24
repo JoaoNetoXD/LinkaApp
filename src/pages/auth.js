@@ -289,7 +289,7 @@ export function renderAuth(container) {
         <p class="auth-aside-title">Conexões que geram <span class="hl">negócios</span>.</p>
         <div class="auth-ticket">
           <div class="auth-ticket-main">
-            <span class="auth-ticket-eyebrow">Cupom Empreende iCEV</span>
+            <span class="auth-ticket-eyebrow">Cupom Empreende <span class="brand-case">iCEV</span></span>
             <strong>Brownie com nozes</strong>
             <span class="auth-ticket-price">R$ 9,00 <s>R$ 12,00</s></span>
           </div>

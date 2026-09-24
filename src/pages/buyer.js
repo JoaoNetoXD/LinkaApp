@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons, claimCoupon } from '../services/coupon-service.js';
@@ -706,7 +706,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         </div>
 
         <div class="buyer-greeting">
-          <p class="buyer-eyebrow">${institutionName ? `${escapeHTML(institutionName)} · ` : ''}${todayLabel}</p>
+          <p class="buyer-eyebrow">${institutionName ? `${brandCaseHTML(institutionName)} · ` : ''}${todayLabel}</p>
           <h2 class="buyer-greeting-title">${greetingName ? `Olá, <span class="hl${introMark}">${escapeHTML(greetingName)}</span>` : `Descontos de quem <span class="hl${introMark}">empreende</span>`}</h2>
         </div>
 
@@ -992,7 +992,7 @@ async function renderCategories(container) {
         <header class="acct-header">
           <div class="acct-heading">
             <div class="acct-header-copy">
-              <p class="t-eyebrow">Explorar${institutionName ? ` · ${escapeHTML(institutionName)}` : ''}</p>
+              <p class="t-eyebrow">Explorar${institutionName ? ` · ${brandCaseHTML(institutionName)}` : ''}</p>
               <h1 class="acct-title">Categorias</h1>
             </div>
             <button class="icon-btn acct-icon-btn" id="btnBackBuyerHome" type="button" aria-label="Voltar para o início">
@@ -1525,7 +1525,7 @@ function renderProfile(container) {
     <div class="page buyer-wrapper acct-page acct-page--narrow profile-page">
       <header class="acct-header canopy">
         <div class="acct-header-copy">
-          <p class="t-eyebrow">Empreende iCEV</p>
+          <p class="t-eyebrow">${isLoggedIn ? `${brandCaseHTML(activeInstitution.name || 'iCEV')} · ${escapeHTML(roleMeta.label)}` : 'Visitante'}</p>
           <h1 class="acct-title">Perfil</h1>
         </div>
       </header>

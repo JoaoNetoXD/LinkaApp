@@ -29,8 +29,6 @@
 
 .admin-sidebar .admin-brand-logo { height: 38px; }
 
-/* Uppercase labels keep the brand's lowercase i in "iCEV". */
-.admin-brand-case { text-transform: none; }
 
 /* ---------- Sidebar (desktop only) ---------- */
 
