@@ -1,6 +1,7 @@
 import '../styles/admin.css';
 import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
-import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
+import { pendingAds, adminStats, categoryHeat, categories as mockCategories, institution } from '../data/mock.js';
+import { REJECT_REASONS, ADJUST_REASONS } from '../utils/moderation-reasons.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
 import { signOutUser } from '../services/auth-service.js';
@@ -2091,7 +2092,7 @@ function showRejectModal(adId, container) {
         <h3 class="modal-title" id="reject-modal-title">Recusar oferta</h3>
         <p class="modal-description">Escolha o motivo. A empresa recebe essa explicação junto com a recusa.</p>
         <div class="reject-reasons" id="reject-reasons">
-          ${rejectReasons.map((r, i) => `
+          ${REJECT_REASONS.map((r, i) => `
             <button class="reject-reason-option" type="button" data-reason="${i}">
               <span class="reject-reason-radio" aria-hidden="true"></span>
               <span>${r}</span>
@@ -2121,7 +2122,7 @@ function showRejectModal(adId, container) {
     if (selectedReason === -1) { showToast('Selecione um motivo.', 'error'); return; }
     confirmRejectBtn.disabled = true;
     confirmRejectBtn.textContent = 'Recusando...';
-    const result = await rejectProduct(adId, rejectReasons[selectedReason]);
+    const result = await rejectProduct(adId, REJECT_REASONS[selectedReason]);
     if (result?.success) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);
@@ -2145,7 +2146,7 @@ function showAdjustModal(adId, container) {
         <h3 class="modal-title" id="adjust-modal-title">Pedir ajuste</h3>
         <p class="modal-description">Escolha o motivo e, se quiser, explique o que a empresa precisa corrigir.</p>
         <div class="reject-reasons">
-          ${rejectReasons.map((r, i) => `
+          ${ADJUST_REASONS.map((r, i) => `
             <button class="reject-reason-option" type="button" data-reason="${i}">
               <span class="reject-reason-radio" aria-hidden="true"></span>
               <span>${r}</span>
@@ -2179,7 +2180,7 @@ function showAdjustModal(adId, container) {
     const note = modalRoot.querySelector('#adjust-note')?.value?.trim() || '';
     confirmAdjustBtn.disabled = true;
     confirmAdjustBtn.textContent = 'Enviando...';
-    const result = await requestProductAdjustment(adId, rejectReasons[selectedAdjustReason], note);
+    const result = await requestProductAdjustment(adId, ADJUST_REASONS[selectedAdjustReason], note);
     if (result?.success) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);

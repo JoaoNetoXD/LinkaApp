@@ -701,6 +701,8 @@
   scrollbar-width: none;
 }
 .detail-carousel::-webkit-scrollbar { display: none; }
+/* The shell clips outside rings: draw it inside the photo. */
+.detail-carousel:focus-visible { outline-offset: -3px; }
 
 .detail-carousel-slide {
   flex: 0 0 100%;

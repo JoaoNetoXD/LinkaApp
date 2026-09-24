@@ -221,13 +221,6 @@ export const categoryHeat = [
 ];
 
 
-export const rejectReasons = [
-  'Foto inadequada',
-  'Produto proibido',
-  'Preço fora do padrão',
-  'Descrição insuficiente',
-  'Categoria incorreta'
-];
 
 // Color palettes for product placeholders
 export const productColors = {

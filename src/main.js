@@ -2,6 +2,7 @@ import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathFor
 import { resetAppScroll } from './utils/scroll.js';
 import { syncHistoryEntry, readNextRoute, authRoute, navigate } from './utils/navigation.js';
 import { AUTH_RETURN_KEY } from './lib/supabase.js';
+import { installDialogA11y } from './utils/dialog-a11y.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -785,6 +786,7 @@ window.addEventListener('load', () => {
 
 // Init: the app restores scroll itself, once the screen has rendered (see utils/navigation.js).
 if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+installDialogA11y();
 handleRoute();
 
 // Register service worker

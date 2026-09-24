@@ -90,14 +90,14 @@
 .btn-danger:hover:not(:disabled) { background: #FBDADF; }
 /* Final confirmation of a destructive action (inside a dialog). */
 .btn-danger--solid { background: var(--danger); color: #fff; }
-.btn-danger--solid:hover:not(:disabled) { background: #B8232F; }
+.btn-danger--solid:hover:not(:disabled) { background: #A51F2C; }
 
 .btn-success {
   background: var(--success);
   color: #fff;
   border-color: transparent;
 }
-.btn-success:hover:not(:disabled) { background: #087650; }
+.btn-success:hover:not(:disabled) { background: #06663F; }
 
 .btn-sm { min-height: 38px; padding: 0 14px; font-size: var(--fs-14); border-radius: var(--r-sm); }
 .btn-sm svg { width: 16px; height: 16px; }

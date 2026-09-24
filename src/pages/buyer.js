@@ -108,6 +108,40 @@ function canUseSellerMode() {
   return ['seller', 'admin'].includes(getAccountRole());
 }
 
+function confirmBecomeSeller() {
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    modalRoot.innerHTML = `
+      <div class="coupon-sheet-overlay visible" id="becomeSellerSheet">
+        <div class="coupon-sheet" role="dialog" aria-modal="true" aria-labelledby="becomeSellerTitle">
+          <div class="modal-handle" aria-hidden="true"></div>
+          <div class="coupon-sheet-header">
+            <div class="coupon-sheet-heading">
+              <p class="t-eyebrow">Minha empresa</p>
+              <h3 id="becomeSellerTitle">Cadastrar sua empresa?</h3>
+            </div>
+            <button class="icon-btn coupon-sheet-close" type="button" aria-label="Fechar">${icons.x}</button>
+          </div>
+          <div class="coupon-sheet-body">
+            <p class="coupon-sheet-desc">Sua conta ganha o painel Minha empresa para divulgar cupons. Seu nome e seu WhatsApp passam a aparecer para os alunos nas suas ofertas. Você continua podendo pegar cupons.</p>
+            <div class="coupon-sheet-actions">
+              <button class="btn-primary btn-block btn-lg" id="btnConfirmBecomeSeller" type="button">${icons.plus}<span>Cadastrar empresa</span></button>
+              <button class="btn-ghost btn-block" id="btnCancelBecomeSeller" type="button">Agora não</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    const sheet = modalRoot.querySelector('#becomeSellerSheet');
+    const done = (answer) => { modalRoot.innerHTML = ''; resolve(answer); };
+    sheet.addEventListener('click', (event) => { if (event.target === sheet) done(false); });
+    sheet.querySelector('.coupon-sheet-close').addEventListener('click', () => done(false));
+    sheet.querySelector('#btnCancelBecomeSeller').addEventListener('click', () => done(false));
+    sheet.querySelector('#btnConfirmBecomeSeller').addEventListener('click', () => done(true));
+  });
+}
+
 async function openSellerFlow() {
   if (!globalSession?.user?.id) {
     window.location.hash = '#/auth?role=seller';
@@ -118,6 +152,8 @@ async function openSellerFlow() {
     window.location.hash = '#/seller';
     return;
   }
+
+  if (!(await confirmBecomeSeller())) return;
 
   const result = await becomeSeller();
   if (!result.success) {
