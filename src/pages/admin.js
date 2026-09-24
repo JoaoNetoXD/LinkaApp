@@ -803,6 +803,14 @@ function formatAdminDate(value) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
+// "86999001122" or "5586999001122" -> "(86) 99900-1122"; anything else is shown as typed.
+function formatAdminPhone(value) {
+  const digits = String(value || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return String(value || '').trim();
+}
+
 function renderCategoryProductRow(product) {
   const category = getAdminCategories().find(c => c.id === product.category);
   const status = getProductStatusMeta(product.status);
@@ -1276,7 +1284,7 @@ function showAdminProductDetails(productId, container) {
         </div>
         <div class="admin-product-detail-block">
           <h4>Empresa</h4>
-          <p>${escapeHTML(product.seller?.name || 'Empresa sem perfil')}${product.seller?.email ? ` · ${escapeHTML(product.seller.email)}` : ''}</p>
+          <p>${escapeHTML(product.seller?.name || 'Empresa sem perfil')}${product.seller?.whatsapp ? ` · WhatsApp ${escapeHTML(formatAdminPhone(product.seller.whatsapp))}` : ''}</p>
         </div>
         ${product.rejectionReason ? `
           <div class="admin-product-detail-block danger">

@@ -2,6 +2,11 @@ import { supabase } from '../lib/supabase.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+// Profile columns the browser may read. E-mail and the push subscription are
+// not readable through the API (scripts/profile-privacy-migration.sql); pages
+// take the user's e-mail from the session instead.
+const PROFILE_COLUMNS = 'id, name, whatsapp, avatar, role, course, semester, verified, institution_id, created_at';
+
 function cleanUrl(url = '') {
   return String(url || '').trim().replace(/\/+$/, '');
 }
@@ -122,7 +127,7 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
     const { data, error } = await supabase
       .from('profiles')
       .insert(profile)
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .maybeSingle();
 
     if (error) throw error;
@@ -265,7 +270,7 @@ export async function getCurrentProfile(userId) {
   }
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_COLUMNS)
     .eq('id', userId)
     .maybeSingle();
 

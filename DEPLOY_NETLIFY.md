@@ -30,9 +30,9 @@ Depois rode:
 scripts/coupon-claim-migration.sql
 ```
 
-Ela cria a função de retirada de cupom (`claim_coupon`), trava o cadastro por e-mail institucional e garante que a quantidade de cupons baixe a cada retirada. É idempotente: pode rodar de novo sem problema.
+Ela cria a função de retirada de cupom (`claim_coupon`), trava o cadastro por e-mail institucional e garante que a quantidade de cupons baixe a cada retirada. É idempotente: pode rodar de novo sem problema. Pode rodar antes ou logo depois do deploy; enquanto ela não roda, o botão "Pegar cupom" avisa que a retirada ainda não está ativa.
 
-Projeto novo do zero: rode `supabase_schema.sql`, depois `scripts/superadmin-migration.sql`, `scripts/security-hardening-migration.sql`, `scripts/product-images-storage-policies.sql` (depois de criar o bucket público `product-images` em Storage) e, por último, `scripts/coupon-claim-migration.sql`. A ordem importa: a última redefine a regra das ofertas.
+Projeto novo do zero: rode `supabase_schema.sql`, depois `scripts/superadmin-migration.sql`, `scripts/security-hardening-migration.sql`, `scripts/product-images-storage-policies.sql` (depois de criar o bucket público `product-images` em Storage), `scripts/coupon-claim-migration.sql` e, por último, `scripts/profile-privacy-migration.sql`. A ordem importa: a penúltima redefine a regra das ofertas.
 
 Para promover seu usuário a admin, use o bloco comentado de `scripts/admin-role-fix.sql` (troque `SEU_EMAIL_AQUI`).
 
@@ -79,7 +79,21 @@ Em Authentication > Email Templates, use os modelos de `SUPABASE_AUTH_EMAILS.md`
 
 Se o site ainda estiver com o endereço antigo no Netlify, renomeie em Site configuration > Site details > Change site name (por exemplo `empreende-icev`, se estiver livre). Depois atualize `VITE_APP_URL` e `FRONTEND_URL` no Netlify e a Site URL e as Redirect URLs no Supabase Auth, e faça um novo deploy. As prévias de link (WhatsApp, Instagram) e os e-mails passam a usar o endereço novo automaticamente.
 
-## 5. Teste final
+## 5. Privacidade dos perfis (depois do deploy)
+
+Com o site novo no ar, rode no SQL Editor:
+
+```text
+scripts/profile-privacy-migration.sql
+```
+
+Até aqui, qualquer pessoa com a chave pública do site conseguia ler o e-mail e o WhatsApp de todos os perfis. Depois dela, só as empresas continuam públicas (nome e WhatsApp, para os alunos chamarem). O perfil de um aluno só aparece para ele mesmo, para as empresas cujos cupons ele pegou e para os admins. O e-mail deixa de sair pela API.
+
+Não rode antes do deploy: a versão antiga do site pede o e-mail dos perfis e a vitrine pararia de carregar.
+
+Para conferir, abra sem login `https://seu-projeto.supabase.co/rest/v1/profiles?select=email&apikey=SUA_CHAVE_ANON`. O esperado é um erro `permission denied`.
+
+## 6. Teste final
 
 Abra `https://seu-site.netlify.app/api/health`. O esperado:
 

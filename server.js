@@ -482,13 +482,15 @@ async function getAuthContext(req, res) {
   }
 
   const profile = await getProfile(client, data.user.id);
-  return { user: data.user, profile, client };
+  return { user: data.user, profile: profile && { ...profile, email: data.user.email }, client };
 }
 
+// Reads with the user's own token, so only the columns the browser may read
+// (profiles.email is private, see scripts/profile-privacy-migration.sql).
 async function getProfile(client, userId) {
   const { data, error } = await client
     .from('profiles')
-    .select('id, name, email, whatsapp, avatar, role, course, semester, verified, institution_id')
+    .select('id, name, whatsapp, avatar, role, course, semester, verified, institution_id')
     .eq('id', userId)
     .maybeSingle();
 
@@ -671,7 +673,6 @@ async function loadProduct(client, productId) {
       seller:profiles!seller_id (
         id,
         name,
-        email,
         whatsapp,
         avatar,
         course,

@@ -41,7 +41,7 @@ export async function getActiveProducts({ categoryId = 'all', search = '', insti
       .from('products')
       .select(`
         *,
-        seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
+        seller:profiles!seller_id (id, name, whatsapp, avatar, course, semester, verified)
       `)
       .eq('status', 'active')
       .is('deleted_at', null)
@@ -81,7 +81,7 @@ export async function getProductById(productId) {
       .from('products')
       .select(`
         *,
-        seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
+        seller:profiles!seller_id (id, name, whatsapp, avatar, course, semester, verified)
       `)
       .eq('id', productId)
       .is('deleted_at', null)
@@ -333,7 +333,7 @@ export async function getPendingProducts(institutionId = null) {
       .from('products')
       .select(`
         *,
-        seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
+        seller:profiles!seller_id (id, name, whatsapp, avatar, course, semester, verified)
       `)
       .eq('status', 'pending')
       .is('deleted_at', null)
@@ -436,7 +436,7 @@ export async function getAllProducts(institutionId = null) {
       .from('products')
       .select(`
         *,
-        seller:profiles!seller_id (id, name, email, whatsapp, avatar, course, semester, verified)
+        seller:profiles!seller_id (id, name, whatsapp, avatar, course, semester, verified)
       `)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -527,7 +527,6 @@ function transformProduct(dbProduct) {
     seller: dbProduct.seller ? {
       id: dbProduct.seller.id,
       name: dbProduct.seller.name,
-      email: dbProduct.seller.email,
       whatsapp: dbProduct.seller.whatsapp,
       avatar: dbProduct.seller.avatar || dbProduct.seller.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
       course: dbProduct.seller.course,
