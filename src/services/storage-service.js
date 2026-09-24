@@ -75,6 +75,9 @@ export async function compressImage(file, maxWidth = 800, quality = 0.8) {
       let w = img.width, h = img.height;
       if (w > maxWidth) { h = (maxWidth / w) * h; w = maxWidth; }
       canvas.width = w; canvas.height = h;
+      // JPEG has no transparency: a cut-out PNG would come out on black without this.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
         if (!blob) return resolve(file);

@@ -64,6 +64,12 @@ function getMissingProductionConfig() {
   ].filter(Boolean);
 }
 
+// WhatsApp as stored: 10 or 11 digits with the DDD, no country code; null when not dialable.
+function normalizeWhatsAppBR(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').replace(/^0(?=\d{10,11}$)/, '').replace(/^55(?=\d{10,11}$)/, '');
+  return digits.length === 10 || digits.length === 11 ? digits : null;
+}
+
 function makeHttpError(message, statusCode = 500, code = 'SERVER_ERROR') {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -1154,18 +1160,32 @@ app.post('/api/pix', async (req, res) => {
   }
 });
 
+// A click is a signed-in student opening an active offer of another company. Anonymous
+// calls could inflate "Mais procurada" and the reports without limit.
 app.post('/api/products/:productId/click', async (req, res) => {
   try {
     const productId = req.params.productId;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(productId))) {
-      return res.status(400).json({ success: false, error: 'Produto inválido' });
+      return res.status(400).json({ success: false, error: 'Oferta inválida.' });
     }
+    const auth = await getAuthContext(req, res);
+    if (!auth) return;
 
     const admin = requireSupabaseAdmin();
+    const { data: product, error: productError } = await admin
+      .from('products')
+      .select('id,seller_id,status,deleted_at')
+      .eq('id', productId)
+      .maybeSingle();
+    if (productError) throw productError;
+    if (!product || product.status !== 'active' || product.deleted_at || product.seller_id === auth.user.id) {
+      return res.json({ success: true, counted: false });
+    }
+
     const { error } = await admin.rpc('increment_clicks', { product_id: productId });
     if (error) throw error;
 
-    res.json({ success: true });
+    res.json({ success: true, counted: true });
   } catch (error) {
     console.error('Erro ao registrar clique:', error);
     res.status(error.statusCode || 500).json({ success: false, code: error.code || 'CLICK_TRACK_ERROR', error: error.message || 'Erro ao registrar clique' });
@@ -1430,9 +1450,19 @@ app.patch('/api/seller/products/:productId', async (req, res) => {
       updates.slots_total = Number(category.max_slots || product.slots_total || 5);
       updates.slots_used = Math.min(Number(product.slots_used || 0), updates.slots_total);
     }
-    const whatsapp = String(req.body?.whatsapp || '').trim();
-    if (whatsapp) {
-      await admin.from('profiles').update({ whatsapp }).eq('id', product.seller_id);
+    // Every coupon of the batch was taken: the edited offer goes back for approval as a new
+    // batch (like "Renovar"), otherwise approval refuses it as sold out forever.
+    const nextTotal = Number(updates.slots_total ?? product.slots_total ?? 5);
+    if (Number(updates.slots_used ?? product.slots_used ?? 0) >= nextTotal) updates.slots_used = 0;
+
+    const rawWhatsapp = String(req.body?.whatsapp || '').trim();
+    if (rawWhatsapp) {
+      const whatsapp = normalizeWhatsAppBR(rawWhatsapp);
+      if (!whatsapp) {
+        throw makeHttpError('Informe o WhatsApp com DDD, por exemplo (86) 99900-1122.', 400, 'INVALID_WHATSAPP');
+      }
+      const { error: profileError } = await admin.from('profiles').update({ whatsapp }).eq('id', product.seller_id);
+      if (profileError) throw profileError;
     }
 
     const { data, error } = await admin
@@ -1586,12 +1616,17 @@ app.patch('/api/admin/categories/:categoryId', async (req, res) => {
 
     if (error) throw error;
 
+    // "Cupons por oferta" applies to the offers of this category still waiting for approval,
+    // as the editor says; live offers keep the batch their company agreed to.
     if (Object.prototype.hasOwnProperty.call(updates, 'max_slots')) {
-      const { error: productError } = await admin
+      let pendingQuery = admin
         .from('products')
         .update({ slots_total: updates.max_slots })
         .eq('category_id', category.id)
-        .in('status', ['pending', 'needs_adjustment', 'active']);
+        .eq('status', 'pending')
+        .lte('slots_used', updates.max_slots);
+      if (category.institution_id) pendingQuery = pendingQuery.eq('institution_id', category.institution_id);
+      const { error: productError } = await pendingQuery;
       if (productError) throw productError;
     }
 
@@ -1734,9 +1769,16 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
     }
 
     const admin = requireSupabaseAdmin();
+    // The offer stays on the vitrine for the category's hours, counted from approval.
+    const { data: category } = await admin
+      .from('categories')
+      .select('duration_hours')
+      .eq('id', product.category_id)
+      .maybeSingle();
+    const hours = Math.min(Math.max(Number(category?.duration_hours) || 24, 1), 720);
     const { data, error } = await admin
       .from('products')
-      .update({ status: 'active', rejection_reason: null })
+      .update({ status: 'active', rejection_reason: null, expires_at: new Date(Date.now() + hours * 3600000).toISOString() })
       .eq('id', req.params.productId)
       .select('*')
       .single();

@@ -25,14 +25,11 @@ function getPublicAppUrl() {
   return cleanUrl(window.location.origin);
 }
 
-function getEmailRedirectTo(role = 'buyer') {
+// `next` is an in-app route to open once confirmed (an offer the student wanted).
+function getEmailRedirectTo(role = 'buyer', next = '') {
   const accountRole = normalizeRole(role);
-  const target = accountRole === 'seller' ? 'seller' : 'buyer';
-  const params = new URLSearchParams({
-    confirmed: '1',
-    role: accountRole,
-    next: target,
-  });
+  const params = new URLSearchParams({ confirmed: '1', role: accountRole });
+  if (/^#\/[A-Za-z0-9/_?=&%.-]*$/.test(String(next))) params.set('next', next);
   return `${getPublicAppUrl()}/#/auth?${params.toString()}`;
 }
 
@@ -146,7 +143,7 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
       email,
       password,
       options: {
-        emailRedirectTo: getEmailRedirectTo(accountRole),
+        emailRedirectTo: getEmailRedirectTo(accountRole, extra.next),
         data: {
           full_name: fullName,
           role: accountRole,
@@ -161,6 +158,16 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
     });
 
     if (error) throw error;
+
+    // With e-mail confirmation on, an address that already has an account gets no error and
+    // no e-mail: Supabase answers with a user that has no identities.
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return {
+        success: false,
+        code: 'ALREADY_REGISTERED',
+        error: 'Já existe uma conta com este e-mail. Entre com sua senha ou use "Esqueci minha senha".',
+      };
+    }
 
     const profile = data?.session && data?.user
       ? await ensureUserProfile(data.user, accountRole, { fullName, whatsapp: extra.whatsapp })
@@ -238,6 +245,10 @@ export async function signOutUser() {
   try {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    // Nothing from this account stays on a shared computer.
+    if ('caches' in window) {
+      caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => {});
+    }
     return { success: true };
   } catch (err) {
     console.error('Sign out error:', err.message);

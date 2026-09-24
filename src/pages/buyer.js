@@ -11,7 +11,7 @@ import { resetAppScroll } from '../utils/scroll.js';
 import { navigate, goBack, getHashParams, offerRoute, offerShareUrl, authRoute, isValidOfferId } from '../utils/navigation.js';
 import { copyText, shareLink, offerShareText } from '../utils/share.js';
 import { hasVisibleDiscount } from '../utils/pricing.js';
-import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
+import { formatPhoneBR, bindPhoneFormatting, normalizeWhatsAppBR, WHATSAPP_HINT } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -74,6 +74,7 @@ function getUser() {
     return {
       ...baseUser,
       ...globalProfile,
+      email: globalSession?.user?.email || globalProfile.email || baseUser.email || '',
       name,
       fullName: name,
       avatar: globalProfile.avatar || getInitials(name),
@@ -465,8 +466,10 @@ function getTimerTone(hours) {
   return { colorClass: 'timer-neutral', isCritical: false };
 }
 
+// Countdown from a "04h 32min" style label (local mock data); null when there is none.
 function getTimerInfo(expiresIn) {
-  const safeExpiresIn = expiresIn || '24h 00min';
+  if (!expiresIn) return null;
+  const safeExpiresIn = expiresIn;
   const hoursMatch = safeExpiresIn.match(/(\d+)\s*h/);
   const hours = hoursMatch ? parseInt(hoursMatch[1], 10) : /min/.test(safeExpiresIn) ? 0 : 24;
   return { text: `Expira em ${safeExpiresIn}`, ...getTimerTone(hours) };
@@ -481,7 +484,8 @@ function normalizeExpirationDate(expiresAt) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getCountdownInfo(expiresAt, fallbackExpiresIn = '24h 00min') {
+// null when the offer has no end date: no countdown is invented for it.
+function getCountdownInfo(expiresAt, fallbackExpiresIn = '') {
   const end = normalizeExpirationDate(expiresAt);
   if (!end) return getTimerInfo(fallbackExpiresIn);
 
@@ -525,7 +529,8 @@ function startBuyerCountdowns(container) {
       return;
     }
     nodes.forEach((node) => {
-      const info = getCountdownInfo(node.dataset.countdownExpires, node.dataset.countdownFallback || '24h 00min');
+      const info = getCountdownInfo(node.dataset.countdownExpires, node.dataset.countdownFallback || '');
+      if (!info) return;
       node.classList.remove('timer-neutral', 'timer-amber', 'timer-critical', 'expiry--urgent');
       node.classList.add(info.colorClass);
       node.classList.toggle('expiry--urgent', info.isCritical);
@@ -873,6 +878,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
                   ? '<span class="card-soldout-note">Cupons esgotados</span>'
                   : slotsLeft <= 3
                   ? `<span class="card-slots-low">${slotsLeft === 1 ? 'Último cupom' : `Últimos ${slotsLeft} cupons`}</span>`
+                  : !timer
+                  ? `<span class="card-slots">${slotsLeft} cupons disponíveis</span>`
                   : `<span class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                       <span class="timer-icon">${icons.clock}</span>
                       <span data-countdown-label>${escapeHTML(timer.text)}</span>
@@ -1764,8 +1771,10 @@ function renderProfile(container) {
 
   document.getElementById('btnSaveProfile')?.addEventListener('click', async () => {
     const name = document.getElementById('profileName').value.trim();
-    const whatsapp = document.getElementById('profileWhatsapp').value.trim();
+    const typedWhatsapp = document.getElementById('profileWhatsapp').value.trim();
     if (!name) { showToast('Preencha seu nome.', 'error'); return; }
+    if (typedWhatsapp && !normalizeWhatsAppBR(typedWhatsapp)) { showToast(WHATSAPP_HINT, 'error'); return; }
+    const whatsapp = normalizeWhatsAppBR(typedWhatsapp) || '';
 
     const btn = document.getElementById('btnSaveProfile');
     btn.textContent = 'Salvando…';
@@ -1843,7 +1852,7 @@ function renderProductDetail(container) {
     document.title = `${p.title} — Empreende iCEV`;
 
     const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
-    const timer = getCountdownInfo(p.expiresAt, p.expiresIn || '24h 00min');
+    const timer = getCountdownInfo(p.expiresAt, p.expiresIn);
     const slotsLeft = Math.max((p.slots?.total || 5) - (p.slots?.used || 0), 0);
     const isSoldOut = slotsLeft === 0;
     const hasDiscount = hasVisibleDiscount(p);
@@ -1906,7 +1915,7 @@ function renderProductDetail(container) {
                 ${hasDiscount ? `<s class="detail-price-original">${formatCurrency(p.originalPrice)}</s>` : ''}
               </div>
               <ul class="detail-facts">
-                ${isSoldOut ? '' : `<li class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
+                ${isSoldOut || !timer ? '' : `<li class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                   <span class="timer-icon">${icons.clock}</span>
                   <span data-countdown-label>${escapeHTML(timer.text)}</span>
                 </li>`}

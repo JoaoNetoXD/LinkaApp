@@ -6,15 +6,14 @@ import {
 } from '../services/auth-service.js';
 import { icons, renderBrandLogo } from '../main.js';
 import { getAllowedSignupDomains } from '../services/institution-service.js';
-import { bindPhoneFormatting } from '../utils/phone.js';
-import { goBack, readNextRoute } from '../utils/navigation.js';
+import { bindPhoneFormatting, normalizeWhatsAppBR, WHATSAPP_HINT } from '../utils/phone.js';
+import { goBack, navigate, readNextRoute } from '../utils/navigation.js';
 
 const PASSWORD_RECOVERY_KEY = 'empreende_password_recovery_active';
 
 let isLoginMode = true;
 let isResetRequestMode = false;
 let selectedRole = 'buyer';
-let lastIntent = '';
 // E-mail domains accepted at sign-up (null until loaded, [] when unknown).
 let allowedSignupDomains = null;
 let allowedDomainsRequest = null;
@@ -68,15 +67,11 @@ function syncIntentFromUrl() {
     return;
   }
 
+  // "Criar conta de aluno" and "Tenho uma empresa" open the sign-up; every other link, sign-in.
   const intent = params.get('role') || params.get('intent') || '';
-  if (intent && intent !== lastIntent) {
-    lastIntent = intent;
-    if (intent === 'seller' || intent === 'signup') {
-      selectedRole = intent === 'seller' ? 'seller' : 'buyer';
-      isLoginMode = false;
-      isResetRequestMode = false;
-    }
-  }
+  selectedRole = intent === 'seller' ? 'seller' : 'buyer';
+  isLoginMode = !(intent === 'signup' || intent === 'seller');
+  isResetRequestMode = false;
 }
 
 function isReturningToOffer() {
@@ -88,7 +83,8 @@ function isReturningToOffer() {
 // The auth listener in main.js may have navigated already; then there is nothing to do.
 function openAfterSignIn(homePath) {
   if (!window.location.hash.startsWith('#/auth')) return;
-  window.location.hash = readNextRoute() || homePath;
+  // Replace, not push: "back" from the next screen must not land on the sign-in again.
+  navigate(readNextRoute() || homePath, { replace: true });
 }
 
 function showAuthMessage(text, type = 'error') {
@@ -295,8 +291,9 @@ function bindEnterSubmit() {
   });
 }
 
-export function renderAuth(container) {
-  syncIntentFromUrl();
+// The router passes { entering: true }; the tabs inside the page re-render without it.
+export function renderAuth(container, { entering = false } = {}) {
+  if (entering) syncIntentFromUrl();
   const mode = getAuthMode();
   const authParams = readAuthParams();
   const subtitle = getSubtitle(mode);
@@ -377,6 +374,10 @@ export function renderAuth(container) {
   document.getElementById('btnBackHome')?.addEventListener('click', () => {
     goBack(isReturningToOffer() ? readNextRoute() : '#/buyer');
   });
+
+  if (authParams.get('link') === 'expired') {
+    showAuthMessage('Este link expirou ou já foi usado. Entre com sua senha ou peça um novo em "Esqueci minha senha".');
+  }
 
   if (authParams.get('confirmed') === '1') {
     const confirmedRole = authParams.get('role') === 'seller' ? 'seller' : 'buyer';
@@ -501,8 +502,27 @@ export function renderAuth(container) {
       setLoading(btn, false, defaultText);
       return;
     }
+    if (whatsapp && !normalizeWhatsAppBR(whatsapp)) {
+      showAuthMessage(WHATSAPP_HINT);
+      setLoading(btn, false, defaultText);
+      document.getElementById('authWhatsapp')?.focus();
+      return;
+    }
 
-    const res = await signUpUser(email, password, name, selectedRole, { whatsapp });
+    const res = await signUpUser(email, password, name, selectedRole, {
+      whatsapp: normalizeWhatsAppBR(whatsapp) || '',
+      next: readNextRoute(),
+    });
+    if (res.code === 'ALREADY_REGISTERED') {
+      // Back to the sign-in with the address filled in, instead of a "Conta criada" that never arrives.
+      isLoginMode = true;
+      renderAuth(document.getElementById('app'));
+      const emailInput = document.getElementById('authEmail');
+      if (emailInput) emailInput.value = email;
+      showAuthMessage(res.error);
+      document.getElementById('authPassword')?.focus();
+      return;
+    }
     if (!res.success) {
       const message = res.error || 'Não foi possível criar a conta.';
       showAuthMessage(message);

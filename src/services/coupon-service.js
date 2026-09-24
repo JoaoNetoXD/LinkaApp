@@ -217,7 +217,8 @@ function transformCoupon(c) {
   return {
     id: c.id, code: c.code, productId: c.product_id,
     sellerId: c.seller_id,
-    product: c.product?.title || 'Oferta',
+    // product_title is kept on the coupon (scripts/integrity-migration.sql): the offer may be edited or removed.
+    product: c.product?.title || c.product_title || 'Oferta',
     discountPrice: c.product?.discount_price,
     originalPrice: c.product?.original_price,
     discount: c.product?.discount,
@@ -237,7 +238,8 @@ function transformSellerCoupon(c) {
   return {
     id: c.id, code: c.code, productId: c.product_id,
     sellerId: c.seller_id,
-    product: c.product?.title || 'Oferta',
+    // product_title is kept on the coupon (scripts/integrity-migration.sql): the offer may be edited or removed.
+    product: c.product?.title || c.product_title || 'Oferta',
     buyer: c.buyer?.name || 'Aluno',
     status,
     createdAt: formatDate(c.created_at),

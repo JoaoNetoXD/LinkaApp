@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo, refreshCurrentProfile } from '../main.js';
 import { sellerAds, sellerCoupons, categories as mockCategories, currentUser } from '../data/mock.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed, validateCoupon } from '../services/coupon-service.js';
@@ -9,7 +9,7 @@ import { resetAppScroll } from '../utils/scroll.js';
 import { navigate, goBack, getHashParams, offerShareUrl } from '../utils/navigation.js';
 import { shareLink, offerShareText } from '../utils/share.js';
 import { countByDay } from '../utils/week.js';
-import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
+import { formatPhoneBR, bindPhoneFormatting, normalizeWhatsAppBR, WHATSAPP_HINT } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -51,7 +51,16 @@ function renderStatusPill(label, tone = 'neutral') {
   return `<span class="seller-status is-${tone}">${escapeHTML(label)}</span>`;
 }
 
+// Every coupon of the batch was taken: students see "Esgotado", so the company does too.
+function isSoldOutAd(ad) {
+  const total = Number(ad?.slots?.total) || 0;
+  return total > 0 && (Number(ad?.slots?.used) || 0) >= total;
+}
+
 function getOfferStatusMeta(ad) {
+  if ((ad?.status === 'active' || ad?.status === 'pending') && isSoldOutAd(ad)) {
+    return { label: 'Esgotada', tone: 'warning' };
+  }
   if (ad?.status === 'rejected' && String(ad.rejectionReason || '').startsWith('Ajuste solicitado:')) {
     return { label: 'Ajuste solicitado', tone: 'warning' };
   }
@@ -236,6 +245,13 @@ async function loadSellerMainData(user, { force = false } = {}) {
     if (loadedAds.length === 0 && useMocks) loadedAds = sellerAds;
     if (loadedCoupons.length === 0 && useMocks) loadedCoupons = sellerCoupons;
 
+    // An active offer past its end date is expired for the company too, even before the
+    // database job marks it: counts, pill and "Renovar" follow.
+    const now = Date.now();
+    loadedAds = loadedAds.map((ad) => (ad.status === 'active' && ad.expiresAt && new Date(ad.expiresAt).getTime() <= now
+      ? { ...ad, status: 'expired' }
+      : ad));
+
     enrichAdsWithCouponStats();
     // A failed load is not cached: the next render asks again.
     sellerDataLoadedAt = sellerDataFailed ? 0 : Date.now();
@@ -383,8 +399,10 @@ function getSellerStatusCounts(ads = getSellerAdsData()) {
 
 function getSellerComputedStats(ads = getSellerAdsData(), coupons = getSellerCouponData()) {
   const statusCounts = getSellerStatusCounts(ads);
-  const couponsClaimed = ads.reduce((sum, ad) => sum + (ad.couponsGenerated || 0), 0) || coupons.length;
-  const couponsUsed = ads.reduce((sum, ad) => sum + (ad.couponsUsed || 0), 0) || coupons.filter(c => c.status === 'used').length;
+  // From the coupon list itself, so the coupons of deleted offers still count and the
+  // totals always match the Cupons tab.
+  const couponsClaimed = coupons.length;
+  const couponsUsed = coupons.filter((c) => c.status === 'used').length;
   return {
     totalAds: statusCounts.all,
     activeAds: statusCounts.active,
@@ -813,9 +831,9 @@ function renderSellerAdCard(ad) {
       <div class="seller-ad-status">
         ${renderStatusPill(status.label, status.tone)}
         <div class="seller-ad-actions">
-          ${ad.status === 'active' ? `<button class="btn-ghost btn-sm seller-ad-icon-btn share-ad-btn" type="button" data-ad-id="${adId}" aria-label="Compartilhar ${title}" title="Compartilhar">${icons.share}<span class="seller-ad-action-label">Compartilhar</span></button>` : ''}
+          ${ad.status === 'active' && !isSoldOutAd(ad) ? `<button class="btn-ghost btn-sm seller-ad-icon-btn share-ad-btn" type="button" data-ad-id="${adId}" aria-label="Compartilhar ${title}" title="Compartilhar">${icons.share}<span class="seller-ad-action-label">Compartilhar</span></button>` : ''}
           <button class="btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${adId}" aria-label="Editar ${title}">${icons.fileText}<span>Editar</span></button>
-          ${ad.status === 'expired' ? `<button class="btn-secondary btn-sm renew-btn" type="button" data-ad-id="${adId}">${icons.refresh}<span>Renovar</span></button>` : ''}
+          ${ad.status === 'expired' || (['active', 'pending'].includes(ad.status) && isSoldOutAd(ad)) ? `<button class="btn-secondary btn-sm renew-btn" type="button" data-ad-id="${adId}" aria-label="Renovar ${title} com cupons novos">${icons.refresh}<span>Renovar</span></button>` : ''}
           <button class="btn-ghost btn-sm seller-ad-icon-btn seller-ad-delete delete-ad-btn" type="button" data-ad-id="${adId}" aria-label="Excluir ${title}" title="Excluir">${icons.x}<span class="seller-ad-action-label">Excluir</span></button>
         </div>
       </div>
@@ -1088,7 +1106,7 @@ function readProductFormValues(container) {
     originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
     discount: parseInt(container.querySelector('#ad-discount')?.value, 10) || 0,
     couponValidHours: parseInt(container.querySelector('#ad-coupon-valid-hours')?.value, 10) || 24,
-    whatsapp: container.querySelector('#ad-whatsapp')?.value.trim() || '',
+    whatsapp: normalizeWhatsAppBR(container.querySelector('#ad-whatsapp')?.value) || container.querySelector('#ad-whatsapp')?.value.trim() || '',
   };
 }
 
@@ -1100,6 +1118,7 @@ function validateProductForm(values) {
   if (values.discount < 10 || values.discount > 50) return 'O desconto precisa ficar entre 10% e 50%.';
   if (!Number.isInteger(values.couponValidHours) || values.couponValidHours < 1 || values.couponValidHours > 720) return 'Escolha uma validade de cupom entre 1 hora e 30 dias.';
   if (!values.whatsapp) return 'Informe o WhatsApp para contato.';
+  if (!normalizeWhatsAppBR(values.whatsapp)) return WHATSAPP_HINT;
   return null;
 }
 
@@ -1513,8 +1532,9 @@ function bindSellerEvents(container) {
       });
 
       if (result.success) {
-        showToast('Oferta enviada para aprovação.', 'success');
+        showToast(result.warning || 'Oferta enviada para aprovação.', result.warning ? 'warning' : 'success');
         invalidateSellerCache({ data: true });
+        await refreshCurrentProfile().catch(() => {});
         activeTab = 'pending';
         navigate('#/seller/ads', { replace: true });
       } else {
@@ -1555,6 +1575,7 @@ function bindSellerEvents(container) {
       if (result.success) {
         showToast('Oferta atualizada e enviada para aprovação.', 'success');
         invalidateSellerCache({ data: true });
+        await refreshCurrentProfile().catch(() => {});
         activeTab = 'pending';
         navigate('#/seller/ads', { replace: true });
       } else {

@@ -1,5 +1,6 @@
 // Empreende iCEV — Service Worker
-const CACHE_NAME = 'empreende-icev-v2';
+// v3: drops the v2 caches, which also held Supabase responses (codes, profiles).
+const CACHE_NAME = 'empreende-icev-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -29,19 +30,26 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// Only the site's own files are cached (network first, cache when offline). Supabase and the
+// API carry personal data (coupon codes, profiles) and are never stored on the device.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET' || e.request.url.includes('/api/')) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   e.respondWith(
     fetch(e.request)
       .then((response) => {
-        if (response.status === 200) {
+        if (response.ok && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
         }
         return response;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('/index.html')))
+      .catch(() => caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        // Offline: pages open the app shell; a missing file stays a network error.
+        return e.request.mode === 'navigate' ? caches.match('/index.html') : Response.error();
+      }))
   );
 });
 

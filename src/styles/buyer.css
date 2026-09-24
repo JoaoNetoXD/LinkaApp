@@ -546,6 +546,7 @@
 }
 
 .card-timer,
+.card-slots,
 .card-slots-low,
 .card-soldout-note {
   display: inline-flex;

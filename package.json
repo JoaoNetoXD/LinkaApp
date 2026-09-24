@@ -9,11 +9,13 @@
     "check:config:online": "node scripts/check-config.mjs --online",
     "check:config:prod": "node scripts/check-config.mjs --production",
     "test": "node --test",
-    "verify": "npm run check:config && npm test && node --check server.js && npm run build && npm audit --omit=dev --cache .npm-cache",
+    "verify": "npm run check:config && npm test && npm run test:sql && node --check server.js && npm run build && npm audit --omit=dev --cache .npm-cache",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:sql": "node tests/sql/integrity.sql-test.mjs"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "concurrently": "^9.2.1",
     "vite": "^8.0.10"
   },

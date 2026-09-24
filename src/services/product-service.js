@@ -64,7 +64,11 @@ export async function getActiveProducts({ categoryId = 'all', search = '', insti
     if ((!data || data.length === 0) && USE_MOCKS) {
       return filterMockProducts(mockProducts, categoryId, search);
     }
-    return (data || []).map(transformProduct);
+    // An offer past its end date leaves the vitrine even before the database job marks it expired.
+    const now = Date.now();
+    return (data || [])
+      .filter((row) => !row.expires_at || new Date(row.expires_at).getTime() > now)
+      .map(transformProduct);
   } catch (err) {
     if (USE_MOCKS) {
       console.warn('getActiveProducts: Supabase unavailable, using mock data.', err.message);
@@ -151,11 +155,14 @@ export async function createProduct({ sellerId, title, description, categoryId, 
 
   try {
     const categoryDefaults = await getCategoryDefaults(categoryId);
+    // The offer still goes out if the WhatsApp can't be saved; the company is told to check it.
+    let warning = '';
     if (whatsapp) {
-      await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ whatsapp })
         .eq('id', sellerId);
+      if (profileError) warning = 'A oferta foi enviada, mas não conseguimos salvar o WhatsApp. Confira seu perfil.';
     }
 
     const productData = {
@@ -185,7 +192,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
       .single();
 
     if (error) throw error;
-    return { success: true, product: transformProduct(data) };
+    return { success: true, product: transformProduct(data), warning };
   } catch (err) {
     if (USE_MOCKS) {
       console.warn('createProduct: Supabase unavailable, simulating creation.', err.message);
@@ -317,8 +324,14 @@ export async function incrementProductClicks(productId) {
   // Only call RPC if productId is a valid UUID (not a mock integer)
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!productId || !uuidRe.test(String(productId))) return;
+  // Only signed-in students count (the server ignores guests and the company's own offer).
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return;
   try {
-    const response = await fetch(`${API_URL}/products/${productId}/click`, { method: 'POST' });
+    const response = await fetch(`${API_URL}/products/${productId}/click`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || 'Não foi possível registrar clique.');
@@ -506,8 +519,8 @@ export async function getCategoryStats(institutionId = null) {
 function transformProduct(dbProduct) {
   if (!dbProduct) return null;
 
-  // Calculate time remaining
-  let expiresIn = '24h 00min';
+  // Calculate time remaining (none without an end date: the card then shows no countdown)
+  let expiresIn = null;
   if (dbProduct.expires_at) {
     const remaining = new Date(dbProduct.expires_at) - new Date();
     if (remaining > 0) {

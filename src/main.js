@@ -1,6 +1,7 @@
 import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
 import { resetAppScroll } from './utils/scroll.js';
 import { syncHistoryEntry, readNextRoute, authRoute, navigate } from './utils/navigation.js';
+import { AUTH_RETURN_KEY } from './lib/supabase.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -571,14 +572,47 @@ function getSessionRole(session, profile = globalProfile) {
   return profile?.role || 'buyer';
 }
 
+// A deploy renames every page chunk. A tab opened before it asks for files that no longer
+// exist: reload once to get the new build, and never leave the old screen standing silently.
+const CHUNK_RELOAD_KEY = 'empreende_chunk_reload';
+window.addEventListener('vite:preloadError', (event) => {
+  const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
+  if (Date.now() - last < 10000) return; // just reloaded: let loadPage report it
+  event.preventDefault();
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+  window.location.reload();
+});
+
+async function loadPage(importer) {
+  try {
+    return await importer();
+  } catch (error) {
+    showToast('Não foi possível abrir esta tela. Confira sua conexão e tente de novo.', 'error');
+    throw error;
+  }
+}
+
 // Simple client-side routing (supports both hash and path)
 let routeVersion = 0;
 async function handleRoute() {
   const rawRoute = window.location.hash.slice(1) || window.location.pathname;
   const [path] = rawRoute.split('?');
 
-  // Ignore hash changes for intra-page anchors (e.g. #problema, #contato)
+  // An expired or already used e-mail link comes back as "#error=...": say so on the sign-in.
+  if (/^#error(=|_)/.test(window.location.hash)) {
+    sessionStorage.removeItem(AUTH_RETURN_KEY);
+    navigate('#/auth?link=expired', { replace: true });
+    return;
+  }
   if (window.location.hash && !window.location.hash.startsWith('#/')) {
+    // A plain in-page anchor: nothing to route.
+    if (!/(^#|&)(access_token|refresh_token)=/.test(window.location.hash)) return;
+    // An e-mail link's tokens: Supabase reads them, clears the hash and its auth event routes.
+    await getCurrentSession();
+    if (!/(^#|&)(access_token|refresh_token)=/.test(window.location.hash)) return;
+    // Still there: the link could not be used (expired, or no connection).
+    sessionStorage.removeItem(AUTH_RETURN_KEY);
+    navigate('#/auth?link=expired', { replace: true });
     return;
   }
   syncHistoryEntry();
@@ -625,9 +659,9 @@ async function handleRoute() {
 
   if (path.startsWith('/auth') || path === 'auth') {
     setPageTitle('auth');
-    const { renderAuth } = await import('./pages/auth.js');
+    const { renderAuth } = await loadPage(() => import('./pages/auth.js'));
     if (currentRoute !== routeVersion) return;
-    renderAuth(app);
+    renderAuth(app, { entering: true });
     resetAppScroll(app);
     const authQuery = (window.location.hash.split('?')[1] || '').split('#')[0];
     const isPasswordResetRoute = window.location.hash.startsWith('#/auth')
@@ -635,26 +669,27 @@ async function handleRoute() {
     if (session && !isPasswordResetRoute) {
       const profile = await loadProfileForSession(session);
       if (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth')) {
-        window.location.hash = readNextRoute() || getHomePathForRole(getSessionRole(session, profile));
+        // Replace, not push: "back" from the next screen must not land on the sign-in again.
+        navigate(readNextRoute() || getHomePathForRole(getSessionRole(session, profile)), { replace: true });
       }
     }
   } else if (path.startsWith('/buyer') || path === 'buyer') {
     const parts = path.split('/').filter(Boolean);
     const subPage = parts[1]?.split('?')[0];
     setPageTitle(subPage || 'buyer');
-    const { renderBuyer } = await import('./pages/buyer.js');
+    const { renderBuyer } = await loadPage(() => import('./pages/buyer.js'));
     if (currentRoute !== routeVersion) return;
     renderBuyer(app, subPage);
   } else if (path.startsWith('/seller') || path === 'seller') {
     const parts = path.split('/').filter(Boolean);
     setPageTitle('seller');
-    const { renderSeller } = await import('./pages/seller.js');
+    const { renderSeller } = await loadPage(() => import('./pages/seller.js'));
     if (currentRoute !== routeVersion) return;
     renderSeller(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/admin') || path === 'admin') {
     const parts = path.split('/').filter(Boolean);
     setPageTitle('admin');
-    const { renderAdmin } = await import('./pages/admin.js');
+    const { renderAdmin } = await loadPage(() => import('./pages/admin.js'));
     if (currentRoute !== routeVersion) return;
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
@@ -662,7 +697,7 @@ async function handleRoute() {
     return;
   } else {
     setPageTitle('buyer');
-    const { renderBuyer } = await import('./pages/buyer.js');
+    const { renderBuyer } = await loadPage(() => import('./pages/buyer.js'));
     if (currentRoute !== routeVersion) return;
     renderBuyer(app);
   }
@@ -677,8 +712,9 @@ onAuthStateChange(async (event, session) => {
   signedInUserId = session?.user?.id || null;
   globalSession = session;
   if (event === 'PASSWORD_RECOVERY' && session) {
+    sessionStorage.removeItem(AUTH_RETURN_KEY);
     sessionStorage.setItem('empreende_password_recovery_active', '1');
-    window.location.hash = '#/auth?reset=1';
+    navigate('#/auth?reset=1', { replace: true });
     return;
   }
 
@@ -689,12 +725,21 @@ onAuthStateChange(async (event, session) => {
     try {
       globalProfile = await getCurrentProfile(session.user.id);
     } catch { globalProfile = null; }
+    // Signed in by an e-mail confirmation link: open the screen it was meant for.
+    const authReturn = sessionStorage.getItem(AUTH_RETURN_KEY);
+    if (authReturn) {
+      sessionStorage.removeItem(AUTH_RETURN_KEY);
+      navigate(readNextRoute(authReturn) || getHomePathForRole(getSessionRole(session)), { replace: true });
+      if (/[?&]confirmed=1/.test(authReturn)) showToast('E-mail confirmado. Sua conta está pronta.', 'success');
+      return;
+    }
     const rawRoute = window.location.hash.slice(1) || window.location.pathname;
     const [path] = rawRoute.split('?');
     if (!path || path === '/') {
-      window.location.hash = '#/buyer';
+      navigate('#/buyer', { replace: true });
     } else if (path === 'auth' || path.startsWith('/auth')) {
-      window.location.hash = readNextRoute() || getHomePathForRole(getSessionRole(session));
+      // Replace, not push: "back" from the next screen must not land on the sign-in again.
+      navigate(readNextRoute() || getHomePathForRole(getSessionRole(session)), { replace: true });
     } else {
       handleRoute();
     }
