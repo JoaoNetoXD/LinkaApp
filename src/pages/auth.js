@@ -6,6 +6,7 @@ import {
 } from '../services/auth-service.js';
 import { icons, renderBrandLogo } from '../main.js';
 import { getAllowedSignupDomains } from '../services/institution-service.js';
+import { bindPhoneFormatting } from '../utils/phone.js';
 
 const PASSWORD_RECOVERY_KEY = 'empreende_password_recovery_active';
 
@@ -265,6 +266,8 @@ function bindEnterSubmit() {
       enterSubmitQueued = false;
     }, 300);
   };
+
+  bindPhoneFormatting(document.getElementById('authWhatsapp'));
 
   document.querySelectorAll('#authEmail, #authPassword, #authPasswordConfirm, #authName, #authWhatsapp').forEach((input) => {
     ['keydown', 'keypress', 'keyup'].forEach((eventName) => {

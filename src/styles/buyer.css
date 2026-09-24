@@ -167,6 +167,7 @@
   box-shadow: var(--shadow-2);
 }
 .search-wrapper:focus-within .search-suggestions { display: block; animation: lk-pop-in var(--dur-2) var(--ease-out); }
+.buyer-header:has(.search-wrapper:focus-within .search-suggestions) :is(.category-scroll, .feed-filters) { visibility: hidden; }
 
 .suggestion-item {
   display: flex;
@@ -521,7 +522,8 @@
 }
 
 .card-timer,
-.card-slots-low {
+.card-slots-low,
+.card-soldout-note {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -599,6 +601,7 @@
 
 .detail-page { padding-bottom: calc(110px + var(--safe-bottom)); }
 
+/* Navy top bar (full-bleed through ::before) that the canopy band below continues. */
 .detail-header {
   position: sticky;
   top: 0;
@@ -608,12 +611,22 @@
   align-items: center;
   margin: 0 calc(var(--gutter) * -1);
   padding: calc(10px + var(--safe-top)) var(--gutter) 10px;
-  background: rgba(236, 232, 242, 0.86);
-  backdrop-filter: saturate(1.4) blur(12px);
-  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+.detail-header::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 calc(50% - 50vw);
+  background: var(--navy);
 }
 
-.detail-header .icon-btn { border-radius: var(--r-pill); }
+.detail-header .icon-btn {
+  border-radius: var(--r-pill);
+  background: var(--on-navy-fill);
+  border-color: var(--on-navy-line);
+  color: var(--on-navy);
+}
+.detail-header .icon-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); }
 
 .detail-header-label {
   text-align: center;
@@ -622,14 +635,29 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--on-navy-mute);
 }
 
+/* The navy continues behind the top of the photo, which straddles its edge. */
 .detail-container {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding-top: 6px;
+}
+.detail-container::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  height: clamp(118px, 34vw, 200px);
+  background:
+    radial-gradient(min(80vw, 460px) 220px at 100% 100%, rgba(237, 30, 121, 0.2), transparent 72%),
+    var(--navy);
 }
 
 .detail-gallery-shell {
@@ -789,8 +817,9 @@
   border: 1px solid var(--rule);
 }
 .seller-detail-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.seller-detail-name { font-size: var(--fs-15); font-weight: 600; }
-.seller-detail-subtitle { font-size: var(--fs-13); color: var(--ink-mute); white-space: nowrap; }
+.seller-detail-head > div:last-child { min-width: 0; }
+.seller-detail-name { font-size: var(--fs-15); font-weight: 600; overflow-wrap: anywhere; }
+.seller-detail-subtitle { font-size: var(--fs-13); line-height: 1.35; color: var(--ink-mute); }
 .seller-whatsapp-button { min-height: 40px; padding: 0 14px; font-size: var(--fs-14); flex-shrink: 0; }
 .seller-whatsapp-button svg { width: 16px; height: 16px; color: #1FA855; }
 
@@ -837,21 +866,40 @@
 }
 
 .detail-buy-button { flex: 1; min-height: 52px; }
+.detail-buy-bar .btn-primary:disabled {
+  opacity: 1;
+  background: var(--on-navy-fill);
+  box-shadow: inset 0 0 0 1px var(--on-navy-line);
+  color: var(--on-navy-mute);
+}
 
 @media (min-width: 900px) {
   .detail-container {
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
     /* Ticket and company card stack in the right column; the photo spans both rows. */
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       "gallery ticket"
+      "gallery buy"
       "gallery seller"
       "thumbs .";
     align-items: start;
     gap: 16px 28px;
   }
-  .detail-gallery-shell { grid-area: gallery; position: sticky; top: 76px; }
+  .detail-page { padding-bottom: calc(56px + var(--safe-bottom)); }
+  /* Desktop: the navy buy block sits under the price instead of floating. */
+  .detail-buy-bar {
+    grid-area: buy;
+    position: static;
+    width: auto;
+    transform: none;
+    box-shadow: var(--shadow-2);
+  }
+  /* Short band: photo and ticket both straddle it, the ticket's notches stay below. */
+  .detail-container::before { height: 150px; }
+  /* Sticks exactly where it starts (header 64px + 6px), so it lines up with the ticket. */
+  .detail-gallery-shell { grid-area: gallery; position: sticky; top: calc(70px + var(--safe-top)); }
   .detail-thumbnails { grid-area: thumbs; }
   .detail-ticket { grid-area: ticket; }
   .seller-detail-card { grid-area: seller; }

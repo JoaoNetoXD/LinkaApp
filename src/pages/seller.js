@@ -6,6 +6,7 @@ import { uploadMultipleImages, compressImage, createPreviewURL } from '../servic
 import { getCategories } from '../services/category-service.js';
 import { getCouponCodeCandidates } from '../utils/coupon-code.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 
@@ -33,10 +34,11 @@ const OFFER_STATUS = {
 };
 
 // `pending` only exists on codes issued before the coupon-only model; they are never valid.
+// A note only appears where it prevents a mistake (accepting a code that no longer counts).
 const COUPON_STATUS = {
-  active: { label: 'Ativo', tone: 'info', note: 'Confira na hora da compra. Depois de marcado como usado, o código fica bloqueado.' },
+  active: { label: 'Ativo', tone: 'info', note: '' },
   pending: { label: 'Pendente', tone: 'warning', note: 'Este código não foi liberado e não vale para compra.' },
-  used: { label: 'Usado', tone: 'success', note: 'Já usado numa compra e bloqueado contra reuso.' },
+  used: { label: 'Usado', tone: 'success', note: '' },
   expired: { label: 'Expirado', tone: 'neutral', note: 'Fora do prazo. Não aceite este código.' },
 };
 
@@ -857,7 +859,7 @@ function renderContactSection() {
       <legend class="seller-form-legend">Contato</legend>
       <div class="input-group">
         <label for="ad-whatsapp">WhatsApp para contato</label>
-        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" autocomplete="tel" inputmode="tel" value="${escapeHTML(getUser().whatsapp || '')}">
+        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" autocomplete="tel" inputmode="tel" value="${escapeHTML(formatPhoneBR(getUser().whatsapp))}">
         <div class="input-hint">É por aqui que os alunos chamam sua empresa para comprar.</div>
       </div>
     </fieldset>
@@ -1139,8 +1141,10 @@ function renderSellerCoupons() {
           <div class="seller-coupon-info">
             <strong class="seller-coupon-product">${escapeHTML(c.product)}</strong>
             <p class="seller-coupon-meta">${escapeHTML(c.buyer || 'Aluno')} · retirado em <span class="t-mono">${escapeHTML(c.createdAt)}</span></p>
-            <p class="seller-coupon-meta">Validade: <span class="t-mono">${escapeHTML(c.validUntil || 'não informada')}</span>${c.status === 'used' && hasTime(c.usedAt) ? ` · usado em <span class="t-mono">${escapeHTML(c.usedAt)}</span>` : ''}</p>
-            <p class="seller-coupon-note">${status.note}</p>
+            ${c.status === 'used'
+              ? (hasTime(c.usedAt) ? `<p class="seller-coupon-meta">Usado em <span class="t-mono">${escapeHTML(c.usedAt)}</span></p>` : '')
+              : c.validUntil ? `<p class="seller-coupon-meta">Validade: <span class="t-mono">${escapeHTML(c.validUntil)}</span></p>` : ''}
+            ${status.note ? `<p class="seller-coupon-note">${status.note}</p>` : ''}
           </div>
           ${c.status === 'active' ? `
             <div class="seller-coupon-action">
@@ -1304,6 +1308,7 @@ function bindSellerEvents(container) {
   const categorySelect = container.querySelector('#ad-category');
   const selectedPhotoFiles = new Map();
   const createForm = container.querySelector('#create-ad-form');
+  bindPhoneFormatting(container.querySelector('#ad-whatsapp'));
   const createSubmitBtn = container.querySelector('#create-submit-btn');
   const imageRequiredError = container.querySelector('#image-required-error');
 

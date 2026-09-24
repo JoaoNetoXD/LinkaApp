@@ -144,8 +144,17 @@
 }
 .admin-topbar .icon-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); }
 
-.admin-topbar .tabs { background: var(--on-navy-fill); }
-.admin-topbar .tab { color: var(--on-navy-mute); }
+/* Phone tabs scroll edge to edge and fade out at the sides, like the vitrine chips. */
+.admin-topbar .tabs {
+  gap: 6px;
+  padding: 0 var(--gutter);
+  border-radius: 0;
+  background: transparent;
+  scroll-padding-inline: var(--gutter);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - var(--gutter)), transparent);
+}
+.admin-topbar .tab { border-radius: var(--r-pill); background: var(--on-navy-fill); color: var(--on-navy-soft); }
 .admin-topbar .tab:hover { color: var(--on-navy); }
 .admin-topbar .tab.active { background: var(--paper); color: var(--ink); box-shadow: none; }
 .admin-topbar .tab:not(.active) .tab-count { background: rgba(255, 255, 255, 0.16); color: var(--on-navy); }
@@ -239,7 +248,7 @@
 .admin-logout-btn { min-height: 40px; }
 
 .admin-tabs-container {
-  padding: 0 var(--gutter) 10px;
+  padding: 0 0 12px;
 }
 
 /* ---------- Canvas ---------- */
@@ -289,6 +298,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Phones: header actions share the full width instead of wrapping at odd sizes. */
+@media (max-width: 639px) {
+  .admin-view-actions { width: 100%; }
+  .admin-view-actions > * { flex: 1 1 auto; }
 }
 
 .admin-section { margin-top: 28px; }

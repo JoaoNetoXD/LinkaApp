@@ -18,6 +18,9 @@
 
 /* ---------- Type roles ---------- */
 
+/* Keeps a word like "e-mail" from breaking at its hyphen. */
+.nowrap { white-space: nowrap; }
+
 .t-display {
   font-family: var(--font-display);
   font-weight: 700;

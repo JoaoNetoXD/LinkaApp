@@ -5,6 +5,7 @@ import { getInstitutionStats, updateInstitution, getInstitution, getAllInstituti
 import { signOutUser } from '../services/auth-service.js';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { formatPhoneBR } from '../utils/phone.js';
 import { getPlatformUsers, updatePlatformUser, createPlatformInstitution } from '../services/superadmin-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
@@ -417,7 +418,7 @@ function renderPlatformUsers() {
     <form id="platform-user-search" class="platform-toolbar" role="search">
       <label class="platform-search">
         ${icons.search}
-        <input class="platform-search-input" type="search" name="search" aria-label="Buscar usuários" placeholder="Buscar por nome ou e-mail" value="${escapeHTML(platformUsersSearch)}" />
+        <input class="platform-search-input" type="search" name="search" aria-label="Buscar usuários" placeholder="Nome ou e-mail" value="${escapeHTML(platformUsersSearch)}" />
       </label>
       <button class="btn-secondary platform-search-btn" type="submit">Buscar</button>
     </form>
@@ -628,10 +629,9 @@ function renderAdminDashboard() {
   `;
 }
 
-const CATEGORY_ALERT_ACTIONS = new Set(['Editar vagas', 'Visualizar']);
-
+// Each alert names the view its action opens; approval is the default.
 function getAlertView(alert) {
-  return alert.view || (CATEGORY_ALERT_ACTIONS.has(alert.action) ? 'categories' : 'moderation');
+  return alert.view || 'moderation';
 }
 
 function buildAdminAlerts() {
@@ -801,14 +801,6 @@ function formatAdminDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Sem data';
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-}
-
-// "86999001122" or "5586999001122" -> "(86) 99900-1122"; anything else is shown as typed.
-function formatAdminPhone(value) {
-  const digits = String(value || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
-  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return String(value || '').trim();
 }
 
 function renderCategoryProductRow(product) {
@@ -1284,7 +1276,7 @@ function showAdminProductDetails(productId, container) {
         </div>
         <div class="admin-product-detail-block">
           <h4>Empresa</h4>
-          <p>${escapeHTML(product.seller?.name || 'Empresa sem perfil')}${product.seller?.whatsapp ? ` · WhatsApp ${escapeHTML(formatAdminPhone(product.seller.whatsapp))}` : ''}</p>
+          <p>${escapeHTML(product.seller?.name || 'Empresa sem perfil')}${product.seller?.whatsapp ? ` · WhatsApp ${escapeHTML(formatPhoneBR(product.seller.whatsapp))}` : ''}</p>
         </div>
         ${product.rejectionReason ? `
           <div class="admin-product-detail-block danger">

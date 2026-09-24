@@ -158,6 +158,7 @@ export async function validateCoupon(code) {
       .select(`*, product:products!product_id (title), buyer:profiles!buyer_id (name)`)
       .in('code', candidates).maybeSingle();
 
+    if (error && USE_MOCKS) return validateDevCoupon(candidates);
     if (error || !data) return { valid: false, error: 'Cupom não encontrado.' };
     if (data.status === 'used') return { valid: false, error: 'Cupom já foi utilizado.', coupon: data };
     if (data.status === 'expired' || new Date(data.valid_until) < new Date()) {
@@ -171,6 +172,15 @@ export async function validateCoupon(code) {
     }
     return { valid: false, error: 'Cupom não encontrado.' };
   }
+}
+
+// Local preview without Supabase: check the code against the mock company wallet.
+function validateDevCoupon(candidates) {
+  const coupon = mockSellerCoupons.find((c) => candidates.includes(c.code));
+  if (!coupon) return { valid: false, error: 'Cupom não encontrado.' };
+  if (coupon.status === 'used') return { valid: false, error: 'Cupom já foi utilizado.', coupon };
+  if (coupon.status === 'expired') return { valid: false, error: 'Cupom expirado.', coupon };
+  return { valid: true, coupon: { id: `dev-${coupon.code}`, ...coupon } };
 }
 
 /** Get coupon stats for a product */

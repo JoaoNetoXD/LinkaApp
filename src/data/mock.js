@@ -174,11 +174,11 @@ export const coupons = [
 ];
 
 export const sellerCoupons = [
-  { code: 'X4R8', buyer: 'Thiago Santos', product: 'Brownie Artesanal com Nozes', status: 'pending', createdAt: '27/04/2026 11:20' },
-  { code: 'Y2T6', buyer: 'Camila Rocha', product: 'Brownie Artesanal com Nozes', status: 'pending', createdAt: '27/04/2026 10:45' },
-  { code: 'Z9P1', buyer: 'Felipe Alves', product: 'Brownie Artesanal com Nozes', status: 'used', createdAt: '27/04/2026 09:30' },
-  { code: 'W7L3', buyer: 'Juliana Costa', product: 'Brownie Artesanal com Nozes', status: 'used', createdAt: '26/04/2026 16:10' },
-  { code: 'V5N8', buyer: 'Ricardo Lima', product: 'Brownie Artesanal com Nozes', status: 'expired', createdAt: '25/04/2026 13:00' }
+  { code: 'K7QM-4TXP', buyer: 'Thiago Santos', product: 'Brownie Artesanal com Nozes', status: 'active', createdAt: '27/04/2026 11:20', validUntil: '28/04/2026 11:20' },
+  { code: 'H2VD-9NRE', buyer: 'Camila Rocha', product: 'Brownie Artesanal com Nozes', status: 'active', createdAt: '27/04/2026 10:45', validUntil: '28/04/2026 10:45' },
+  { code: 'Z9PF-3WAL', buyer: 'Felipe Alves', product: 'Brownie Artesanal com Nozes', status: 'used', createdAt: '27/04/2026 09:30', usedAt: '27/04/2026 12:05' },
+  { code: 'W7LC-8QMS', buyer: 'Juliana Costa', product: 'Brownie Artesanal com Nozes', status: 'used', createdAt: '26/04/2026 16:10', usedAt: '26/04/2026 18:40' },
+  { code: 'V5NB-2KJT', buyer: 'Ricardo Lima', product: 'Brownie Artesanal com Nozes', status: 'expired', createdAt: '25/04/2026 13:00', validUntil: '26/04/2026 13:00' }
 ];
 
 export const pendingAds = [
@@ -219,12 +219,6 @@ export const categoryHeat = [
   { id: 'others', name: 'Outros', slotsUsed: 2, slotsTotal: 5, queue: 0, duration: '24h', status: 'available' }
 ];
 
-export const alerts = [
-  { id: 1, level: 'critical', title: 'Categoria "Lanches" lotada', description: '5/5 vagas ocupadas com 4 anúncios na fila.', time: 'Há 15 min', action: 'Editar vagas' },
-  { id: 2, level: 'critical', title: 'Anúncio pendente há 2h+', description: '"Pulseira Artesanal Macramê" aguardando moderação.', time: 'Há 2h 10min', action: 'Moderar agora' },
-  { id: 3, level: 'attention', title: 'Categoria "Serviços" em 80%', description: '4 de 5 vagas ocupadas com 2 na fila.', time: 'Há 30 min', action: 'Visualizar' },
-  { id: 4, level: 'attention', title: 'Tentativa de reuso de cupom', description: 'Cupom Z9P1 (usado) tentou ser reutilizado por Felipe Alves.', time: 'Há 1h', action: 'Ver detalhes' }
-];
 
 export const rejectReasons = [
   'Foto inadequada',

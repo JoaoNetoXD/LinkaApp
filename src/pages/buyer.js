@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
 import { hasVisibleDiscount } from '../utils/pricing.js';
+import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -430,22 +431,19 @@ async function renderBuyerPage(container) {
   refreshBuyerNavBadges(container);
 }
 
+// Offers usually stay up for 24h, so urgency is counted in hours: the last hour
+// is critical (red, pulsing), under 6h is a heads-up (amber), anything else is calm.
+function getTimerTone(hours) {
+  if (hours < 1) return { colorClass: 'timer-critical', isCritical: true };
+  if (hours < 6) return { colorClass: 'timer-amber', isCritical: false };
+  return { colorClass: 'timer-neutral', isCritical: false };
+}
+
 function getTimerInfo(expiresIn) {
   const safeExpiresIn = expiresIn || '24h 00min';
-  const match = safeExpiresIn.match(/(\d+)h/);
-  let hours = 24;
-  if (match) {
-    hours = parseInt(match[1]);
-  }
-  let colorClass = 'timer-neutral';
-  let isCritical = false;
-  if (hours < 24) {
-    colorClass = 'timer-critical';
-    isCritical = true;
-  } else if (hours <= 48) {
-    colorClass = 'timer-amber';
-  }
-  return { text: `Expira em ${safeExpiresIn}`, colorClass, isCritical };
+  const hoursMatch = safeExpiresIn.match(/(\d+)\s*h/);
+  const hours = hoursMatch ? parseInt(hoursMatch[1], 10) : /min/.test(safeExpiresIn) ? 0 : 24;
+  return { text: `Expira em ${safeExpiresIn}`, ...getTimerTone(hours) };
 }
 
 function normalizeExpirationDate(expiresAt) {
@@ -469,8 +467,7 @@ function getCountdownInfo(expiresAt, fallbackExpiresIn = '24h 00min') {
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
   const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-  const isCritical = hours < 24;
-  const colorClass = hours < 24 ? 'timer-critical' : hours <= 48 ? 'timer-amber' : 'timer-neutral';
+  const { colorClass, isCritical } = getTimerTone(hours);
 
   let label;
   if (hours >= 48) {
@@ -782,12 +779,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         ` : ''}
       </header>
 
-      ${shouldShowInstitutionBanner() ? `
+      ${shouldShowInstitutionBanner() && !searchQuery.trim() ? `
         <div class="inst-banner">
           <div class="banner-icon">${icons.shield}</div>
           <div class="banner-text">
             <strong>Só empresas de alunos do iCEV</strong>
-            <span>Cada oferta passa pela equipe Empreende iCEV antes de aparecer aqui. Você pega o código e compra direto com a empresa.</span>
+            <span>Toda oferta é aprovada pela equipe. Você pega o código aqui e compra direto com a empresa.</span>
           </div>
           <button class="inst-banner-close" id="btnHideInstBanner" type="button" aria-label="Fechar aviso">${icons.x}</button>
         </div>
@@ -824,7 +821,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
                 ${hasDiscount ? `<span class="price-original">${formatCurrency(p.originalPrice)}</span>` : ''}
               </div>
               <div class="card-meta">
-                ${!isSoldOut && slotsLeft <= 3
+                ${isSoldOut
+                  ? '<span class="card-soldout-note">Cupons esgotados</span>'
+                  : slotsLeft <= 3
                   ? `<span class="card-slots-low">${slotsLeft === 1 ? 'Último cupom' : `Últimos ${slotsLeft} cupons`}</span>`
                   : `<span class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
                       <span class="timer-icon">${icons.clock}</span>
@@ -1103,7 +1102,7 @@ function showLoginRequiredModal(product, container) {
         <div class="coupon-sheet-header">
           <div class="coupon-sheet-heading">
             <p class="t-eyebrow">Pegar cupom</p>
-            <h3 id="couponSheetTitle">Entre com seu e-mail do iCEV</h3>
+            <h3 id="couponSheetTitle">Entre com seu <span class="nowrap">e-mail</span> do iCEV</h3>
           </div>
           <button class="icon-btn coupon-sheet-close" type="button" aria-label="Fechar">${icons.x}</button>
         </div>
@@ -1259,7 +1258,7 @@ function showBuyerCouponDetail(coupon, { justClaimed = false } = {}) {
           ${icons.shield}
           <span>Cada código vale uma compra. A empresa marca como usado na hora e ele deixa de valer.</span>
         </p>
-        ${whatsappUrl ? `<a class="btn-primary btn-block btn-lg btn-whatsapp coupon-detail-whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener">${icons.whatsapp} Chamar a empresa no WhatsApp</a>` : isActive ? `<p class="coupon-detail-note coupon-detail-note--contact">${icons.alertTriangle}<span>A empresa ainda não informou WhatsApp. Procure-a no campus e mostre o código.</span></p>` : ''}
+        ${whatsappUrl ? `<div class="coupon-detail-footer"><a class="btn-primary btn-block btn-lg btn-whatsapp coupon-detail-whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener">${icons.whatsapp} Chamar a empresa no WhatsApp</a></div>` : isActive ? `<p class="coupon-detail-note coupon-detail-note--contact">${icons.alertTriangle}<span>A empresa ainda não informou WhatsApp. Procure-a no campus e mostre o código.</span></p>` : ''}
       </div>
     </div>
   `;
@@ -1519,7 +1518,7 @@ function renderProfile(container) {
   const displayName = user.fullName || user.name || 'Usuário';
   const email = user.email || '';
   const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
-  const whatsappStatus = user.whatsapp ? 'Configurado' : 'Não informado';
+  const whatsappStatus = user.whatsapp ? formatPhoneBR(user.whatsapp) : 'Não informado';
   const logoutIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 
   container.innerHTML = `
@@ -1569,10 +1568,6 @@ function renderProfile(container) {
                 <span class="profile-row-label">WhatsApp</span>
                 <span class="profile-row-value ${user.whatsapp ? '' : 'is-muted'}">${escapeHTML(whatsappStatus)}</span>
               </div>
-              <div class="profile-row">
-                <span class="profile-row-label">Verificação</span>
-                <span class="profile-row-value ${user.verified ? '' : 'is-muted'}">${user.verified ? 'Verificada' : 'Padrão'}</span>
-              </div>
             </div>
           </section>
 
@@ -1591,7 +1586,7 @@ function renderProfile(container) {
 
               <label class="profile-field" for="profileWhatsapp">
                 <span>WhatsApp</span>
-                <input type="tel" value="${escapeHTML(user.whatsapp || '')}" id="profileWhatsapp" class="profile-input" autocomplete="tel" inputmode="tel" placeholder="(00) 00000-0000" />
+                <input type="tel" value="${escapeHTML(formatPhoneBR(user.whatsapp))}" id="profileWhatsapp" class="profile-input" autocomplete="tel" inputmode="tel" placeholder="(86) 99900-1122" />
               </label>
 
               <p class="profile-form-hint">Aparece nos seus cupons e para as empresas quando você usar um código.</p>
@@ -1619,6 +1614,8 @@ function renderProfile(container) {
 
     ${renderBuyerBottomNav('profile')}
   `;
+
+  bindPhoneFormatting(document.getElementById('profileWhatsapp'));
 
   document.getElementById('btnSaveProfile')?.addEventListener('click', async () => {
     const name = document.getElementById('profileName').value.trim();
@@ -1797,17 +1794,18 @@ function renderProductDetail(container) {
               </a>
             ` : ''}
           </section>
+
+          <div class="detail-buy-bar">
+            <div class="detail-buy-summary">
+              <span>Com o cupom</span>
+              <strong>${formatCurrency(p.discountPrice)}</strong>
+            </div>
+            <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>
+              ${ownedCoupon ? `${icons.ticket} Ver meu cupom` : isSoldOut ? 'Cupons esgotados' : `${icons.ticket} Pegar cupom`}
+            </button>
+          </div>
         </div>
 
-        <div class="detail-buy-bar">
-          <div class="detail-buy-summary">
-            <span>Com o cupom</span>
-            <strong>${formatCurrency(p.discountPrice)}</strong>
-          </div>
-          <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>
-            ${ownedCoupon ? `${icons.ticket} Ver meu cupom` : isSoldOut ? 'Cupons esgotados' : `${icons.ticket} Pegar cupom`}
-          </button>
-        </div>
       </div>
     `;
 

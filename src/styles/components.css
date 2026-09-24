@@ -503,13 +503,16 @@ select.input-field,
 }
 
 .modal-content {
+  /* Sticky footers inside a sheet bleed through this padding. */
+  --modal-pad-x: 20px;
+  --modal-pad-bottom: calc(24px + var(--safe-bottom));
   position: relative;
   width: 100%;
   max-width: 520px;
   max-height: min(92vh, 92dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px 20px calc(24px + var(--safe-bottom));
+  padding: 12px var(--modal-pad-x) var(--modal-pad-bottom);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   background: var(--paper);
   color: var(--ink);
@@ -545,7 +548,9 @@ select.input-field,
 @media (min-width: 720px) {
   .modal-backdrop { align-items: center; padding: 24px; }
   .modal-content {
-    padding: 28px;
+    --modal-pad-x: 28px;
+    --modal-pad-bottom: 28px;
+    padding: 28px var(--modal-pad-x) var(--modal-pad-bottom);
     border-radius: var(--r-xl);
     animation: lk-pop-in var(--dur-3) var(--ease-out);
   }
@@ -573,12 +578,13 @@ select.input-field,
   gap: 12px;
   padding: 12px 8px 12px 14px;
   border-radius: var(--r-md);
-  background: var(--ink);
-  color: #fff;
+  /* White so it stands out on the navy canopy it usually lands on. */
+  background: var(--paper);
+  color: var(--ink);
   font-size: var(--fs-14);
   font-weight: 500;
   line-height: 1.4;
-  box-shadow: var(--shadow-3);
+  box-shadow: 0 0 0 1px rgba(24, 42, 80, 0.06), 0 18px 40px -16px rgba(12, 20, 45, 0.55);
   pointer-events: auto;
   animation: lk-pop-in var(--dur-3) var(--ease-out);
 }
@@ -590,13 +596,13 @@ select.input-field,
   height: 26px;
   flex-shrink: 0;
   border-radius: var(--r-xs);
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--brand-tint);
+  color: var(--brand);
 }
 .toast-icon svg { width: 15px; height: 15px; }
-.toast.success .toast-icon { background: #2FBF8A; color: #032A1B; }
-.toast.error .toast-icon { background: #FF6B76; color: #3A0008; }
-.toast.warning .toast-icon { background: #FFC766; color: #3D2200; }
+.toast.success .toast-icon { background: var(--success-tint); color: var(--success); }
+.toast.error .toast-icon { background: var(--danger-tint); color: var(--danger); }
+.toast.warning .toast-icon { background: var(--warning-tint); color: var(--warning); }
 
 .toast-message { flex: 1; min-width: 0; }
 
@@ -607,9 +613,9 @@ select.input-field,
   height: 32px;
   flex-shrink: 0;
   border-radius: var(--r-sm);
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ink-mute);
 }
-.toast-close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.toast-close:hover { color: var(--ink); background: var(--paper-sunken); }
 .toast-close svg { width: 16px; height: 16px; }
 
 /* ---------- Canopy: the navy band at the top of a screen ----------
@@ -674,6 +680,11 @@ select.input-field,
 }
 
 .canopy .btn-ghost:hover:not(:disabled) { background: var(--on-navy-fill); color: var(--on-navy); }
+
+/* Magenta on navy is too faint for a focus ring (2.4:1); navy surfaces use white. */
+:is(.canopy, .bottom-nav, .detail-header, .detail-buy-bar, .seller-main-header, .admin-topbar, .admin-sidebar) :focus-visible {
+  outline-color: var(--on-navy);
+}
 
 /* ---------- Bottom navigation (floating dock) ---------- */
 

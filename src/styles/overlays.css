@@ -68,15 +68,16 @@
 .first-run-tour-close:hover { background: var(--paper-sunken); color: var(--ink); }
 .first-run-tour-close svg { width: 18px; height: 18px; }
 
-/* Stage: a porcelain desk with a dotted grid, the "phone" sits on it */
+/* Stage: a lilac desk with a dotted grid, the "phone" sits on it. Fixed height
+   (the tallest scene) so the card doesn't jump between steps. */
 .first-run-tour-visual {
   display: grid;
   place-items: center;
-  min-height: 212px;
+  height: 252px;
   padding: 20px;
   border-radius: var(--r-md);
   background-color: var(--porcelain);
-  background-image: radial-gradient(circle at 1px 1px, #D9DDE6 1px, transparent 0);
+  background-image: radial-gradient(circle at 1px 1px, #D3CCE0 1px, transparent 0);
   background-size: 16px 16px;
 }
 
@@ -266,6 +267,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Room for a two-line title and three lines of text on every step. */
+  min-height: 164px;
 }
 .first-run-tour-kicker {
   font-family: var(--font-body);

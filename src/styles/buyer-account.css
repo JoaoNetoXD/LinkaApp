@@ -516,6 +516,8 @@
 }
 
 .btn-whatsapp svg { color: var(--success); }
+/* On the magenta call-to-action the logo goes white like the label. */
+.btn-primary.btn-whatsapp svg { color: currentColor; }
 
 /* Spent tickets: flat, muted, stamped */
 .coupon-ticket.used,
@@ -713,7 +715,16 @@
 }
 .coupon-detail-note svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
 
-.coupon-detail-whatsapp { margin-top: 16px; }
+/* Calling the company is the next step: its footer stays pinned to the bottom
+   of the sheet, fading the content that scrolls beneath it. */
+.coupon-detail-footer {
+  position: sticky;
+  bottom: calc(var(--modal-pad-bottom) * -1);
+  z-index: 1;
+  margin: 16px calc(var(--modal-pad-x) * -1) calc(var(--modal-pad-bottom) * -1);
+  padding: 18px var(--modal-pad-x) var(--modal-pad-bottom);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--paper) 18px);
+}
 
 /* ============================================================
    Coupon sheets: sign in to retrieve, and the retrieved code

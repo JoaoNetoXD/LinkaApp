@@ -390,7 +390,7 @@ function renderFirstRunTourScene(scene = 'feed') {
           <span><b>24</b><small>Cupons retirados</small></span>
           <span><b>17</b><small>Usados na compra</small></span>
         </div>
-        <div class="tour-action-pill">${icons.plus} Criar cupom</div>
+        <div class="tour-action-pill">${icons.plus} Criar oferta</div>
       </div>
     `;
   }
