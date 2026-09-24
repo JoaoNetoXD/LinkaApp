@@ -255,13 +255,14 @@
 
 /* ---------- Featured ticket ---------- */
 
+.buyer-featured-row { margin-top: 6px; }
+
 .buyer-featured-strip {
   position: relative;
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) 88px;
   align-items: stretch;
   width: 100%;
-  margin-top: 6px;
   border-radius: var(--r-lg);
   background: var(--brand-gradient-warm);
   color: #fff;
@@ -361,6 +362,22 @@
   color: #fff;
   transform: rotate(-6deg);
 }
+.buyer-featured-go svg { width: 22px; height: 22px; }
+
+/* Second ticket (wide screens only): paper instead of the warm gradient, so the
+   biggest discount stays the one hero. */
+.buyer-featured-strip.is-secondary {
+  display: none;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 18px 36px -20px rgba(12, 20, 45, 0.6), 0 2px 6px rgba(12, 20, 45, 0.14);
+}
+.is-secondary .buyer-featured-media { background: var(--paper-sunken); }
+.is-secondary .buyer-featured-badge { color: var(--brand); }
+.is-secondary .buyer-featured-now { color: var(--brand); }
+.is-secondary .buyer-featured-price s { color: var(--ink-mute); }
+.is-secondary .buyer-featured-stub { border-left-color: var(--rule-strong); }
+.is-secondary .buyer-featured-percent { color: var(--ink); }
 
 /* ---------- Listing ---------- */
 
@@ -912,6 +929,13 @@
     box-shadow: var(--shadow-2);
   }
   .buyer-featured-strip { max-width: 720px; }
+  .buyer-featured-row.has-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .has-pair .buyer-featured-strip { max-width: none; }
+  .buyer-featured-strip.is-secondary { display: grid; }
   /* Short band: photo and ticket both straddle it, the ticket's notches stay below. */
   .detail-container::before { height: 150px; }
   /* Sticks exactly where it starts (header 64px + 6px), so it lines up with the ticket. */

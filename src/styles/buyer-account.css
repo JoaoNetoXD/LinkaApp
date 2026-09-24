@@ -373,23 +373,23 @@
   .category-app-desc { display: block; }
 }
 
+/* Wide screens keep the same full-bleed canopy as every other screen: search and the
+   "all offers" ticket share its last row, and the ticket still straddles the edge. */
 @media (min-width: 900px) {
-  .buyer-categories-page {
+  .buyer-categories-page { max-width: calc(960px + var(--gutter) * 2); }
+  .category-intro.canopy {
     display: grid;
-    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
-    column-gap: 40px;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas:
+      "head head"
+      "search spotlight";
+    column-gap: 20px;
     align-items: start;
   }
-  .category-intro { position: sticky; top: calc(20px + var(--safe-top)); }
-  .category-intro.canopy {
-    --canopy-cut: 0px;
-    margin-top: calc(20px + var(--safe-top));
-    padding: 26px 22px 22px;
-  }
-  .category-intro.canopy::before { inset: 0; border-radius: var(--r-lg); }
-  .category-intro .acct-header { padding-top: 0; }
-  .category-intro .category-spotlight-action::after { background: var(--navy); }
-  .category-section { margin-top: 0; padding-top: calc(20px + var(--safe-top)); }
+  .category-intro .acct-header { grid-area: head; }
+  .category-intro .category-search-shortcut { grid-area: search; margin-top: 8px; }
+  .category-intro .category-spotlight { grid-area: spotlight; margin-top: 0; }
+  .category-section { margin-top: 36px; }
   .category-app-grid { gap: 14px; }
   .category-app-card { min-height: 176px; padding: 18px; }
 }

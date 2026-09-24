@@ -688,10 +688,13 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const greetingName = isAuthenticated()
     ? String(user.name || user.fullName || '').trim().split(' ')[0] || null
     : null;
-  const featuredProduct = filteredProducts.length
-    ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
+  // Only offers a student can still take are featured.
+  const claimable = filteredProducts.filter(hasCouponsLeft);
+  const featuredProduct = claimable.length
+    ? [...claimable].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
     : null;
   const showFeatured = Boolean(featuredProduct && hasVisibleDiscount(featuredProduct) && !searchQuery.trim());
+  const runnerUp = showFeatured ? pickRunnerUp(claimable, featuredProduct) : null;
 
   // Draw the highlighter once per session, not on every search re-render.
   const introMark = buyerIntroPlayed ? '' : ' hl--draw';
@@ -789,20 +792,10 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         </div>
 
         ${showFeatured ? `
-          <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque: ${escapeHTML(featuredProduct.title)}">
-            <span class="buyer-featured-media">${getProductImage(featuredProduct.images?.[0], 240, 240, featuredProduct.category)}</span>
-            <span class="buyer-featured-copy">
-              <span class="buyer-featured-badge">Maior desconto</span>
-              <strong>${escapeHTML(featuredProduct.title)}</strong>
-              <span class="buyer-featured-price">
-                <span class="buyer-featured-now">${formatCurrency(featuredProduct.discountPrice)}</span>
-                <s>${formatCurrency(featuredProduct.originalPrice)}</s>
-              </span>
-            </span>
-            <span class="buyer-featured-stub" aria-hidden="true">
-              <span class="buyer-featured-percent">−${featuredProduct.discount}%</span>
-            </span>
-          </button>
+          <div class="buyer-featured-row${runnerUp ? ' has-pair' : ''}">
+            ${renderFeaturedTicket(featuredProduct, 'Maior desconto')}
+            ${runnerUp ? renderFeaturedTicket(runnerUp.product, runnerUp.label, 'is-secondary') : ''}
+          </div>
         ` : ''}
       </header>
 
@@ -966,8 +959,8 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     });
   });
 
-  container.querySelector('[data-featured-product]')?.addEventListener('click', (event) => {
-    openProductDetail(event.currentTarget.dataset.featuredProduct);
+  container.querySelectorAll('[data-featured-product]').forEach((ticket) => {
+    ticket.addEventListener('click', () => openProductDetail(ticket.dataset.featuredProduct));
   });
 
   container.querySelectorAll('[data-product-card]').forEach(card => {
@@ -1152,6 +1145,39 @@ function renderOfferUnavailable(container) {
   `;
   container.querySelector('#btnBackFromOffer')?.addEventListener('click', () => goBack('#/buyer'));
   container.querySelector('#btnOfferMissingExplore')?.addEventListener('click', () => navigate('#/buyer'));
+}
+
+function hasCouponsLeft(product) {
+  return (Number(product.slots?.total) || 0) - (Number(product.slots?.used) || 0) > 0;
+}
+
+// Wide screens have room for a second ticket next to the biggest discount: the offer
+// students open most, or the newest one while nothing has been opened yet.
+function pickRunnerUp(products, featured) {
+  const others = products.filter((product) => String(product.id) !== String(featured.id));
+  if (!others.length) return null;
+  const mostOpened = others.reduce((best, product) => (Number(product.clicks) || 0) > (Number(best.clicks) || 0) ? product : best);
+  if ((Number(mostOpened.clicks) || 0) > 0) return { product: mostOpened, label: 'Mais procurada' };
+  return { product: others[0], label: 'Nova na vitrine' };
+}
+
+function renderFeaturedTicket(product, label, variant = '') {
+  return `
+    <button class="buyer-featured-strip${variant ? ` ${variant}` : ''}" type="button" data-featured-product="${escapeHTML(product.id)}" aria-label="${escapeHTML(label)}: ${escapeHTML(product.title)}, ${formatCurrency(product.discountPrice)}">
+      <span class="buyer-featured-media">${getProductImage(product.images?.[0], 240, 240, product.category)}</span>
+      <span class="buyer-featured-copy">
+        <span class="buyer-featured-badge">${escapeHTML(label)}</span>
+        <strong>${escapeHTML(product.title)}</strong>
+        <span class="buyer-featured-price">
+          <span class="buyer-featured-now">${formatCurrency(product.discountPrice)}</span>
+          ${hasVisibleDiscount(product) ? `<s>${formatCurrency(product.originalPrice)}</s>` : ''}
+        </span>
+      </span>
+      <span class="buyer-featured-stub" aria-hidden="true">
+        ${hasVisibleDiscount(product) ? `<span class="buyer-featured-percent">−${Number(product.discount)}%</span>` : `<span class="buyer-featured-go">${icons.arrowRight}</span>`}
+      </span>
+    </button>
+  `;
 }
 
 function renderProductSkeletons() {
