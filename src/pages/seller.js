@@ -417,6 +417,29 @@ function renderSellerStatCard({ icon, value, label, hint, attrs, detail = '', fe
   `;
 }
 
+// The three newest codes (the list comes newest first), where the company confirms a sale
+// without opening the coupons tab. With offers live but no code yet, a nudge to share them.
+function renderRecentCoupons(stats) {
+  const coupons = getSellerCouponData();
+  if (!coupons.length && !stats.activeAds) return '';
+  return `
+    <section class="seller-section" aria-labelledby="seller-recent-title">
+      <div class="seller-section-head">
+        <h2 class="seller-section-title" id="seller-recent-title">Últimos cupons</h2>
+        ${coupons.length > 3 ? `<button class="btn-ghost btn-sm seller-section-link" type="button" data-seller-action="coupons">Ver todos ${icons.arrowRight}</button>` : ''}
+      </div>
+      ${coupons.length
+        ? `<div class="seller-list">${coupons.slice(0, 3).map(renderSellerCouponCard).join('')}</div>`
+        : renderEmptyState({
+          icon: icons.ticket,
+          title: 'Nenhum cupom retirado ainda',
+          text: 'Compartilhe o link das suas ofertas ativas no WhatsApp e no Instagram para chegar a mais alunos.',
+          action: `<button class="btn-secondary" type="button" data-seller-action="ads">${icons.share} Compartilhar ofertas</button>`,
+        })}
+    </section>
+  `;
+}
+
 function renderDashboard() {
   const user = getUser();
   const ads = getSellerAdsData();
@@ -454,29 +477,7 @@ function renderDashboard() {
       </div>
     </section>
 
-    <section class="seller-section" aria-labelledby="seller-shortcuts-title">
-      <div class="seller-section-head">
-        <h2 class="seller-section-title" id="seller-shortcuts-title">Atalhos</h2>
-      </div>
-      <div class="seller-list seller-shortcuts">
-        <button class="seller-shortcut" type="button" data-seller-action="ads">
-          <span class="seller-shortcut-icon" aria-hidden="true">${icons.tag}</span>
-          <span class="seller-shortcut-copy">
-            <strong>Gerenciar ofertas</strong>
-            <small>Edite, renove ou tire ofertas da vitrine</small>
-          </span>
-          <span class="seller-shortcut-arrow" aria-hidden="true">${ICON_CHEVRON_RIGHT}</span>
-        </button>
-        <button class="seller-shortcut" type="button" data-seller-action="clicks">
-          <span class="seller-shortcut-icon" aria-hidden="true">${icons.chart}</span>
-          <span class="seller-shortcut-copy">
-            <strong>Ver análise</strong>
-            <small>Cliques, cupons e categorias com mais procura</small>
-          </span>
-          <span class="seller-shortcut-arrow" aria-hidden="true">${ICON_CHEVRON_RIGHT}</span>
-        </button>
-      </div>
-    </section>
+    ${renderRecentCoupons(stats)}
   `;
 }
 
@@ -1100,6 +1101,32 @@ async function collectProductImageUrls(container, selectedPhotoFiles) {
   return imageUrls.slice(0, 3);
 }
 
+function renderSellerCouponCard(c) {
+  const status = COUPON_STATUS[c.status] || COUPON_STATUS.expired;
+  const hasTime = (value) => Boolean(value) && value !== '—';
+  return `
+    <article class="seller-coupon-card is-${escapeHTML(c.status)}">
+      <span class="seller-coupon-code coupon-code">${escapeHTML(c.code)}</span>
+      <div class="seller-coupon-status">${renderStatusPill(status.label, status.tone)}</div>
+      <div class="seller-coupon-info">
+        <strong class="seller-coupon-product">${escapeHTML(c.product)}</strong>
+        <p class="seller-coupon-meta">${escapeHTML(c.buyer || 'Aluno')} · retirado em <span class="t-mono">${escapeHTML(c.createdAt)}</span></p>
+        ${c.status === 'used'
+          ? (hasTime(c.usedAt) ? `<p class="seller-coupon-meta">Usado em <span class="t-mono">${escapeHTML(c.usedAt)}</span></p>` : '')
+          : c.validUntil ? `<p class="seller-coupon-meta">Validade: <span class="t-mono">${escapeHTML(c.validUntil)}</span></p>` : ''}
+        ${status.note ? `<p class="seller-coupon-note">${status.note}</p>` : ''}
+      </div>
+      ${c.status === 'active' ? `
+        <div class="seller-coupon-action">
+          <button class="btn-secondary btn-sm mark-used-btn" type="button" data-id="${escapeHTML(c.id)}" data-code="${escapeHTML(c.code)}">
+            ${icons.check} Marcar como usado
+          </button>
+        </div>
+      ` : ''}
+    </article>
+  `;
+}
+
 function renderSellerCoupons() {
   const coupons = getSellerCouponData();
   const counts = {
@@ -1115,7 +1142,6 @@ function renderSellerCoupons() {
     ['used', 'Usados'],
     ['expired', 'Expirados'],
   ];
-  const hasTime = (value) => Boolean(value) && value !== '—';
   return `
     ${renderViewHead({
       eyebrow: 'Na hora da compra',
@@ -1154,30 +1180,7 @@ function renderSellerCoupons() {
     </div>
 
     <div class="seller-coupons-list">
-      ${filteredCoupons.length ? `<div class="seller-list">${filteredCoupons.map(c => {
-        const status = COUPON_STATUS[c.status] || COUPON_STATUS.expired;
-        return `
-        <article class="seller-coupon-card is-${escapeHTML(c.status)}">
-          <span class="seller-coupon-code coupon-code">${escapeHTML(c.code)}</span>
-          <div class="seller-coupon-status">${renderStatusPill(status.label, status.tone)}</div>
-          <div class="seller-coupon-info">
-            <strong class="seller-coupon-product">${escapeHTML(c.product)}</strong>
-            <p class="seller-coupon-meta">${escapeHTML(c.buyer || 'Aluno')} · retirado em <span class="t-mono">${escapeHTML(c.createdAt)}</span></p>
-            ${c.status === 'used'
-              ? (hasTime(c.usedAt) ? `<p class="seller-coupon-meta">Usado em <span class="t-mono">${escapeHTML(c.usedAt)}</span></p>` : '')
-              : c.validUntil ? `<p class="seller-coupon-meta">Validade: <span class="t-mono">${escapeHTML(c.validUntil)}</span></p>` : ''}
-            ${status.note ? `<p class="seller-coupon-note">${status.note}</p>` : ''}
-          </div>
-          ${c.status === 'active' ? `
-            <div class="seller-coupon-action">
-              <button class="btn-secondary btn-sm mark-used-btn" type="button" data-id="${escapeHTML(c.id)}" data-code="${escapeHTML(c.code)}">
-                ${icons.check} Marcar como usado
-              </button>
-            </div>
-          ` : ''}
-        </article>
-      `;
-      }).join('')}</div>` : renderEmptyState({
+      ${filteredCoupons.length ? `<div class="seller-list">${filteredCoupons.map(renderSellerCouponCard).join('')}</div>` : renderEmptyState({
         icon: icons.ticket,
         title: coupons.length ? 'Nenhum cupom neste filtro' : 'Nenhum cupom retirado ainda',
         text: coupons.length

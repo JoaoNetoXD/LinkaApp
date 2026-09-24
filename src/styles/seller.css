@@ -217,6 +217,9 @@
   color: var(--ink);
 }
 
+.seller-section-link { gap: 6px; color: var(--ink); }
+.seller-section-link svg { width: 15px; height: 15px; }
+
 /* Dense list: rows inside one card, hairline separators via 1px gap. */
 .seller-list {
   display: grid;
@@ -398,49 +401,6 @@
 .seller-setup-step-arrow { display: inline-flex; color: var(--ink-faint); transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
 .seller-setup-step-arrow svg { width: 16px; height: 16px; }
 .seller-setup-step:hover .seller-setup-step-arrow { color: var(--ink); transform: translateX(2px); }
-
-/* ---------- Painel: shortcuts ---------- */
-
-.seller-shortcut {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 70px;
-  padding: 12px 16px;
-  background: var(--paper);
-  text-align: left;
-  color: var(--ink);
-  transition: background-color var(--dur-2) var(--ease-out);
-}
-.seller-shortcut:hover { background: var(--paper-sunken); }
-.seller-shortcut:focus-visible { outline-offset: -2px; }
-
-.seller-shortcut-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: var(--r-sm);
-  background: var(--paper-sunken);
-  color: var(--ink);
-}
-.seller-shortcut-icon svg { width: 19px; height: 19px; }
-
-.seller-shortcut-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-.seller-shortcut-copy strong { font-size: var(--fs-15); font-weight: 600; }
-.seller-shortcut-copy small { font-size: var(--fs-13); color: var(--ink-mute); }
-
-.seller-shortcut-arrow { display: inline-flex; color: var(--ink-faint); transition: transform var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
-.seller-shortcut-arrow svg { width: 18px; height: 18px; }
-.seller-shortcut:hover .seller-shortcut-arrow { color: var(--ink); transform: translateX(2px); }
 
 /* ---------- Metric ledger ---------- */
 
@@ -1346,7 +1306,6 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
   .seller-setup-steps { grid-area: steps; }
   .seller-setup-title { font-size: var(--fs-24); }
 
-  .seller-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ============================================================
