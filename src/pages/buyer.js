@@ -2,12 +2,14 @@ import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCas
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons, claimCoupon } from '../services/coupon-service.js';
-import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
+import { getNotifications, getUnreadCount, markAllAsRead, markAsRead } from '../services/notification-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
 import { supabase } from '../lib/supabase.js';
 import { becomeSeller, signOutUser } from '../services/auth-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { navigate, goBack, getHashParams, offerRoute, offerShareUrl, authRoute, isValidOfferId } from '../utils/navigation.js';
+import { copyText, shareLink, offerShareText } from '../utils/share.js';
 import { hasVisibleDiscount } from '../utils/pricing.js';
 import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
 
@@ -33,10 +35,10 @@ const CATEGORY_COVERS = {
 
 const CATEGORY_DESCRIPTIONS = {
   food: 'Lanches, bebidas e produtos prontos para retirar.',
-  fashion: 'Roupas, acessorios e itens de uso pessoal.',
+  fashion: 'Roupas, acessórios e itens de uso pessoal.',
   services: 'Aulas, reparos, atendimentos e ajuda presencial.',
-  digital: 'Design, arquivos, aulas online e servicos criativos.',
-  others: 'Ofertas variadas verificadas pela instituicao.',
+  digital: 'Design, arquivos, aulas online e serviços criativos.',
+  others: 'Ofertas variadas, aprovadas pela equipe.',
 };
 
 // wa.me needs the full international number; profiles store Brazilian numbers without +55.
@@ -68,7 +70,7 @@ function getUser() {
   const baseUser = USE_MOCKS ? currentUser : guestUser;
 
   if (globalProfile) {
-    const name = globalProfile.name || baseUser.name || 'Usuario';
+    const name = globalProfile.name || baseUser.name || 'Usuário';
     return {
       ...baseUser,
       ...globalProfile,
@@ -80,7 +82,7 @@ function getUser() {
 
   if (globalSession?.user) {
     const metadata = globalSession.user.user_metadata || {};
-    const name = metadata.full_name || metadata.name || globalSession.user.email?.split('@')[0] || baseUser.name || 'Usuario';
+    const name = metadata.full_name || metadata.name || globalSession.user.email?.split('@')[0] || baseUser.name || 'Usuário';
     return {
       ...baseUser,
       id: globalSession.user.id,
@@ -136,12 +138,13 @@ let filtersOpen = false;
 let currentView = 'home'; // home | categories | detail | coupons | profile | notifications
 let selectedProduct = null;
 let selectedProductImageIndex = 0;
+// Offer requested by the #/buyer/offer?id=… address (null when the id is not valid).
+let routeOfferId = null;
 let cachedProducts = null;
 let activeInstitution = institution;
 let buyerIntroPlayed = false;
 let loadedCategories = mockCategories;
-let buyerNavFocus = 'home';
-let focusCategoriesAfterRender = false;
+let focusSearchAfterRender = false;
 let buyerShellLoadedAt = 0;
 let buyerShellPromise = null;
 let buyerShellUserKey = null;
@@ -289,20 +292,6 @@ async function loadBuyerCoupons(userId) {
   return normalizedRows;
 }
 
-function focusCategoriesSection(container) {
-  const chips = container.querySelector('.category-scroll');
-  if (!chips) return;
-  chips.classList.add('category-scroll-highlight');
-  chips.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  setTimeout(() => chips.classList.remove('category-scroll-highlight'), 1100);
-}
-
-function openBuyerCategories(container) {
-  buyerNavFocus = 'cats';
-  currentView = 'categories';
-  renderBuyerPage(container);
-}
-
 async function saveCurrentProfileFields({ name, whatsapp }) {
   if (!globalSession?.user?.id) return;
   const { data, error } = await supabase
@@ -319,43 +308,59 @@ async function saveCurrentProfileFields({ name, whatsapp }) {
 }
 
 export function renderBuyer(container, subpage) {
-  if (subpage === 'coupons') {
-    currentView = 'coupons';
-    buyerNavFocus = 'coupons';
-  } else if (subpage === 'categories') {
-    currentView = 'categories';
-    buyerNavFocus = 'cats';
-  } else if (subpage === 'profile') {
-    currentView = 'profile';
-    buyerNavFocus = 'profile';
-  } else {
-    currentView = 'home';
-    buyerNavFocus = 'home';
-  }
+  if (['coupons', 'categories', 'profile', 'notifications'].includes(subpage)) currentView = subpage;
+  else if (subpage === 'offer') enterOfferRoute();
+  else currentView = 'home';
   renderBuyerPage(container);
 }
 
+// #/buyer/offer?id=… : opened from the list the offer is already in memory; from a
+// shared link or a refresh it is fetched when the page renders.
+function enterOfferRoute() {
+  const offerId = getHashParams().get('id');
+  routeOfferId = isValidOfferId(offerId) ? offerId : null;
+  if (String(selectedProduct?.id) !== String(routeOfferId)) {
+    selectedProduct = null;
+    selectedProductImageIndex = 0;
+  }
+  currentView = 'detail';
+  if (routeOfferId) incrementProductClicks(routeOfferId);
+}
+
+function findKnownProduct(productId) {
+  const key = String(productId);
+  const pools = [cachedProducts || [], ...[...buyerProductsCache.values()].map((entry) => entry.products || [])];
+  if (USE_MOCKS) pools.push(mockProducts);
+  for (const pool of pools) {
+    const match = pool.find((product) => String(product.id) === key);
+    if (match) return match;
+  }
+  return null;
+}
+
+async function resolveRouteOffer(container) {
+  if (!routeOfferId) return null;
+  if (String(selectedProduct?.id) === String(routeOfferId)) return selectedProduct;
+  const known = findKnownProduct(routeOfferId);
+  if (known) return known;
+  renderOfferSkeleton(container);
+  const product = await getProductById(routeOfferId).catch(() => null);
+  return product?.status === 'active' ? product : null;
+}
+
 function bindBottomNav(container) {
-  const navItems = container.querySelectorAll('.bottom-nav-item');
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const nav = item.dataset.nav;
-      if (nav === 'home') {
-        buyerNavFocus = 'home';
-        currentView = 'home';
+  container.querySelectorAll('.bottom-nav-item[data-nav]').forEach((item) => {
+    if (item.dataset.bound) return;
+    item.dataset.bound = '1';
+    item.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (item.dataset.nav === 'home') {
+        // "Início" always opens the whole vitrine, whatever search or filter was on.
         searchQuery = '';
-        renderBuyerPage(container);
-      } else if (nav === 'cats') {
-        openBuyerCategories(container);
-      } else if (nav === 'coupons') {
-        buyerNavFocus = 'coupons';
-        currentView = 'coupons';
-        renderBuyerPage(container);
-      } else if (nav === 'profile') {
-        buyerNavFocus = 'profile';
-        currentView = 'profile';
-        renderBuyerPage(container);
+        activeCategory = 'all';
       }
+      navigate(item.getAttribute('href'));
     });
   });
 }
@@ -404,14 +409,20 @@ async function renderBuyerPage(container) {
     await renderHome(container);
     if (renderId !== buyerRenderId || !isBuyerRoute()) return;
     initObserver();
-    if (focusCategoriesAfterRender) {
-      focusCategoriesAfterRender = false;
-      requestAnimationFrame(() => focusCategoriesSection(container));
+    if (focusSearchAfterRender) {
+      // Arrived from "Buscar uma oferta específica" on the categories page.
+      focusSearchAfterRender = false;
+      resetAppScroll(container);
+      container.querySelector('#searchInput')?.focus({ preventScroll: true });
     } else {
       resetAppScroll(container);
     }
   } else if (currentView === 'detail') {
-    renderProductDetail(container);
+    const product = await resolveRouteOffer(container);
+    if (renderId !== buyerRenderId || !isBuyerRoute()) return;
+    selectedProduct = product;
+    if (product) renderProductDetail(container);
+    else renderOfferUnavailable(container);
     resetAppScroll(container);
   } else if (currentView === 'categories') {
     await renderCategories(container);
@@ -577,7 +588,7 @@ async function refreshBuyerNavBadges(container) {
   const couponsBadges = container.querySelectorAll('[data-nav-coupon-badge]');
   const notificationBadges = container.querySelectorAll('[data-nav-notification-badge]');
   if (!userId) {
-    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.style.display = 'none'; });
+    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.hidden = true; });
     return;
   }
 
@@ -589,14 +600,14 @@ async function refreshBuyerNavBadges(container) {
     const activeCoupons = (Array.isArray(coupons) ? coupons : []).filter((coupon) => coupon.status === 'active').length;
     couponsBadges.forEach((badge) => {
       badge.textContent = activeCoupons > 99 ? '99+' : String(activeCoupons);
-      badge.style.display = activeCoupons > 0 ? '' : 'none';
+      badge.hidden = !(activeCoupons > 0);
     });
     notificationBadges.forEach((badge) => {
       badge.textContent = unread > 99 ? '99+' : String(unread);
-      badge.style.display = unread > 0 ? '' : 'none';
+      badge.hidden = !(unread > 0);
     });
   } catch {
-    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.style.display = 'none'; });
+    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.hidden = true; });
   }
 }
 
@@ -605,21 +616,16 @@ async function refreshBuyerNavBadges(container) {
  * @param {'home'|'cats'|'coupons'|'profile'|null} activeTab
  */
 function renderBuyerBottomNav(activeTab) {
+  const item = (id, href, content) => `
+      <a class="bottom-nav-item ${activeTab === id ? 'active' : ''}" href="${href}" data-nav="${id}"${activeTab === id ? ' aria-current="page"' : ''}>
+        ${content}<div class="nav-indicator"></div>
+      </a>`;
   return `
-    <nav class="bottom-nav">
-      <div class="bottom-nav-item ${activeTab === 'home' ? 'active' : ''}" data-nav="home">
-        ${icons.home}<span>Início</span><div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item ${activeTab === 'cats' ? 'active' : ''}" data-nav="cats">
-        ${icons.grid}<span>Categorias</span><div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item ${activeTab === 'coupons' ? 'active' : ''}" data-nav="coupons">
-        <span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge style="display:none;">0</span></span>
-        <span>Cupons</span><div class="nav-indicator"></div>
-      </div>
-      <div class="bottom-nav-item ${activeTab === 'profile' ? 'active' : ''}" data-nav="profile">
-        ${icons.user}<span>Perfil</span><div class="nav-indicator"></div>
-      </div>
+    <nav class="bottom-nav" aria-label="Navegação principal">
+      ${item('home', '#/buyer', `${icons.home}<span>Início</span>`)}
+      ${item('cats', '#/buyer/categories', `${icons.grid}<span>Categorias</span>`)}
+      ${item('coupons', '#/buyer/coupons', `<span class="nav-icon-wrapper">${icons.ticket}<span class="nav-badge" data-nav-coupon-badge hidden>0</span></span><span>Cupons</span>`)}
+      ${item('profile', '#/buyer/profile', `${icons.user}<span>Perfil</span>`)}
     </nav>
   `;
 }
@@ -680,7 +686,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const user = getUser();
   const showSellerAccess = isAuthenticated();
   const greetingName = isAuthenticated()
-    ? (user.name || user.fullName || 'usuario').split(' ')[0]
+    ? String(user.name || user.fullName || '').trim().split(' ')[0] || null
     : null;
   const featuredProduct = filteredProducts.length
     ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
@@ -720,7 +726,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
               ${icons.bell}
               ${isAuthenticated() ? '<span class="badge" id="notifBadge" hidden>0</span>' : ''}
             </button>
-            ${isAuthenticated() ? `<div class="user-avatar" aria-hidden="true">${escapeHTML(user.avatar || 'U')}</div>` : ''}
+            ${isAuthenticated() ? `<a class="user-avatar buyer-avatar-link" href="#/buyer/profile" aria-label="Abrir seu perfil">${escapeHTML(user.avatar || 'U')}</a>` : ''}
           </div>
         </div>
 
@@ -900,8 +906,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Notification button
   container.querySelector('#btnNotifications')?.addEventListener('click', () => {
-    currentView = 'notifications';
-    renderBuyerPage(container);
+    navigate('#/buyer/notifications');
   });
 
   container.querySelector('#btnSellerMode')?.addEventListener('click', openSellerFlow);
@@ -948,7 +953,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   container.querySelectorAll('.chip').forEach(chip => {
     chip.addEventListener('click', (e) => {
       const list = container.querySelector('.products-list');
-      buyerNavFocus = chip.dataset.cat === 'all' ? 'home' : 'cats';
       if (list) {
         list.style.opacity = '0';
         list.style.transform = 'scale(0.98)';
@@ -963,11 +967,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
 
   container.querySelector('[data-featured-product]')?.addEventListener('click', (event) => {
-    openProductDetail(event.currentTarget.dataset.featuredProduct, container);
+    openProductDetail(event.currentTarget.dataset.featuredProduct);
   });
 
   container.querySelectorAll('[data-product-card]').forEach(card => {
-    const open = () => openProductDetail(card.dataset.productCard, container);
+    const open = () => openProductDetail(card.dataset.productCard);
     card.addEventListener('click', (event) => {
       if (event.target.closest('button, a, input, select, textarea')) return;
       open();
@@ -1060,40 +1064,94 @@ async function renderCategories(container) {
   `;
 
   container.querySelector('#btnBackBuyerHome')?.addEventListener('click', () => {
-    buyerNavFocus = 'home';
-    currentView = 'home';
-    renderBuyerPage(container);
+    navigate('#/buyer');
   });
 
   container.querySelector('#btnFocusSearchFromCategories')?.addEventListener('click', () => {
-    buyerNavFocus = 'home';
-    currentView = 'home';
-    renderBuyerPage(container).then(() => {
-      const input = container.querySelector('#searchInput');
-      input?.focus();
-      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
+    focusSearchAfterRender = true;
+    navigate('#/buyer');
   });
 
   container.querySelectorAll('[data-open-category]').forEach(button => {
     button.addEventListener('click', () => {
       activeCategory = button.dataset.openCategory || 'all';
       searchQuery = '';
-      buyerNavFocus = activeCategory === 'all' ? 'home' : 'cats';
-      currentView = 'home';
-      renderBuyerPage(container);
+      navigate('#/buyer');
     });
   });
 }
 
-function openProductDetail(productId, container) {
-  const product = (cachedProducts || (USE_MOCKS ? mockProducts : [])).find(p => String(p.id) === String(productId));
-  if (!product) return;
-  selectedProduct = product;
-  selectedProductImageIndex = 0;
-  currentView = 'detail';
-  incrementProductClicks(productId);
-  renderBuyerPage(container);
+function openProductDetail(productId) {
+  if (!isValidOfferId(productId)) return;
+  const product = findKnownProduct(productId);
+  if (product) {
+    selectedProduct = product;
+    selectedProductImageIndex = 0;
+  }
+  navigate(offerRoute(productId));
+}
+
+async function shareOffer(product) {
+  const result = await shareLink({
+    title: product.title,
+    text: offerShareText(product, formatCurrency),
+    url: offerShareUrl(product.id),
+  });
+  if (result === 'copied') showToast('Link da oferta copiado.', 'success');
+  else if (result === 'failed') showToast('Não foi possível copiar o link da oferta.', 'error');
+}
+
+const ICON_BACK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>';
+
+// Shown while an offer opened by link loads.
+function renderOfferSkeleton(container) {
+  container.innerHTML = `
+    <div class="page buyer-wrapper detail-page" aria-busy="true">
+      <header class="detail-header">
+        <button class="icon-btn" id="btnBackHome" type="button" aria-label="Voltar para ofertas">${ICON_BACK}</button>
+        <span class="detail-header-label">Oferta</span>
+        <span class="detail-header-spacer" aria-hidden="true"></span>
+      </header>
+      <div class="detail-container">
+        <div class="detail-gallery-shell"><div class="detail-carousel skeleton" aria-hidden="true"></div></div>
+        <section class="detail-ticket" aria-hidden="true">
+          <div class="detail-ticket-main">
+            <div class="skeleton skeleton-line is-short"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line is-price"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  `;
+  container.querySelector('#btnBackHome')?.addEventListener('click', () => goBack('#/buyer'));
+}
+
+// A link to an offer that expired, was removed or never existed.
+function renderOfferUnavailable(container) {
+  document.title = 'Oferta fora do ar — Empreende iCEV';
+  container.innerHTML = `
+    <div class="page buyer-wrapper acct-page acct-page--narrow offer-missing-page">
+      <header class="acct-header canopy">
+        <div class="acct-topbar">
+          <button class="icon-btn acct-icon-btn" id="btnBackFromOffer" type="button" aria-label="Voltar para ofertas">${ICON_BACK}</button>
+        </div>
+        <div class="acct-header-copy">
+          <p class="t-eyebrow">Link de oferta</p>
+          <h1 class="acct-title">Oferta fora do ar</h1>
+        </div>
+      </header>
+      <div class="acct-empty">
+        <span class="acct-empty-icon">${icons.ticket}</span>
+        <h2>Esta oferta saiu da vitrine</h2>
+        <p>Ela expirou ou foi retirada pela empresa. Veja as ofertas que estão no ar agora.</p>
+        <button class="btn-primary acct-empty-action" id="btnOfferMissingExplore" type="button">Ver ofertas</button>
+      </div>
+    </div>
+    ${renderBuyerBottomNav('home')}
+  `;
+  container.querySelector('#btnBackFromOffer')?.addEventListener('click', () => goBack('#/buyer'));
+  container.querySelector('#btnOfferMissingExplore')?.addEventListener('click', () => navigate('#/buyer'));
 }
 
 function renderProductSkeletons() {
@@ -1159,11 +1217,11 @@ function showLoginRequiredModal(product, container) {
   });
   modal.querySelector('#btnLoginToClaim').addEventListener('click', () => {
     close();
-    window.location.hash = '#/auth';
+    navigate(authRoute({ next: offerRoute(product.id) }));
   });
   modal.querySelector('#btnSignupToClaim').addEventListener('click', () => {
     close();
-    window.location.hash = '#/auth?intent=signup';
+    navigate(authRoute({ intent: 'signup', next: offerRoute(product.id) }));
   });
 }
 
@@ -1223,12 +1281,8 @@ function getBuyerCouponStatusMeta(status) {
 
 async function copyBuyerCouponCode(code) {
   if (!code) return;
-  try {
-    await navigator.clipboard.writeText(code);
-    showToast(`Código ${code} copiado.`, 'success');
-  } catch {
-    showToast('Não foi possível copiar o código.', 'error');
-  }
+  if (await copyText(code)) showToast(`Código ${code} copiado.`, 'success');
+  else showToast('Não foi possível copiar o código.', 'error');
 }
 
 function showBuyerCouponDetail(coupon, { justClaimed = false } = {}) {
@@ -1392,27 +1446,14 @@ async function renderCoupons(container) {
   });
 
   container.querySelector('#btnCouponsExplore')?.addEventListener('click', () => {
-    buyerNavFocus = 'home';
-    currentView = 'home';
-    renderBuyerPage(container);
+    navigate('#/buyer');
   });
 
-  // Copy coupon code to clipboard
-  container.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const code = btn.dataset.code;
-      if (code) {
-        navigator.clipboard.writeText(code).then(() => {
-          showToast(`Código ${code} copiado!`, 'success');
-        });
-      }
-    });
-  });
   container.querySelectorAll('.copy-btn').forEach(btn => {
     btn.addEventListener('click', (event) => {
-      event.stopImmediatePropagation();
+      event.stopPropagation();
       copyBuyerCouponCode(btn.dataset.code);
-    }, true);
+    });
   });
 
   container.querySelectorAll('[data-coupon-detail]').forEach(card => {
@@ -1668,8 +1709,7 @@ function renderProfile(container) {
   document.getElementById('btnOpenSellerPanel')?.addEventListener('click', () => { window.location.hash = '#/seller'; });
   document.getElementById('btnOpenAdminPanel')?.addEventListener('click', () => { window.location.hash = '#/admin'; });
   document.getElementById('btnOpenBuyerHome')?.addEventListener('click', () => {
-    currentView = 'home';
-    renderBuyerPage(container);
+    navigate('#/buyer');
   });
   document.getElementById('btnReplayTour')?.addEventListener('click', replayFirstRunTour);
 
@@ -1717,7 +1757,8 @@ function bindSwipeNavigation(element, onSwipeLeft, onSwipeRight) {
 function renderProductDetail(container) {
   {
     const p = selectedProduct;
-    if (!p) { currentView = 'home'; renderBuyerPage(container); return; }
+    if (!p) { renderOfferUnavailable(container); return; }
+    document.title = `${p.title} — Empreende iCEV`;
 
     const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
     const timer = getCountdownInfo(p.expiresAt, p.expiresIn || '24h 00min');
@@ -1733,11 +1774,9 @@ function renderProductDetail(container) {
     container.innerHTML = `
       <div class="page buyer-wrapper detail-page${isSoldOut ? ' is-sold-out' : ''}">
         <header class="detail-header">
-          <button class="icon-btn" id="btnBackHome" type="button" aria-label="Voltar para ofertas">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          </button>
+          <button class="icon-btn" id="btnBackHome" type="button" aria-label="Voltar para ofertas">${ICON_BACK}</button>
           <span class="detail-header-label">${escapeHTML(catName)}</span>
-          <span class="detail-header-spacer" aria-hidden="true"></span>
+          <button class="icon-btn" id="btnShareOffer" type="button" aria-label="Compartilhar oferta">${icons.share}</button>
         </header>
 
         <div class="detail-container">
@@ -1831,9 +1870,8 @@ function renderProductDetail(container) {
       </div>
     `;
 
-    container.querySelector('#btnBackHome').addEventListener('click', () => {
-      currentView = 'home'; selectedProduct = null; renderBuyerPage(container);
-    });
+    container.querySelector('#btnBackHome').addEventListener('click', () => goBack('#/buyer'));
+    container.querySelector('#btnShareOffer')?.addEventListener('click', () => shareOffer(p));
 
     container.querySelector('#btnClaimCoupon')?.addEventListener('click', (event) => {
       const existing = getActiveCouponForProduct(p.id);
@@ -1965,6 +2003,12 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
 
 // ─── NOTIFICATIONS PAGE ─────────────────────────────────
 
+// Notifications may carry an in-app address ("#/buyer/coupons"); anything else is ignored.
+function getNotificationLink(url) {
+  const value = String(url || '');
+  return /^#\/[A-Za-z0-9/_?=&%.-]*$/.test(value) ? value : '';
+}
+
 async function renderNotifications(container) {
   const userId = globalSession?.user?.id;
   const backIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>';
@@ -1989,9 +2033,7 @@ async function renderNotifications(container) {
       </div>
       ${renderBuyerBottomNav(null)}
     `;
-    container.querySelector('#btnBackFromNotif')?.addEventListener('click', () => {
-      currentView = 'home'; renderBuyerPage(container);
-    });
+    container.querySelector('#btnBackFromNotif')?.addEventListener('click', () => goBack('#/buyer'));
     container.querySelector('#btnNotifLogin')?.addEventListener('click', () => {
       window.location.hash = '#/auth';
     });
@@ -2028,8 +2070,11 @@ async function renderNotifications(container) {
         </div>
       ` : `
         <div class="notifications-list">
-          ${notifs.map(n => `
-            <div class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}" data-url="${escapeHTML(n.action_url || '')}">
+          ${notifs.map(n => {
+            const link = getNotificationLink(n.action_url);
+            const tag = link ? 'a' : 'div';
+            return `
+            <${tag} class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}"${link ? ` href="${escapeHTML(link)}"` : ''} data-notif-id="${escapeHTML(n.id || '')}">
               <span class="notif-icon notif-icon--${typeTones[n.type] || typeTones.info}" aria-hidden="true">${typeIcons[n.type] || typeIcons.info}</span>
               <div class="notif-content">
                 <div class="notif-head">
@@ -2038,17 +2083,15 @@ async function renderNotifications(container) {
                 </div>
                 ${n.body ? `<p class="notif-body">${escapeHTML(n.body)}</p>` : ''}
               </div>
-            </div>
-          `).join('')}
+            </${tag}>
+          `; }).join('')}
         </div>
       `}
     </div>
     ${renderBuyerBottomNav(null)}
   `;
 
-  container.querySelector('#btnBackFromNotif').addEventListener('click', () => {
-    currentView = 'home'; renderBuyerPage(container);
-  });
+  container.querySelector('#btnBackFromNotif').addEventListener('click', () => goBack('#/buyer'));
 
   container.querySelector('#btnMarkAllRead')?.addEventListener('click', async () => {
     await markAllAsRead(userId);
@@ -2057,13 +2100,13 @@ async function renderNotifications(container) {
     renderNotifications(container);
   });
 
-  // Click on notification item — navigate to action_url if set
-  container.querySelectorAll('.notif-item').forEach(item => {
+  // Opening a notification marks it as read; its link (if any) does the navigation.
+  container.querySelectorAll('.notif-item.notif-unread[data-notif-id]').forEach(item => {
     item.addEventListener('click', () => {
-      const url = item.dataset.url;
-      if (url && url.startsWith('#/')) {
-        window.location.hash = url;
-      }
+      const id = item.dataset.notifId;
+      if (!id) return;
+      markAsRead(id).catch(() => {});
+      unreadCountCache.delete(userId);
     });
   });
 

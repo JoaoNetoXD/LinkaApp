@@ -68,6 +68,8 @@
 .buyer-actions .icon-btn { width: 40px; height: 40px; border-radius: var(--r-pill); }
 .buyer-actions .icon-btn svg { width: 19px; height: 19px; }
 .buyer-actions .user-avatar { width: 40px; height: 40px; font-size: var(--fs-14); }
+.buyer-avatar-link { transition: box-shadow var(--dur-2) var(--ease-out); }
+.buyer-avatar-link:hover { box-shadow: 0 0 0 3px var(--on-navy-line); }
 /* On phones the bottom nav already has Perfil; the avatar would crowd the logo. */
 @media (max-width: 479px) { .buyer-actions .user-avatar { display: none; } }
 

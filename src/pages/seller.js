@@ -6,6 +6,8 @@ import { uploadMultipleImages, compressImage, createPreviewURL } from '../servic
 import { getCategories } from '../services/category-service.js';
 import { getCouponCodeCandidates } from '../utils/coupon-code.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { navigate, goBack, getHashParams, offerShareUrl } from '../utils/navigation.js';
+import { shareLink, offerShareText } from '../utils/share.js';
 import { formatPhoneBR, bindPhoneFormatting } from '../utils/phone.js';
 
 const USE_MOCKS = import.meta.env.DEV;
@@ -250,7 +252,12 @@ async function syncSellerCategories() {
 }
 
 export function renderSeller(container, subpage) {
-  if (subpage === 'create') {
+  if (subpage === 'edit') {
+    selectedAdId = getHashParams().get('id') || null;
+    sellerView = 'edit';
+    sellerNavFocus = 'ads';
+  } else if (subpage === 'create') {
+    selectedAdId = null;
     sellerView = 'create';
     sellerNavFocus = 'ads';
   } else if (subpage === 'coupons') {
@@ -278,17 +285,26 @@ function isSellerRoute() {
   return hash === '#/seller' || hash.startsWith('#/seller/') || hash.startsWith('#/seller?');
 }
 
+const SELLER_ROUTES = { dashboard: '#/seller', ads: '#/seller/ads', coupons: '#/seller/coupons' };
+
 function renderNavItem(id, icon, label) {
   const isActive = sellerNavFocus === id;
   return `
-    <div class="bottom-nav-item ${isActive ? 'active' : ''}" data-nav="${id}" role="button" tabindex="0"${isActive ? ' aria-current="page"' : ''}>
+    <a class="bottom-nav-item ${isActive ? 'active' : ''}" href="${SELLER_ROUTES[id]}" data-nav="${id}"${isActive ? ' aria-current="page"' : ''}>
       ${icon}<span>${label}</span>
       <div class="nav-indicator"></div>
-    </div>
+    </a>
   `;
 }
 
-async function renderSellerPage(container, { force = false } = {}) {
+// Another seller screen opens by address; a shortcut to the screen already open just
+// re-renders it where it is (filters live in memory, not in the address).
+function openSellerScreen(hash, container) {
+  if (window.location.hash === hash) renderSellerPage(container, { keepScroll: true });
+  else navigate(hash);
+}
+
+async function renderSellerPage(container, { force = false, keepScroll = false } = {}) {
   const renderId = ++sellerRenderId;
   const isStale = () => renderId !== sellerRenderId || !isSellerRoute();
   const user = getUser();
@@ -332,8 +348,10 @@ async function renderSellerPage(container, { force = false } = {}) {
       </nav>
     </div>
   `;
+  const scrollY = window.scrollY;
   bindSellerEvents(container);
-  resetAppScroll(container);
+  if (keepScroll) window.scrollTo(0, scrollY);
+  else resetAppScroll(container);
 }
 
 function getSellerAdsData() {
@@ -769,9 +787,10 @@ function renderSellerAdCard(ad) {
       <div class="seller-ad-status">
         ${renderStatusPill(status.label, status.tone)}
         <div class="seller-ad-actions">
+          ${ad.status === 'active' ? `<button class="btn-ghost btn-sm seller-ad-icon-btn share-ad-btn" type="button" data-ad-id="${adId}" aria-label="Compartilhar ${title}" title="Compartilhar">${icons.share}<span class="seller-ad-action-label">Compartilhar</span></button>` : ''}
           <button class="btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${adId}" aria-label="Editar ${title}">${icons.fileText}<span>Editar</span></button>
           ${ad.status === 'expired' ? `<button class="btn-secondary btn-sm renew-btn" type="button" data-ad-id="${adId}">${icons.refresh}<span>Renovar</span></button>` : ''}
-          <button class="btn-ghost btn-sm seller-ad-delete delete-ad-btn" type="button" data-ad-id="${adId}" aria-label="Excluir ${title}" title="Excluir">${icons.x}<span class="seller-ad-delete-label">Excluir</span></button>
+          <button class="btn-ghost btn-sm seller-ad-icon-btn seller-ad-delete delete-ad-btn" type="button" data-ad-id="${adId}" aria-label="Excluir ${title}" title="Excluir">${icons.x}<span class="seller-ad-action-label">Excluir</span></button>
         </div>
       </div>
       ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${icons.alertTriangle}<span>${escapeHTML(ad.rejectionReason)}</span></div>` : ''}
@@ -1166,19 +1185,12 @@ function renderSellerCoupons() {
 }
 
 function bindSellerEvents(container) {
-  const openCreateForm = () => {
-    selectedAdId = null;
-    sellerView = 'create';
-    sellerNavFocus = 'ads';
-    renderSellerPage(container);
-  };
+  const openCreateForm = () => navigate('#/seller/create');
   container.querySelectorAll('#new-ad-btn, .create-ad-cta, .new-ad-trigger').forEach((btn) => {
     btn.addEventListener('click', openCreateForm);
   });
   container.querySelector('#back-to-dashboard')?.addEventListener('click', () => {
-    selectedAdId = null;
-    sellerView = sellerNavFocus === 'ads' ? 'ads' : 'dashboard';
-    renderSellerPage(container);
+    goBack(sellerNavFocus === 'ads' ? '#/seller/ads' : '#/seller');
   });
   container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
     window.location.hash = '#/buyer';
@@ -1190,20 +1202,14 @@ function bindSellerEvents(container) {
     control.addEventListener('click', () => {
       const action = control.dataset.sellerAction;
       if (action === 'ads') {
-        sellerView = 'ads';
-        sellerNavFocus = 'ads';
         activeTab = 'all';
-        renderSellerPage(container);
+        openSellerScreen('#/seller/ads', container);
       } else if (action === 'coupons') {
-        sellerView = 'coupons';
-        sellerNavFocus = 'coupons';
-        renderSellerPage(container);
+        openSellerScreen('#/seller/coupons', container);
       } else if (action === 'create') {
         openCreateForm();
       } else if (action === 'clicks') {
-        sellerView = 'insights';
-        sellerNavFocus = 'dashboard';
-        renderSellerPage(container);
+        openSellerScreen('#/seller/insights', container);
       } else if (action === 'profile') {
         window.location.hash = PROFILE_ROUTE;
       }
@@ -1213,17 +1219,13 @@ function bindSellerEvents(container) {
   container.querySelectorAll('[data-tab-shortcut]').forEach((shortcut) => {
     shortcut.addEventListener('click', () => {
       activeTab = shortcut.dataset.tabShortcut || 'all';
-      sellerView = 'ads';
-      sellerNavFocus = 'ads';
-      renderSellerPage(container);
+      openSellerScreen('#/seller/ads', container);
     });
   });
 
   const openProductManager = (adId) => {
-    selectedAdId = adId;
-    sellerView = 'edit';
-    sellerNavFocus = 'ads';
-    renderSellerPage(container);
+    if (!adId) return;
+    navigate(`#/seller/edit?id=${encodeURIComponent(adId)}`);
   };
 
   container.querySelectorAll('[data-open-ad-id]').forEach(card => {
@@ -1245,6 +1247,17 @@ function bindSellerEvents(container) {
     });
   });
 
+  container.querySelectorAll('.share-ad-btn').forEach(btn => {
+    btn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const ad = getSellerAdsData().find((item) => String(item.id) === String(btn.dataset.adId));
+      if (!ad) return;
+      const result = await shareLink({ title: ad.title, text: offerShareText(ad, formatCurrency), url: offerShareUrl(ad.id) });
+      if (result === 'copied') showToast('Link da oferta copiado. Cole no WhatsApp ou no Instagram da empresa.', 'success');
+      else if (result === 'failed') showToast('Não foi possível copiar o link da oferta.', 'error');
+    });
+  });
+
   container.querySelectorAll('.delete-ad-btn').forEach(btn => {
     btn.addEventListener('click', (event) => {
       event.preventDefault();
@@ -1255,13 +1268,13 @@ function bindSellerEvents(container) {
 
   // Tabs
   container.querySelectorAll('[data-tab]').forEach(tab => {
-    tab.addEventListener('click', () => { activeTab = tab.dataset.tab; sellerNavFocus = 'ads'; renderSellerPage(container); });
+    tab.addEventListener('click', () => { activeTab = tab.dataset.tab; renderSellerPage(container, { keepScroll: true }); });
   });
 
   container.querySelectorAll('[data-coupon-filter]').forEach(chip => {
     chip.addEventListener('click', () => {
       couponStatusFilter = chip.dataset.couponFilter;
-      renderSellerPage(container);
+      renderSellerPage(container, { keepScroll: true });
     });
   });
 
@@ -1470,10 +1483,8 @@ function bindSellerEvents(container) {
       if (result.success) {
         showToast('Oferta enviada para aprovação.', 'success');
         invalidateSellerCache({ data: true });
-        sellerView = 'ads';
-        sellerNavFocus = 'ads';
         activeTab = 'pending';
-        renderSellerPage(container, { force: true });
+        navigate('#/seller/ads', { replace: true });
       } else {
         showToast(result.error || 'Não foi possível criar a oferta. Tente de novo.', 'error');
         btn.textContent = origText;
@@ -1512,11 +1523,8 @@ function bindSellerEvents(container) {
       if (result.success) {
         showToast('Oferta atualizada e enviada para aprovação.', 'success');
         invalidateSellerCache({ data: true });
-        selectedAdId = null;
-        sellerView = 'ads';
-        sellerNavFocus = 'ads';
         activeTab = 'pending';
-        renderSellerPage(container, { force: true });
+        navigate('#/seller/ads', { replace: true });
       } else {
         showToast(result.error || 'Não foi possível salvar a oferta.', 'error');
         btn.textContent = origText;
@@ -1554,10 +1562,8 @@ function bindSellerEvents(container) {
         if (result?.success) {
           showToast('Oferta renovada e enviada para aprovação.', 'success');
           invalidateSellerCache({ data: true });
-          sellerView = 'ads';
-          sellerNavFocus = 'ads';
           activeTab = 'pending';
-          renderSellerPage(container, { force: true });
+          openSellerScreen('#/seller/ads', container);
         } else {
           showToast(result?.error || 'Não foi possível renovar a oferta.', 'error');
           btn.innerHTML = `${icons.refresh}<span>Renovar</span>`;
@@ -1573,38 +1579,15 @@ function bindSellerEvents(container) {
     if (canvas) drawSimpleChart(canvas, loadedCoupons || []);
   }, 100);
 
-  // Bottom nav — event delegation on <nav>; the items are role="button", so Enter/Space act too.
-  const sellerNav = container.querySelector('.bottom-nav');
-  if (sellerNav) {
-    const goToSection = (nav) => {
-      if (nav === 'dashboard') {
-        sellerView = 'dashboard';
-        sellerNavFocus = 'dashboard';
-        activeTab = 'active';
-      } else if (nav === 'ads') {
-        sellerView = 'ads';
-        sellerNavFocus = 'ads';
-        activeTab = 'all';
-      } else if (nav === 'coupons') {
-        sellerView = 'coupons';
-        sellerNavFocus = 'coupons';
-      } else {
-        return;
-      }
-      renderSellerPage(container);
-    };
-    sellerNav.addEventListener('click', (e) => {
-      const item = e.target.closest('[data-nav]');
-      if (item) goToSection(item.dataset.nav);
-    });
-    sellerNav.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return;
-      const item = e.target.closest('[data-nav]');
-      if (!item) return;
-      e.preventDefault();
-      goToSection(item.dataset.nav);
-    });
-  }
+  // Bottom nav: links to each screen; the tab picks a fresh filter on the way.
+  container.querySelector('.bottom-nav')?.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-nav]');
+    if (!item || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (item.dataset.nav === 'dashboard') activeTab = 'active';
+    else if (item.dataset.nav === 'ads') activeTab = 'all';
+    navigate(item.getAttribute('href'));
+  });
 }
 
 // Renders a modal into #modal-root; closes on backdrop click and Escape.
@@ -1732,11 +1715,9 @@ function showDeleteProductModal(adId, container) {
       modal.close();
       showToast('Oferta excluída.', 'success');
       invalidateSellerCache({ data: true });
-      selectedAdId = null;
-      sellerView = 'ads';
-      sellerNavFocus = 'ads';
       activeTab = 'all';
-      renderSellerPage(container, { force: true });
+      if (sellerView === 'ads') renderSellerPage(container, { keepScroll: true });
+      else navigate('#/seller/ads', { replace: true });
     } else {
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Excluir';

@@ -64,6 +64,7 @@ A fonte da marca é a **Inter** (é a usada no slogan). Títulos em Inter 700–
 - **Confirmação destrutiva** dentro de diálogo usa `btn-danger--solid` (vermelho cheio). Botão desativado explica o motivo em texto, não em tooltip.
 - **Avisos (toasts)** são brancos com ícone colorido: eles costumam aparecer sobre o toldo marinho.
 - **Foco de teclado**: anel magenta em superfícies claras, branco sobre o marinho (toldo, barras, dock).
+- **Navegação**: toda tela tem endereço próprio (`#/buyer/offer?id=…`, `#/seller/edit?id=…`, `#/admin/moderation`), então o voltar do celular, o recarregar e os links compartilhados caem no lugar certo. Docks e abas são links (`<a href>`); troque de tela com `navigate()` e use `goBack(fallback)` nos botões "Voltar" (`src/utils/navigation.js`). Filtros e buscas ficam na memória, não no endereço. Ao voltar, a tela reabre na mesma rolagem.
 - **Textos**: números ficam presos à unidade (`&nbsp;`), "e-mail" não quebra em títulos (`.nowrap`), "iCEV" mantém o i minúsculo em rótulos em caixa-alta (`brandCaseHTML`). Telefones aparecem como (86) 99900-1122 (`src/utils/phone.js`).
 
 ## Componentes (`src/styles/components.css`)

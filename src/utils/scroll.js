@@ -1,12 +1,20 @@
+import { takePendingScroll } from './navigation.js';
+
+/**
+ * Puts a freshly rendered screen at the top, or back where the user left it when
+ * they returned to it with the back button.
+ */
 export function resetAppScroll(container = document, { behavior = 'auto' } = {}) {
   requestAnimationFrame(() => {
+    const top = takePendingScroll() ?? 0;
     try {
-      window.scrollTo({ top: 0, left: 0, behavior });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
+      window.scrollTo({ top, left: 0, behavior });
     } catch {
-      window.scrollTo(0, 0);
+      window.scrollTo(0, top);
     }
+    if (top) return;
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
 
     const root = container?.querySelector?.('.app-body, .page, .buyer-wrapper, .admin-page, .seller-page, .auth-wrapper');
     [root, ...document.querySelectorAll('.app-body, .page, .buyer-wrapper, .admin-page, .seller-page, .auth-wrapper')]

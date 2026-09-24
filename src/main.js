@@ -1,5 +1,6 @@
 import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
 import { resetAppScroll } from './utils/scroll.js';
+import { syncHistoryEntry, readNextRoute } from './utils/navigation.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -21,6 +22,7 @@ const PAGE_TITLES = {
   admin: 'Empreende iCEV — Administração',
   auth: 'Empreende iCEV — Entrar',
   coupons: 'Empreende iCEV — Meus cupons',
+  categories: 'Empreende iCEV — Categorias',
   profile: 'Empreende iCEV — Perfil',
   notifications: 'Empreende iCEV — Notificações',
 };
@@ -50,6 +52,7 @@ export const icons = {
   arrowDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>',
   clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
   copy: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  share: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
   whatsapp: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>',
   alertTriangle: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   fileText: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>',
@@ -433,7 +436,9 @@ function shouldForceTour() {
 
 function canShowFirstRunTour(path = '') {
   const normalizedPath = String(path || '').replace(/^\//, '');
-  const isBuyerSurface = !normalizedPath || normalizedPath === 'buyer' || normalizedPath.startsWith('buyer/');
+  // Someone who opened a shared offer came for that offer; the tour waits for the vitrine.
+  const isBuyerSurface = !normalizedPath || normalizedPath === 'buyer'
+    || (normalizedPath.startsWith('buyer/') && !normalizedPath.startsWith('buyer/offer'));
   return (shouldForceTour() || !localStorage.getItem(FIRST_RUN_TOUR_KEY))
     && isBuyerSurface
     && !document.querySelector('.first-run-tour-shell');
@@ -576,6 +581,7 @@ async function handleRoute() {
   if (window.location.hash && !window.location.hash.startsWith('#/')) {
     return;
   }
+  syncHistoryEntry();
   const currentRoute = ++routeVersion;
 
   // Clear any open modals when navigating between pages
@@ -627,7 +633,7 @@ async function handleRoute() {
     if (session && !isPasswordResetRoute) {
       const profile = await loadProfileForSession(session);
       if (window.location.hash === '#/auth' || window.location.hash.startsWith('#/auth')) {
-        window.location.hash = getHomePathForRole(getSessionRole(session, profile));
+        window.location.hash = readNextRoute() || getHomePathForRole(getSessionRole(session, profile));
       }
     }
   } else if (path.startsWith('/buyer') || path === 'buyer') {
@@ -686,7 +692,7 @@ onAuthStateChange(async (event, session) => {
     if (!path || path === '/') {
       window.location.hash = '#/buyer';
     } else if (path === 'auth' || path.startsWith('/auth')) {
-      window.location.hash = getHomePathForRole(getSessionRole(session));
+      window.location.hash = readNextRoute() || getHomePathForRole(getSessionRole(session));
     } else {
       handleRoute();
     }
@@ -730,7 +736,8 @@ window.addEventListener('load', () => {
   }, 2400);
 });
 
-// Init
+// Init: the app restores scroll itself, once the screen has rendered (see utils/navigation.js).
+if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
 handleRoute();
 
 // Register service worker

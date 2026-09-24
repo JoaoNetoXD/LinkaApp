@@ -5,6 +5,7 @@ import { getInstitutionStats, updateInstitution, getInstitution, getAllInstituti
 import { signOutUser } from '../services/auth-service.js';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/category-service.js';
 import { resetAppScroll } from '../utils/scroll.js';
+import { navigate } from '../utils/navigation.js';
 import { formatPhoneBR } from '../utils/phone.js';
 import { getPlatformUsers, updatePlatformUser, createPlatformInstitution } from '../services/superadmin-service.js';
 
@@ -15,6 +16,8 @@ const BRAND_NAME = 'Empreende iCEV';
 const EMAIL_DOMAIN_PATTERN = /^@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 
 let adminView = 'dashboard';
+// "Cliques" opens the categories section scrolled to the category ranking.
+let scrollToCategoriesAfterRender = false;
 let loadedPendingAds = null;
 let loadedStats = null;
 let loadedAllProducts = [];
@@ -290,12 +293,27 @@ async function loadAdminData({ force = false } = {}) {
 }
 
 export function renderAdmin(container, subpage) {
-  if (subpage) adminView = subpage;
-  else adminView = 'dashboard';
+  adminView = [...ADMIN_VIEWS, ...PLATFORM_VIEWS].some((view) => view.id === subpage) ? subpage : 'dashboard';
   if (!container.querySelector('.admin-page')) container.innerHTML = renderAdminSkeleton();
   renderAdminPage(container).then((rendered) => {
-    if (rendered) resetAppScroll(container);
+    if (!rendered) return;
+    if (scrollToCategoriesAfterRender && adminView === 'categories') scrollCategoryManagementIntoView(container);
+    else resetAppScroll(container);
+    scrollToCategoriesAfterRender = false;
   });
+}
+
+function adminRoute(view) {
+  return view && view !== 'dashboard' ? `#/admin/${view}` : '#/admin';
+}
+
+// Each section has its own address, so the back button and a refresh keep the admin in place.
+function openAdminView(view) {
+  navigate(adminRoute(view));
+}
+
+function isPlainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
 }
 
 async function renderAdminPage(container, options = {}) {
@@ -321,11 +339,11 @@ async function renderAdminPage(container, options = {}) {
   const pendingCount = getPendingList().length;
   const tabViews = [...ADMIN_VIEWS, ...(isSuperadmin() ? PLATFORM_VIEWS : [])];
   const renderNavItem = (view) => `
-    <button class="nav-item admin-nav-item ${adminView === view.id ? 'active' : ''}" type="button" data-nav="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
+    <a class="nav-item admin-nav-item ${adminView === view.id ? 'active' : ''}" href="${adminRoute(view.id)}" data-nav="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
       ${icons[view.icon]}
       <span class="admin-nav-label">${view.label}</span>
       ${view.id === 'moderation' && pendingCount ? `<span class="admin-nav-count">${pendingCount}</span>` : ''}
-    </button>
+    </a>
   `;
   container.innerHTML = `
     <div class="page admin-page">
@@ -366,9 +384,9 @@ async function renderAdminPage(container, options = {}) {
           <nav class="admin-tabs-container" aria-label="Seções do painel">
             <div class="tabs admin-tabs">
               ${tabViews.map((view) => `
-                <button class="tab ${adminView === view.id ? 'active' : ''}" type="button" data-admin-tab="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
+                <a class="tab ${adminView === view.id ? 'active' : ''}" href="${adminRoute(view.id)}" data-admin-tab="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
                   ${view.label}${view.id === 'moderation' && pendingCount ? ` <span class="tab-count">${pendingCount}</span>` : ''}
-                </button>
+                </a>
               `).join('')}
             </div>
           </nav>
@@ -1500,24 +1518,19 @@ function showAdminMetricModal(title, description, rows = []) {
 
 async function handleAdminMetric(metric, container) {
   if (metric === 'pending') {
-    adminView = 'moderation';
-    await renderAdminPage(container);
-    resetAppScroll(container);
+    openAdminView('moderation');
     return;
   }
   if (metric === 'clicks') {
     const rows = getAdminCategoryRows().sort((a, b) => b.clicks - a.clicks);
     selectedCategoryId = rows[0]?.id || selectedCategoryId;
-    adminView = 'categories';
     categoryStatusFilter = 'all';
-    await renderAdminPage(container);
-    scrollCategoryManagementIntoView(container);
+    scrollToCategoriesAfterRender = true;
+    openAdminView('categories');
     return;
   }
   if (metric === 'couponsGenerated' || metric === 'couponsUsed' || metric === 'conversion') {
-    adminView = 'reports';
-    await renderAdminPage(container);
-    resetAppScroll(container);
+    openAdminView('reports');
     return;
   }
 
@@ -1612,21 +1625,12 @@ function bindAdminEvents(container) {
     });
   });
 
-  // Tabs
-  container.querySelectorAll('[data-admin-tab]').forEach(tab => {
-    tab.addEventListener('click', async () => {
-      adminView = tab.dataset.adminTab;
-      await renderAdminPage(container);
-      resetAppScroll(container);
-    });
-  });
-
-  // Bottom nav
-  container.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', async () => {
-      adminView = item.dataset.nav;
-      await renderAdminPage(container);
-      resetAppScroll(container);
+  // Section tabs, sidebar and in-page shortcuts ("Ver fila", "Ver categorias")
+  container.querySelectorAll('[data-admin-tab], .admin-nav-item[data-nav]').forEach(link => {
+    link.addEventListener('click', (event) => {
+      if (!isPlainClick(event)) return;
+      event.preventDefault();
+      openAdminView(link.dataset.adminTab || link.dataset.nav);
     });
   });
 
@@ -2017,15 +2021,13 @@ function bindAdminEvents(container) {
 
   // Admin bell notification
   container.querySelector('#btnAdminNotif')?.addEventListener('click', () => {
-    adminView = 'moderation';
-    renderAdminPage(container);
+    openAdminView('moderation');
   });
 
   // Alert action buttons — route by action text
   container.querySelectorAll('[data-alert-view]').forEach(btn => {
     btn.addEventListener('click', () => {
-      adminView = btn.dataset.alertView === 'categories' ? 'categories' : 'moderation';
-      renderAdminPage(container);
+      openAdminView(btn.dataset.alertView === 'categories' ? 'categories' : 'moderation');
     });
   });
 

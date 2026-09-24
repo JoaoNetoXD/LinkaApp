@@ -7,7 +7,8 @@
 - Só alunos do iCEV participam: o cadastro exige e-mail institucional (`@somosicev.com`, configurado na tabela `institutions`).
 - Alunos com empresa ("Tenho uma empresa") publicam ofertas com cupom: preço, desconto e validade do cupom. A quantidade de cupons vem da categoria, definida pela equipe.
 - A equipe (admin) aprova cada oferta antes de ela aparecer na vitrine.
-- O aluno cliente abre a oferta e toca em **Pegar cupom**: recebe um código único (ex.: `K7QM-4TXP`), guardado em Cupons.
+- O aluno cliente abre a oferta e toca em **Pegar cupom**: recebe um código único (ex.: `K7QM-4TXP`), guardado em Cupons. Sem conta, ele entra ou se cadastra e volta direto para a mesma oferta.
+- Cada oferta tem um link próprio (`/#/buyer/offer?id=…`). O aluno e a empresa compartilham pelo botão de compartilhar (WhatsApp, Instagram) ou copiam o link.
 - A compra acontece **fora da plataforma**, direto com a empresa (normalmente pelo WhatsApp). A empresa confere o código e marca como usado.
 - Não há pagamento dentro do app. O código do Mercado Pago continua no servidor, desligado por `PAYMENTS_ENABLED=false`.
 

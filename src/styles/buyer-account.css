@@ -1149,8 +1149,8 @@
   transition: background-color var(--dur-2) var(--ease-out);
 }
 .notif-item + .notif-item { border-top: 1px solid var(--rule); }
-.notif-item[data-url^="#/"] { cursor: pointer; }
-.notif-item[data-url^="#/"]:hover { background: var(--paper-sunken); }
+a.notif-item:hover { background: var(--paper-sunken); }
+a.notif-item:focus-visible { outline-offset: -3px; }
 
 /* Unread: cobalt dot in the gutter */
 .notif-unread::before {

@@ -628,8 +628,10 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
 
 .seller-ad-delete { color: var(--danger); }
 .seller-ad-delete:hover:not(:disabled) { background: var(--danger-tint); color: var(--danger); }
-.seller-ad-actions .seller-ad-delete { width: 36px; padding: 0; }
-.seller-ad-delete-label { display: none; }
+/* Share and delete are icons on phones and gain their label on wide screens. */
+.seller-ad-actions .seller-ad-icon-btn { width: 36px; padding: 0; }
+.seller-ad-icon-btn svg { width: 18px; height: 18px; }
+.seller-ad-action-label { display: none; }
 
 .seller-ad-note {
   display: flex;
@@ -660,14 +662,14 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
   .seller-ad-thumb { width: 72px; height: 72px; }
   .seller-ad-status {
     display: grid;
-    grid-template-columns: 140px 300px;
+    grid-template-columns: 140px auto;
     align-items: center;
     justify-items: start;
     gap: 16px;
   }
   .seller-ad-actions { justify-self: end; }
-  .seller-ad-actions .seller-ad-delete { width: auto; padding: 0 12px; }
-  .seller-ad-delete-label { display: inline; }
+  .seller-ad-actions .seller-ad-icon-btn { width: auto; padding: 0 12px; }
+  .seller-ad-action-label { display: inline; }
   .seller-ad-note { grid-column: 1 / -1; }
 }
 
