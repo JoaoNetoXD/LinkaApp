@@ -5,13 +5,21 @@
 -- is no payment inside the platform. Idempotent: safe to run again.
 --
 -- BEFORE RUNNING: confirm the student e-mail domain in public.institutions
--- (column "domain", e.g. '@icev.edu.br'). Sign-ups from any other domain
+-- (column "domain", e.g. '@somosicev.com'). Sign-ups from any other domain
 -- are rejected once this runs. Extra domains go in settings.extra_domains.
 -- ====================================================================
 
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
+-- The old seed domain '@icev.edu.br' has no mail server (no MX record), so
+-- no one could confirm an account with it. iCEV e-mail runs on Google
+-- Workspace at somosicev.com. Only that seed value is replaced; a domain an
+-- admin set on purpose stays as it is.
+UPDATE public.institutions
+SET domain = '@somosicev.com'
+WHERE lower(domain) = '@icev.edu.br';
 
 -- Coupon validity chosen by the company per offer (already applied in some projects).
 ALTER TABLE public.products
@@ -36,7 +44,7 @@ CREATE INDEX IF NOT EXISTS coupons_buyer_product_status_idx
 -- --------------------------------------------------------------------
 -- 1. Sign-up only with an institutional e-mail.
 --    Allowed domains: institutions.domain plus institutions.settings.extra_domains
---    (a JSON array such as ["@aluno.icev.edu.br"]), both editable by admins.
+--    (a JSON array such as ["@outro-dominio.com.br"]), both editable by admins.
 -- --------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger

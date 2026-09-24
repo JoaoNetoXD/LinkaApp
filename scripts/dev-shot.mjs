@@ -76,7 +76,7 @@ function previewSetupScript(role, showTour) {
     if (${JSON.stringify(role)} === 'none') return 'logged-out';
     const exp = Math.floor(Date.now() / 1000) + 31536000;
     const user = { id: '00000000-0000-4000-8000-000000000001', aud: 'authenticated', role: 'authenticated',
-      email: 'maria.clara@icev.edu.br', user_metadata: { full_name: 'Maria Clara Souza' }, app_metadata: {} };
+      email: 'maria.clara@somosicev.com', user_metadata: { full_name: 'Maria Clara Souza' }, app_metadata: {} };
     const jwt = b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ sub: user.id, exp, role: 'authenticated' }) + '.dev';
     localStorage.setItem(${JSON.stringify(key)}, JSON.stringify({ access_token: jwt, refresh_token: 'dev',
       expires_in: 31536000, expires_at: exp, token_type: 'bearer', user }));

@@ -257,7 +257,7 @@ export async function getCurrentProfile(userId) {
         role: normalizeRole(previewRole),
         name: 'Maria Clara Souza',
         full_name: 'Maria Clara Souza',
-        email: 'maria.clara@icev.edu.br',
+        email: 'maria.clara@somosicev.com',
         whatsapp: '86999001122',
         institution_id: null,
       };

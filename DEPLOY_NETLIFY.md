@@ -6,19 +6,21 @@ Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e com
 
 Abra o SQL Editor do Supabase.
 
-**Antes de tudo, confira o domínio de e-mail dos alunos.** Depois da migração, só e-mails desse domínio conseguem criar conta:
+**Antes de tudo, confira o domínio de e-mail dos alunos.** Depois da migração, só e-mails desse domínio conseguem criar conta.
+
+O e-mail do iCEV é do Google Workspace em `somosicev.com`. O domínio antigo da semente, `@icev.edu.br`, não tem servidor de e-mail: ninguém conseguiria confirmar a conta com ele. Por isso a migração troca `@icev.edu.br` por `@somosicev.com` sozinha. Confirme com a coordenação se os alunos têm e-mail `@somosicev.com`. Para conferir o que está no banco:
 
 ```sql
 select id, name, domain, settings->'extra_domains' as extra_domains from public.institutions;
 ```
 
-Se o domínio estiver errado, corrija (exemplo):
+Se os alunos usarem outro domínio, corrija depois da migração (ou pelo painel admin, em Configurações > Acesso):
 
 ```sql
-update public.institutions set domain = '@icev.edu.br' where name = 'iCEV';
+update public.institutions set domain = '@dominio-dos-alunos.com.br' where name = 'iCEV';
 -- Domínios adicionais (ex.: alunos e professores com domínios diferentes):
 update public.institutions
-set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{extra_domains}', '["@outro-dominio.edu.br"]')
+set settings = jsonb_set(coalesce(settings, '{}'::jsonb), '{extra_domains}', '["@outro-dominio.com.br"]')
 where name = 'iCEV';
 ```
 

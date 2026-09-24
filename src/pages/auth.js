@@ -210,7 +210,7 @@ function renderAuthForm(mode) {
         </div>
         <div class="auth-form-group">
           <label for="authEmail">E-mail</label>
-          <input type="email" id="authEmail" class="auth-input" placeholder="voce@icev.edu.br" autocomplete="email" />
+          <input type="email" id="authEmail" class="auth-input" placeholder="voce@somosicev.com" autocomplete="email" />
         </div>
         <button id="btnSubmitAuth" class="auth-btn" type="submit">Enviar link</button>
       </form>
@@ -227,7 +227,7 @@ function renderAuthForm(mode) {
 
       <div class="auth-form-group">
         <label for="authEmail">${isLoginMode ? 'E-mail' : 'E-mail institucional'}</label>
-        <input type="email" id="authEmail" class="auth-input" placeholder="voce${allowedSignupDomains?.[0] || '@icev.edu.br'}" autocomplete="email"${isLoginMode ? '' : ' aria-describedby="authEmailHint"'} />
+        <input type="email" id="authEmail" class="auth-input" placeholder="voce${allowedSignupDomains?.[0] || '@somosicev.com'}" autocomplete="email"${isLoginMode ? '' : ' aria-describedby="authEmailHint"'} />
         ${isLoginMode ? '' : `<p class="auth-field-hint" id="authEmailHint">${describeAllowedDomains()}</p>`}
       </div>
 

@@ -556,7 +556,7 @@ GRANT EXECUTE ON FUNCTION public.issue_coupon_for_payment(uuid) TO service_role;
 
 -- Instituição piloto
 INSERT INTO institutions (id, name, full_name, domain, primary_color, plan) VALUES
-('00000000-0000-0000-0000-000000000001', 'iCEV', 'Instituto de Ensino Superior iCEV', '@icev.edu.br', '#2563eb', 'pro')
+('00000000-0000-0000-0000-000000000001', 'iCEV', 'Instituto de Ensino Superior iCEV', '@somosicev.com', '#2563eb', 'pro')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO categories (id, name, max_slots, duration_hours) VALUES

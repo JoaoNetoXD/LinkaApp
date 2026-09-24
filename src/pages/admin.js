@@ -1979,7 +1979,7 @@ function bindAdminEvents(container) {
         inputHtml = `<input type="color" class="admin-color-input" id="settingEditVal" value="${escapeHTML(activeInstitution.primaryColor || '#C0176B')}" />`;
       } else if (isDomain) {
         inputHtml = `
-          <input type="text" class="input-field admin-domain-input" id="settingEditVal" value="${escapeHTML(currentVal)}" placeholder="@icev.edu.br" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingEditHint" />
+          <input type="text" class="input-field admin-domain-input" id="settingEditVal" value="${escapeHTML(currentVal)}" placeholder="@somosicev.com" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingEditHint" />
           <span class="input-hint" id="settingEditHint">Use o formato @escola.edu.br.</span>
         `;
       }
@@ -2079,7 +2079,7 @@ function bindAdminEvents(container) {
         fieldHtml = `<input class="input-field" id="settingJsonVal" type="number" min="0" value="${escapeHTML(String(currentValue || ''))}" />`;
       } else if (mode === 'list') {
         fieldHtml = `
-          <textarea class="input-field admin-domain-input" id="settingJsonVal" rows="4" placeholder="@aluno.icev.edu.br" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingJsonHint">${escapeHTML(getExtraDomains().join('\n'))}</textarea>
+          <textarea class="input-field admin-domain-input" id="settingJsonVal" rows="4" placeholder="@outro-dominio.com.br" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingJsonHint">${escapeHTML(getExtraDomains().join('\n'))}</textarea>
           <span class="input-hint" id="settingJsonHint">Um domínio por linha, no formato @escola.edu.br.${primaryDomain ? ` O domínio principal (${escapeHTML(primaryDomain)}) já está liberado.` : ''}</span>
         `;
       }
