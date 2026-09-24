@@ -70,16 +70,18 @@ export async function getActiveProducts({ categoryId = 'all', search = '', insti
       console.warn('getActiveProducts: Supabase unavailable, using mock data.', err.message);
       return filterMockProducts(mockProducts, categoryId, search);
     }
-    return [];
+    // The vitrine tells "could not load" apart from "no offers", so the failure goes up.
+    throw err;
   }
 }
 
 /**
- * Fetch a single product by ID
+ * Fetch a single product by ID: null when it does not exist (or is not visible);
+ * throws when the request itself fails, so the page can offer a retry.
  */
 export async function getProductById(productId) {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await withTimeout(supabase
       .from('products')
       .select(`
         *,
@@ -87,16 +89,16 @@ export async function getProductById(productId) {
       `)
       .eq('id', productId)
       .is('deleted_at', null)
-      .single();
+      .maybeSingle());
 
     if (error) throw error;
-    return transformProduct(data);
+    return data ? transformProduct(data) : null;
   } catch (err) {
     if (USE_MOCKS) {
       console.warn('getProductById: Supabase unavailable, using mock data.', err.message);
       return mockProducts.find(p => p.id == productId) || null;
     }
-    return null;
+    throw err;
   }
 }
 

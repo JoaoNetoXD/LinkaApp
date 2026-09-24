@@ -156,6 +156,8 @@ const buyerProductsCache = new Map();
 const buyerProductsRequests = new Map();
 const unreadCountCache = new Map();
 const buyerCouponsCache = new Map();
+// The last offer request failed (offline, timeout): the home offers a retry instead of "no offers".
+let productsLoadFailed = false;
 let buyerRenderId = 0;
 let buyerHomeRenderId = 0;
 
@@ -253,12 +255,13 @@ async function loadBuyerProducts({ categoryId = activeCategory, search = searchQ
     .then((rows) => {
       const products = Array.isArray(rows) ? rows : [];
       buyerProductsCache.set(cacheKey, { products, loadedAt: Date.now() });
+      productsLoadFailed = false;
       return products;
     })
     .catch(() => {
-      const fallback = cached?.products || (USE_MOCKS ? (cachedProducts || mockProducts) : []);
-      buyerProductsCache.set(cacheKey, { products: fallback, loadedAt: Date.now() });
-      return fallback;
+      // Not cached: the next render (or "Tentar de novo") asks the server again.
+      productsLoadFailed = true;
+      return cached?.products || (USE_MOCKS ? (cachedProducts || mockProducts) : []);
     })
     .finally(() => {
       buyerProductsRequests.delete(cacheKey);
@@ -338,14 +341,19 @@ function findKnownProduct(productId) {
   return null;
 }
 
+// Resolves to the offer, null when it is gone, or 'failed' when it could not be loaded.
 async function resolveRouteOffer(container) {
   if (!routeOfferId) return null;
   if (String(selectedProduct?.id) === String(routeOfferId)) return selectedProduct;
   const known = findKnownProduct(routeOfferId);
   if (known) return known;
   renderOfferSkeleton(container);
-  const product = await getProductById(routeOfferId).catch(() => null);
-  return product?.status === 'active' ? product : null;
+  try {
+    const product = await getProductById(routeOfferId);
+    return product?.status === 'active' ? product : null;
+  } catch {
+    return 'failed';
+  }
 }
 
 function bindBottomNav(container) {
@@ -420,8 +428,9 @@ async function renderBuyerPage(container) {
   } else if (currentView === 'detail') {
     const product = await resolveRouteOffer(container);
     if (renderId !== buyerRenderId || !isBuyerRoute()) return;
-    selectedProduct = product;
-    if (product) renderProductDetail(container);
+    selectedProduct = product === 'failed' ? null : product;
+    if (product === 'failed') renderOfferUnavailable(container, { failed: true });
+    else if (product) renderProductDetail(container);
     else renderOfferUnavailable(container);
     resetAppScroll(container);
   } else if (currentView === 'categories') {
@@ -648,6 +657,19 @@ function isSellerContextProfile(role) {
   return query.get('from') === 'seller' && ['seller', 'admin', 'superadmin'].includes(role);
 }
 
+function renderProductsLoadError() {
+  return `
+    <div class="market-empty-state" role="alert">
+      <div class="market-empty-icon">${icons.refresh}</div>
+      <h3>Não foi possível carregar as ofertas</h3>
+      <p>Confira sua conexão com a internet e tente de novo.</p>
+      <div class="market-empty-actions">
+        <button class="btn-primary" id="btnRetryProducts" type="button">${icons.refresh} Tentar de novo</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderEmptyProductsState() {
   const hasFilters = Boolean(searchQuery.trim() || activeCategory !== 'all' || Number(minDiscount) > 0);
   const onlySearch = Boolean(searchQuery.trim()) && activeCategory === 'all' && !(Number(minDiscount) > 0);
@@ -812,11 +834,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
       <div class="list-header">
         <h2>${listTitle}</h2>
-        <span class="offers-count">${loading ? '' : offersLabel}</span>
+        <span class="offers-count">${loading || (productsLoadFailed && !products.length) ? '' : offersLabel}</span>
       </div>
 
       <div class="products-list ${loading ? 'buyer-home-loading' : ''}">
-        ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? renderEmptyProductsState() : filteredProducts.map(p => {
+        ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? (productsLoadFailed && !products.length ? renderProductsLoadError() : renderEmptyProductsState()) : filteredProducts.map(p => {
           const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
           const timer = getCountdownInfo(p.expiresAt, p.expiresIn);
           const slotsLeft = Math.max((p.slots?.total || 0) - (p.slots?.used || 0), 0);
@@ -913,6 +935,13 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
   container.querySelector('#btnEmptyLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
+  });
+  container.querySelector('#btnRetryProducts')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" aria-hidden="true"></span> Carregando…';
+    await loadBuyerProducts({ force: true });
+    renderBuyerPage(container);
   });
   container.querySelector('#btnClearBuyerFilters')?.addEventListener('click', () => {
     searchQuery = '';
@@ -1120,9 +1149,9 @@ function renderOfferSkeleton(container) {
   container.querySelector('#btnBackHome')?.addEventListener('click', () => goBack('#/buyer'));
 }
 
-// A link to an offer that expired, was removed or never existed.
-function renderOfferUnavailable(container) {
-  document.title = 'Oferta fora do ar — Empreende iCEV';
+// A link to an offer that expired, was removed or never existed, or that failed to load.
+function renderOfferUnavailable(container, { failed = false } = {}) {
+  document.title = `${failed ? 'Oferta indisponível' : 'Oferta fora do ar'} — Empreende iCEV`;
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page acct-page--narrow offer-missing-page">
       <header class="acct-header canopy">
@@ -1131,20 +1160,23 @@ function renderOfferUnavailable(container) {
         </div>
         <div class="acct-header-copy">
           <p class="t-eyebrow">Link de oferta</p>
-          <h1 class="acct-title">Oferta fora do ar</h1>
+          <h1 class="acct-title">${failed ? 'Oferta indisponível' : 'Oferta fora do ar'}</h1>
         </div>
       </header>
-      <div class="acct-empty">
-        <span class="acct-empty-icon">${icons.ticket}</span>
-        <h2>Esta oferta saiu da vitrine</h2>
-        <p>Ela expirou ou foi retirada pela empresa. Veja as ofertas que estão no ar agora.</p>
-        <button class="btn-primary acct-empty-action" id="btnOfferMissingExplore" type="button">Ver ofertas</button>
+      <div class="acct-empty"${failed ? ' role="alert"' : ''}>
+        <span class="acct-empty-icon">${failed ? icons.refresh : icons.ticket}</span>
+        <h2>${failed ? 'Não foi possível abrir a oferta' : 'Esta oferta saiu da vitrine'}</h2>
+        <p>${failed ? 'Confira sua conexão com a internet e tente de novo.' : 'Ela expirou ou foi retirada pela empresa. Veja as ofertas que estão no ar agora.'}</p>
+        ${failed
+          ? `<button class="btn-primary acct-empty-action" id="btnOfferRetry" type="button">${icons.refresh} Tentar de novo</button>`
+          : '<button class="btn-primary acct-empty-action" id="btnOfferMissingExplore" type="button">Ver ofertas</button>'}
       </div>
     </div>
     ${renderBuyerBottomNav('home')}
   `;
   container.querySelector('#btnBackFromOffer')?.addEventListener('click', () => goBack('#/buyer'));
   container.querySelector('#btnOfferMissingExplore')?.addEventListener('click', () => navigate('#/buyer'));
+  container.querySelector('#btnOfferRetry')?.addEventListener('click', () => renderBuyerPage(container));
 }
 
 function hasCouponsLeft(product) {
