@@ -108,17 +108,23 @@ export function authRoute({ next = '', intent = '' } = {}) {
   return `#/auth${query ? `?${query}` : ''}`;
 }
 
+// Screens the sign-in may return to: company and admin sections, an offer, an offer being
+// edited. Other sites, other screens and extra parameters fall back to the account's home.
+const NEXT_SECTION_ROUTE = /^#\/(seller(\/(ads|coupons|insights|create))?|admin(\/[a-z]+)?)$/;
+const NEXT_ID_ROUTE = /^#\/(buyer\/offer|seller\/edit)\?id=([^&#]+)$/;
+
 /** The "next" screen requested by the sign-in address, if it is one the app can return to. */
 export function readNextRoute(hash = window.location.hash) {
   const query = (String(hash).split('?')[1] || '').split('#')[0];
   const next = new URLSearchParams(query).get('next') || '';
-  const match = next.match(/^#\/buyer\/offer\?id=([^&#]+)$/);
+  if (NEXT_SECTION_ROUTE.test(next)) return next;
+  const match = next.match(NEXT_ID_ROUTE);
   if (!match) return '';
   let id = '';
   try {
-    id = decodeURIComponent(match[1]);
+    id = decodeURIComponent(match[2]);
   } catch {
     return '';
   }
-  return isValidOfferId(id) ? offerRoute(id) : '';
+  return isValidOfferId(id) ? `#/${match[1]}?id=${encodeURIComponent(id)}` : '';
 }

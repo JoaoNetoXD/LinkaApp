@@ -15,11 +15,19 @@ test('the sign-in only returns to offer pages inside the app', () => {
   const next = (value) => `#/auth?next=${encodeURIComponent(value)}`;
   assert.equal(readNextRoute(next('https://example.com/#/buyer/offer?id=2')), '', 'no other sites');
   assert.equal(readNextRoute(next('//example.com')), '');
-  assert.equal(readNextRoute(next('#/admin')), '', 'no other screens');
+  assert.equal(readNextRoute(next('#/buyer/profile')), '', 'no other screens');
+  assert.equal(readNextRoute(next('#/admin/moderation?x=1')), '');
+  assert.equal(readNextRoute(next('#/seller/edit?id=1&next=#/admin')), '');
   assert.equal(readNextRoute(next('#/buyer/offer?id=2&next=#/admin')), '', 'no extra parameters');
   assert.equal(readNextRoute(next('#/buyer/offer?id=<script>')), '');
   assert.equal(readNextRoute(next('#/buyer/offer?id=%E0%A4%A')), '', 'broken escapes are ignored');
   assert.equal(readNextRoute('#/auth'), '');
+});
+
+test('a company or admin link opened while signed out comes back after sign-in', () => {
+  for (const route of ['#/seller', '#/seller/coupons', '#/admin', '#/admin/moderation', `#/seller/edit?id=${OFFER_ID}`]) {
+    assert.equal(readNextRoute(authRoute({ next: route })), route);
+  }
 });
 
 test('offer ids are the database UUIDs or short mock ids, nothing else', () => {

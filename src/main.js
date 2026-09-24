@@ -1,6 +1,6 @@
 import { getCurrentSession, onAuthStateChange, getCurrentProfile, getHomePathForRole } from './services/auth-service.js';
 import { resetAppScroll } from './utils/scroll.js';
-import { syncHistoryEntry, readNextRoute } from './utils/navigation.js';
+import { syncHistoryEntry, readNextRoute, authRoute, navigate } from './utils/navigation.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -600,7 +600,9 @@ async function handleRoute() {
   
   if (isProtectedRoute) {
     if (!session) {
-      window.location.hash = path.startsWith('/seller') || path === 'seller' ? '#/auth?role=seller' : '#/auth';
+      // Sign in, then land on this exact screen (a saved or shared admin/company link keeps working).
+      // The redirect replaces the locked screen, so "back" from sign-in does not bounce into it again.
+      navigate(authRoute({ next: window.location.hash }), { replace: true });
       return;
     }
     // Load profile if missing and validate role
@@ -615,7 +617,7 @@ async function handleRoute() {
     }
 
     if ((wantsAdmin && !['admin', 'superadmin'].includes(role)) || (wantsSeller && !['seller', 'admin', 'superadmin'].includes(role))) {
-      window.location.hash = '#/buyer';
+      navigate('#/buyer', { replace: true });
       showToast('Acesso restrito ao seu perfil.', 'error');
       return;
     }
@@ -656,7 +658,7 @@ async function handleRoute() {
     if (currentRoute !== routeVersion) return;
     renderAdmin(app, parts[1]?.split('?')[0]);
   } else if (path.startsWith('/landing') || path === 'landing') {
-    window.location.hash = '#/buyer';
+    navigate('#/buyer', { replace: true });
     return;
   } else {
     setPageTitle('buyer');

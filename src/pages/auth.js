@@ -79,7 +79,12 @@ function syncIntentFromUrl() {
   }
 }
 
-// After signing in: back to the offer that asked for it, else the account's home.
+function isReturningToOffer() {
+  return readNextRoute().startsWith('#/buyer/offer');
+}
+
+// After signing in: back to the screen that asked for it (an offer, a company or admin
+// section opened by link), else the account's home.
 // The auth listener in main.js may have navigated already; then there is nothing to do.
 function openAfterSignIn(homePath) {
   if (!window.location.hash.startsWith('#/auth')) return;
@@ -142,7 +147,7 @@ function getSubtitle(mode) {
   if (mode === 'recovery') return 'Crie uma nova senha para voltar a entrar.';
   if (mode === 'forgot') return 'Informe seu e-mail e enviamos um link para criar uma nova senha.';
   // Arrived from "Pegar cupom": the sign-in returns to that offer.
-  if (readNextRoute()) {
+  if (isReturningToOffer()) {
     return isLoginMode
       ? 'Entre com seu e-mail do iCEV e volte direto para o cupom.'
       : 'Crie sua conta com o e-mail do iCEV e volte direto para o cupom.';
@@ -319,7 +324,7 @@ export function renderAuth(container) {
           <div class="auth-header canopy">
             <button type="button" class="auth-back-home" id="btnBackHome">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-              ${readNextRoute() ? 'Voltar para a oferta' : 'Voltar para a vitrine'}
+              ${isReturningToOffer() ? 'Voltar para a oferta' : 'Voltar para a vitrine'}
             </button>
             ${renderBrandLogo('wordmark-on-dark', 'brand-logo auth-logo')}
             <h1 class="auth-title">${getTitle(mode)}</h1>
@@ -370,7 +375,7 @@ export function renderAuth(container) {
   });
 
   document.getElementById('btnBackHome')?.addEventListener('click', () => {
-    goBack(readNextRoute() || '#/buyer');
+    goBack(isReturningToOffer() ? readNextRoute() : '#/buyer');
   });
 
   if (authParams.get('confirmed') === '1') {
@@ -516,7 +521,7 @@ export function renderAuth(container) {
 
     showAuthMessage(selectedRole === 'seller'
       ? 'Conta criada. Abrindo o painel da sua empresa…'
-      : readNextRoute() ? 'Conta criada. Voltando para a oferta…' : 'Conta criada. Abrindo a vitrine…', 'success');
+      : isReturningToOffer() ? 'Conta criada. Voltando para a oferta…' : 'Conta criada. Abrindo a vitrine…', 'success');
 
     setTimeout(() => {
       openAfterSignIn(res.homePath || (selectedRole === 'seller' ? '#/seller' : '#/buyer'));
