@@ -145,7 +145,7 @@
 /* Phone tabs scroll edge to edge and fade out at the sides, like the vitrine chips. */
 .admin-topbar .tabs {
   gap: 6px;
-  padding: 0 var(--gutter);
+  padding: 5px var(--gutter);
   border-radius: 0;
   background: transparent;
   scroll-padding-inline: var(--gutter);
@@ -246,7 +246,7 @@
 .admin-logout-btn { min-height: 40px; }
 
 .admin-tabs-container {
-  padding: 0 0 12px;
+  padding: 0 0 7px;
 }
 
 /* ---------- Canvas ---------- */
@@ -831,8 +831,8 @@
   grid-auto-flow: column;
   grid-auto-columns: 82%;
   gap: 12px;
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 2px var(--gutter) 6px;
+  margin: -4px calc(var(--gutter) * -1) 0;
+  padding: 6px var(--gutter);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scroll-padding-inline: var(--gutter);
@@ -1751,6 +1751,8 @@ textarea.admin-domain-input { min-height: 120px; }
 .admin-product-detail-thumbs {
   display: flex;
   gap: 8px;
+  margin: -4px;
+  padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }

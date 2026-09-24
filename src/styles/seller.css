@@ -1070,8 +1070,8 @@ button.seller-ledger-cell:focus-visible { outline-offset: -2px; }
 .seller-chip-row {
   display: flex;
   gap: 8px;
-  margin: 24px calc(var(--gutter) * -1) 14px;
-  padding: 2px var(--gutter);
+  margin: 20px calc(var(--gutter) * -1) 10px;
+  padding: 6px var(--gutter);
   overflow-x: auto;
   scrollbar-width: none;
 }

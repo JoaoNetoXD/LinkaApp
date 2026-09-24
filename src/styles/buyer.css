@@ -188,9 +188,10 @@
 
 /* ---------- Categories + filters ---------- */
 
+/* Scrollers clip whatever leaves their box: 6px of room keeps focus rings whole. */
 .category-scroll {
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 0 var(--gutter);
+  margin: -6px calc(var(--gutter) * -1);
+  padding: 6px var(--gutter);
   overflow-x: auto;
   scrollbar-width: none;
   scroll-padding-inline: var(--gutter);
@@ -710,6 +711,8 @@
 .detail-thumbnails {
   display: flex;
   gap: 8px;
+  margin: -4px;
+  padding: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }

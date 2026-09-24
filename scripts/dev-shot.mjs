@@ -13,6 +13,8 @@
  *              "none" injects a local preview session; see getCurrentProfile().
  *   --width/--height  viewport (default 375x812; below 768 emulates a phone)
  *   --eval     JS to run after load; repeat the flag for several steps (600 ms apart)
+ *   --tab      press Tab this many times after the steps (real key events, so
+ *              :focus-visible rings show up for keyboard-focus checks)
  *   --wait     ms to wait after load before the steps (default 2500)
  *   --full     capture the full page height
  *   --tour     show the first-run tour
@@ -151,6 +153,17 @@ async function main() {
       const value = await evaluate(step);
       if (value !== undefined) console.log('eval ->', typeof value === 'string' ? value : JSON.stringify(value));
       await sleep(600);
+    }
+
+    for (let i = 0; i < Number(args.tab || 0); i++) {
+      const key = { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 };
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', ...key });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+      await sleep(120);
+    }
+    if (args.tab) {
+      await sleep(300);
+      console.log('focus ->', await evaluate(`(() => { const el = document.activeElement; return el ? (el.id ? '#' + el.id : el.tagName.toLowerCase() + '.' + [...el.classList].join('.')) : 'none'; })()`));
     }
 
     let clip;
