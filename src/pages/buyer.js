@@ -669,6 +669,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   const featuredProduct = filteredProducts.length
     ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
     : null;
+  const showFeatured = Boolean(featuredProduct && hasVisibleDiscount(featuredProduct) && !searchQuery.trim());
 
   // Draw the highlighter once per session, not on every search re-render.
   const introMark = buyerIntroPlayed ? '' : ' hl--draw';
@@ -684,9 +685,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
-      <header class="buyer-header">
+      <header class="buyer-header canopy${showFeatured ? ' buyer-header--featured' : ''}">
         <div class="buyer-header-top">
-          <h1 class="buyer-brand">${renderBrandLogo('wordmark', 'brand-logo buyer-brand-logo')}</h1>
+          <h1 class="buyer-brand">${renderBrandLogo('wordmark-on-dark', 'brand-logo buyer-brand-logo')}</h1>
           <div class="buyer-actions">
             ${showSellerAccess ? `
               <button class="buyer-mode-btn" id="btnSellerMode" type="button" title="${canUseSellerMode() ? 'Abrir minha empresa' : 'Cadastrar minha empresa'}">
@@ -762,6 +763,23 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             </select>
           </label>
         </div>
+
+        ${showFeatured ? `
+          <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque: ${escapeHTML(featuredProduct.title)}">
+            <span class="buyer-featured-media">${getProductImage(featuredProduct.images?.[0], 240, 240, featuredProduct.category)}</span>
+            <span class="buyer-featured-copy">
+              <span class="buyer-featured-badge">Maior desconto de hoje</span>
+              <strong>${escapeHTML(featuredProduct.title)}</strong>
+              <span class="buyer-featured-price">
+                <span class="buyer-featured-now">${formatCurrency(featuredProduct.discountPrice)}</span>
+                <s>${formatCurrency(featuredProduct.originalPrice)}</s>
+              </span>
+            </span>
+            <span class="buyer-featured-stub" aria-hidden="true">
+              <span class="buyer-featured-percent">−${featuredProduct.discount}%</span>
+            </span>
+          </button>
+        ` : ''}
       </header>
 
       ${shouldShowInstitutionBanner() ? `
@@ -773,23 +791,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           </div>
           <button class="inst-banner-close" id="btnHideInstBanner" type="button" aria-label="Fechar aviso">${icons.x}</button>
         </div>
-      ` : ''}
-
-      ${featuredProduct && hasVisibleDiscount(featuredProduct) && !searchQuery.trim() ? `
-        <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque: ${escapeHTML(featuredProduct.title)}">
-          <span class="buyer-featured-media">${getProductImage(featuredProduct.images?.[0], 240, 240, featuredProduct.category)}</span>
-          <span class="buyer-featured-copy">
-            <span class="buyer-featured-badge">Maior desconto de hoje</span>
-            <strong>${escapeHTML(featuredProduct.title)}</strong>
-            <span class="buyer-featured-price">
-              <span class="buyer-featured-now">${formatCurrency(featuredProduct.discountPrice)}</span>
-              <s>${formatCurrency(featuredProduct.originalPrice)}</s>
-            </span>
-          </span>
-          <span class="buyer-featured-stub" aria-hidden="true">
-            <span class="buyer-featured-percent">−${featuredProduct.discount}%</span>
-          </span>
-        </button>
       ` : ''}
 
       <div class="list-header">
@@ -988,7 +989,7 @@ async function renderCategories(container) {
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page buyer-categories-page">
-      <div class="category-intro">
+      <div class="category-intro canopy">
         <header class="acct-header">
           <div class="acct-heading">
             <div class="acct-header-copy">
@@ -1323,7 +1324,7 @@ async function renderCoupons(container) {
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page acct-page--narrow coupons-page">
-      <header class="acct-header">
+      <header class="acct-header canopy">
         <div class="acct-header-copy">
           <p class="t-eyebrow">${summary}</p>
           <h1 class="acct-title">Meus <span class="hl">cupons</span></h1>
@@ -1523,7 +1524,7 @@ function renderProfile(container) {
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page acct-page--narrow profile-page">
-      <header class="acct-header">
+      <header class="acct-header canopy">
         <div class="acct-header-copy">
           <p class="t-eyebrow">Empreende iCEV</p>
           <h1 class="acct-title">Perfil</h1>
@@ -1950,7 +1951,7 @@ async function renderNotifications(container) {
   if (!userId) {
     container.innerHTML = `
       <div class="page buyer-wrapper acct-page acct-page--narrow notifications-page">
-        <header class="acct-header">
+        <header class="acct-header canopy">
           <div class="acct-topbar">
             <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar para o início">${backIcon}</button>
           </div>
@@ -1989,7 +1990,7 @@ async function renderNotifications(container) {
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page acct-page--narrow notifications-page">
-      <header class="acct-header">
+      <header class="acct-header canopy">
         <div class="acct-topbar">
           <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar para o início">${backIcon}</button>
           <button class="btn-ghost btn-sm acct-topbar-action" id="btnMarkAllRead" type="button">${icons.check} Marcar como lidas</button>

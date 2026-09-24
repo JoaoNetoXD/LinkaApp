@@ -612,6 +612,69 @@ select.input-field,
 .toast-close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .toast-close svg { width: 16px; height: 16px; }
 
+/* ---------- Canopy: the navy band at the top of a screen ----------
+   Full-bleed behind the header content, with a pink glow in the corner
+   like light from the logo gradient. Children switch to on-navy colors.
+   --canopy-cut stops the navy early so the last child can straddle
+   the edge (the featured ticket on the home); --canopy-lift extends it
+   up behind whatever sits above the header (padding, a back button). */
+
+.canopy {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 26px;
+  color: var(--on-navy);
+}
+
+.canopy::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: calc(var(--canopy-lift, 0px) * -1) calc(50% - 50vw) var(--canopy-cut, 0);
+  background:
+    var(--canopy-glow, radial-gradient(min(92vw, 560px) 300px at 100% 0%, rgba(237, 30, 121, 0.3), rgba(192, 23, 107, 0.1) 46%, transparent 72%)),
+    var(--navy);
+}
+
+/* Under a sticky navy bar the glow moves to the bottom corner, so the bar
+   and the canopy read as one surface. */
+.canopy--continued {
+  --canopy-glow: radial-gradient(min(80vw, 460px) 240px at 100% 100%, rgba(237, 30, 121, 0.22), rgba(192, 23, 107, 0.06) 50%, transparent 72%);
+}
+
+.canopy .t-eyebrow { color: var(--on-navy-mute); }
+.canopy .hl { color: var(--pink); }
+.canopy .hl::after { background: var(--brand-gradient-warm); }
+
+.canopy .icon-btn {
+  background: var(--on-navy-fill);
+  border-color: var(--on-navy-line);
+  color: var(--on-navy);
+}
+.canopy .icon-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); }
+.canopy .icon-btn .badge { border-color: var(--navy); }
+
+.canopy .chip {
+  background: var(--on-navy-fill);
+  border-color: var(--on-navy-line);
+  color: var(--on-navy-soft);
+}
+.canopy .chip:hover { border-color: rgba(255, 255, 255, 0.34); color: var(--on-navy); }
+.canopy .chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-navy);
+}
+
+.canopy .user-avatar { background: var(--brand); }
+
+.canopy .skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.1) 100%);
+  background-size: 200% 100%;
+}
+
+.canopy .btn-ghost:hover:not(:disabled) { background: var(--on-navy-fill); color: var(--on-navy); }
+
 /* ---------- Bottom navigation (floating dock) ---------- */
 
 .bottom-nav {
@@ -627,11 +690,11 @@ select.input-field,
   padding: 6px;
   transform: translateX(-50%);
   border-radius: var(--r-lg);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(1.6) blur(14px);
-  -webkit-backdrop-filter: saturate(1.6) blur(14px);
-  border: 1px solid var(--rule);
-  box-shadow: 0 18px 40px -20px rgba(24, 42, 80, 0.45), 0 2px 6px rgba(24, 42, 80, 0.06);
+  background: rgba(24, 42, 80, 0.95);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 40px -16px rgba(12, 20, 45, 0.6), 0 2px 6px rgba(12, 20, 45, 0.18);
 }
 
 .bottom-nav-item {
@@ -643,7 +706,7 @@ select.input-field,
   gap: 3px;
   min-width: 0;
   border-radius: var(--r-md);
-  color: var(--ink-mute);
+  color: var(--on-navy-mute);
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
@@ -654,12 +717,12 @@ select.input-field,
 .bottom-nav-item svg { width: 22px; height: 22px; stroke-width: 1.7; }
 .bottom-nav-item > span:not(.nav-icon-wrapper),
 .bottom-nav-item > .nav-label { position: relative; z-index: 0; line-height: 1.1; }
-.bottom-nav-item:hover { color: var(--ink); }
-.bottom-nav-item:active { background: rgba(24, 42, 80, 0.05); }
-.bottom-nav-item.active { color: var(--ink); }
+.bottom-nav-item:hover { color: var(--on-navy); }
+.bottom-nav-item:active { background: var(--on-navy-fill); }
+.bottom-nav-item.active { color: var(--on-navy); }
 .bottom-nav-item.active svg { stroke-width: 2; }
 
-/* Active tab: a short magenta bar, the brand's "≡" reduced to one stroke */
+/* Active tab: a short pink bar, the brand's "≡" reduced to one stroke */
 .nav-indicator {
   position: absolute;
   left: 50%;
@@ -667,7 +730,7 @@ select.input-field,
   width: 0;
   height: 3px;
   border-radius: 2px;
-  background: var(--brand);
+  background: var(--pink);
   transform: translateX(-50%);
   transition: width var(--dur-3) var(--ease-out);
 }
@@ -679,7 +742,7 @@ select.input-field,
   position: absolute;
   top: -5px;
   right: -9px;
-  border: 2px solid var(--paper);
+  border: 2px solid var(--navy);
   height: 19px;
 }
 
@@ -694,7 +757,7 @@ select.input-field,
   justify-content: space-between;
   gap: 12px;
   padding: calc(12px + var(--safe-top)) var(--gutter) 12px;
-  background: rgba(243, 244, 248, 0.88);
+  background: rgba(236, 232, 242, 0.88);
   backdrop-filter: saturate(1.4) blur(12px);
   -webkit-backdrop-filter: saturate(1.4) blur(12px);
   border-bottom: 1px solid transparent;

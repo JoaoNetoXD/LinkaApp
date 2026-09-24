@@ -34,14 +34,14 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--on-navy-mute);
 }
 
 .acct-topbar-spacer { width: 44px; }
 
 .acct-topbar-action {
   grid-column: 3;
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
 }
 
 .acct-icon-btn { border-radius: var(--r-pill); }
@@ -66,7 +66,7 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.045em;
-  color: var(--ink);
+  color: var(--on-navy);
 }
 
 .acct-title .hl::before { left: -0.06em; right: -0.1em; }
@@ -75,7 +75,7 @@
   max-width: 44ch;
   font-size: var(--fs-15);
   line-height: 1.45;
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
 }
 
 .acct-section-head {
@@ -153,6 +153,14 @@
    Categories
    ============================================================ */
 
+/* Title, search and the "all offers" ticket share the navy canopy;
+   the ticket straddles its bottom edge like the featured one on the home. */
+.category-intro.canopy {
+  --canopy-cut: 50px;
+  padding-bottom: 0;
+}
+.category-intro .acct-header { margin-bottom: 18px; }
+
 .category-search-shortcut {
   display: flex;
   align-items: center;
@@ -171,17 +179,21 @@
 }
 .category-search-shortcut svg { width: 19px; height: 19px; color: var(--ink-mute); flex-shrink: 0; }
 .category-search-shortcut:hover { border-color: var(--rule-strong); box-shadow: var(--shadow-2); }
+.canopy .category-search-shortcut {
+  border-color: transparent;
+  box-shadow: 0 14px 32px -16px rgba(5, 10, 30, 0.7);
+}
 
-/* "All offers" as an ink ticket with a tear-off stub */
+/* "All offers" as a warm ticket with a tear-off stub */
 .category-spotlight {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 96px;
   margin-top: 16px;
   border-radius: var(--r-lg);
-  background: var(--ink);
+  background: var(--brand-gradient-warm);
   color: #fff;
-  box-shadow: var(--shadow-2);
+  box-shadow: 0 18px 36px -18px rgba(192, 23, 107, 0.75), 0 2px 6px rgba(12, 20, 45, 0.16);
 }
 
 .category-spotlight-copy {
@@ -198,7 +210,7 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .category-spotlight h2 {
@@ -210,14 +222,13 @@
 }
 
 .category-spotlight-count {
-  color: var(--marker);
   font-feature-settings: "tnum" 1;
 }
 
 .category-spotlight p {
   font-size: var(--fs-13);
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.66);
+  color: rgba(255, 255, 255, 0.84);
 }
 
 .category-spotlight-action {
@@ -227,15 +238,15 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-left: 1.5px dashed rgba(255, 255, 255, 0.22);
+  border-left: 1.5px dashed rgba(255, 255, 255, 0.4);
   border-radius: 0 var(--r-lg) var(--r-lg) 0;
   font-size: var(--fs-14);
   font-weight: 600;
   color: #fff;
   transition: background-color var(--dur-2) var(--ease-out);
 }
-.category-spotlight-action svg { width: 18px; height: 18px; color: var(--marker); transition: transform var(--dur-2) var(--ease-out); }
-.category-spotlight-action:hover { background: rgba(255, 255, 255, 0.06); }
+.category-spotlight-action svg { width: 18px; height: 18px; transition: transform var(--dur-2) var(--ease-out); }
+.category-spotlight-action:hover { background: rgba(255, 255, 255, 0.1); }
 .category-spotlight-action:hover svg { transform: translateX(3px); }
 
 .category-spotlight-action::before,
@@ -248,7 +259,8 @@
   border-radius: 50%;
   background: var(--porcelain);
 }
-.category-spotlight-action::before { top: -7px; }
+/* Top notch is cut into the navy canopy, bottom one into the page. */
+.category-spotlight-action::before { top: -7px; background: var(--navy); }
 .category-spotlight-action::after { bottom: -7px; }
 
 .category-section { margin-top: 28px; }
@@ -369,8 +381,16 @@
     column-gap: 40px;
     align-items: start;
   }
-  .category-intro { position: sticky; top: 0; }
-  .category-section { margin-top: 0; padding-top: calc(28px + var(--safe-top)); }
+  .category-intro { position: sticky; top: calc(20px + var(--safe-top)); }
+  .category-intro.canopy {
+    --canopy-cut: 0px;
+    margin-top: calc(20px + var(--safe-top));
+    padding: 26px 22px 22px;
+  }
+  .category-intro.canopy::before { inset: 0; border-radius: var(--r-lg); }
+  .category-intro .acct-header { padding-top: 0; }
+  .category-intro .category-spotlight-action::after { background: var(--navy); }
+  .category-section { margin-top: 0; padding-top: calc(20px + var(--safe-top)); }
   .category-app-grid { gap: 14px; }
   .category-app-card { min-height: 176px; padding: 18px; }
 }

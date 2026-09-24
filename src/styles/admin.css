@@ -48,14 +48,14 @@
 .admin-sidebar-tag {
   padding: 3px 8px;
   border-radius: var(--r-pill);
-  background: var(--paper-sunken);
-  border: 1px solid var(--rule);
+  background: var(--on-navy-fill);
+  border: 1px solid var(--on-navy-line);
   font-family: var(--font-body);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
 }
 
 .admin-nav {
@@ -71,7 +71,7 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--on-navy-mute);
 }
 
 .admin-nav-item {
@@ -82,15 +82,20 @@
   min-height: 42px;
   padding: 0 10px 0 12px;
   border-radius: var(--r-md);
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
   font-size: var(--fs-14);
   font-weight: 550;
   text-align: left;
   transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
 }
 .admin-nav-item svg { width: 18px; height: 18px; stroke-width: 1.8; flex-shrink: 0; }
-.admin-nav-item:hover { background: var(--paper-sunken); color: var(--ink); }
-.admin-nav-item.active { background: var(--ink); color: var(--paper); }
+.admin-nav-item:hover { background: var(--on-navy-fill); color: var(--on-navy); }
+/* Active section: lighter row plus the pink bar of the tab dock. */
+.admin-nav-item.active {
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--on-navy);
+  box-shadow: inset 3px 0 0 var(--pink);
+}
 
 .admin-nav-label { flex: 1; min-width: 0; }
 
@@ -101,12 +106,12 @@
   height: 20px;
   padding: 0 6px;
   border-radius: var(--r-pill);
-  background: var(--paper-sunken);
-  border: 1px solid var(--rule);
+  background: var(--on-navy-fill);
+  border: 1px solid var(--on-navy-line);
   font-family: var(--font-mono);
   font-size: var(--fs-11);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--on-navy);
 }
 .admin-nav-item.active .admin-nav-count {
   background: var(--brand);
@@ -120,11 +125,30 @@
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  background: color-mix(in srgb, var(--porcelain) 90%, transparent);
-  backdrop-filter: saturate(1.4) blur(12px);
-  -webkit-backdrop-filter: saturate(1.4) blur(12px);
-  border-bottom: 1px solid var(--rule);
+  background: var(--navy);
+  color: var(--on-navy);
 }
+
+.admin-topbar .btn-ghost { color: var(--on-navy-soft); }
+.admin-topbar .btn-ghost:hover:not(:disabled) { background: var(--on-navy-fill); color: var(--on-navy); }
+.admin-topbar .btn-secondary {
+  background: var(--on-navy-fill);
+  border-color: var(--on-navy-line);
+  color: var(--on-navy);
+}
+.admin-topbar .btn-secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); }
+.admin-topbar .icon-btn {
+  background: var(--on-navy-fill);
+  border-color: var(--on-navy-line);
+  color: var(--on-navy);
+}
+.admin-topbar .icon-btn:hover { background: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.3); }
+
+.admin-topbar .tabs { background: var(--on-navy-fill); }
+.admin-topbar .tab { color: var(--on-navy-mute); }
+.admin-topbar .tab:hover { color: var(--on-navy); }
+.admin-topbar .tab.active { background: var(--paper); color: var(--ink); box-shadow: none; }
+.admin-topbar .tab:not(.active) .tab-count { background: rgba(255, 255, 255, 0.16); color: var(--on-navy); }
 
 /* The shared .app-header is sticky on its own; here the wrapper sticks. */
 .admin-main-header {
@@ -147,6 +171,7 @@
   display: none;
   width: 40px;
   height: 40px;
+  background: var(--brand);
   font-size: var(--fs-13);
 }
 
@@ -171,7 +196,7 @@
   font-weight: 600;
   letter-spacing: var(--tracking-label);
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--on-navy-mute);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,7 +233,7 @@
   height: 9px;
   border-radius: 50%;
   background: var(--danger);
-  border: 2px solid var(--paper);
+  border: 2px solid var(--navy);
 }
 
 .admin-logout-btn { min-height: 40px; }
@@ -226,7 +251,9 @@
   padding: 22px var(--gutter) calc(56px + var(--safe-bottom));
 }
 
+/* Canopy continuing the navy top bar (lifted over the body's top padding). */
 .admin-view-header {
+  --canopy-lift: 22px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -249,13 +276,13 @@
   font-weight: 700;
   line-height: 1.02;
   letter-spacing: -0.035em;
-  color: var(--ink);
+  color: var(--on-navy);
 }
 
 .admin-view-subtitle {
   font-size: var(--fs-14);
   line-height: 1.5;
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
 }
 
 .admin-view-actions {
@@ -1920,8 +1947,12 @@ textarea.admin-domain-input { min-height: 120px; }
     /* 15px top centers the 38px wordmark on the 68px top bar row. */
     padding: 15px 14px 20px;
     overflow-y: auto;
-    background: var(--paper);
-    border-right: 1px solid var(--rule);
+    /* Above the view canopy, which runs full-bleed behind it. */
+    z-index: 2;
+    background:
+      radial-gradient(260px 220px at 0% 100%, rgba(237, 30, 121, 0.18), transparent 70%),
+      var(--navy);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .admin-tabs-container { display: none; }
@@ -1937,7 +1968,7 @@ textarea.admin-domain-input { min-height: 120px; }
 
   .admin-body { padding: 32px 32px 72px; }
 
-  .admin-view-header { margin-bottom: 24px; }
+  .admin-view-header { --canopy-lift: 32px; margin-bottom: 24px; }
 
   .admin-metric-card { gap: 20px; padding: 18px 20px; }
   .admin-metric-value,

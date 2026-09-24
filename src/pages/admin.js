@@ -113,7 +113,7 @@ function renderDomainList(domains, emptyText) {
 
 function renderViewHeader({ eyebrow = '', title, subtitle = '', actions = '' }) {
   return `
-    <header class="admin-view-header">
+    <header class="admin-view-header canopy canopy--continued">
       <div class="admin-view-heading">
         ${eyebrow ? `<span class="t-eyebrow">${eyebrow}</span>` : ''}
         <h1 class="admin-view-title">${title}</h1>
@@ -148,16 +148,16 @@ function renderAdminSkeleton() {
   return `
     <div class="page admin-page is-loading" aria-busy="true">
       <aside class="admin-sidebar">
-        <div class="admin-sidebar-brand">${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}</div>
+        <div class="admin-sidebar-brand">${renderBrandLogo('wordmark-on-dark', 'brand-logo admin-brand-logo')}</div>
       </aside>
       <div class="admin-main">
         <div class="admin-topbar admin-skeleton-topbar">
           <div class="app-header admin-main-header">
-            <div class="admin-header-brand">${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}</div>
+            <div class="admin-header-brand">${renderBrandLogo('wordmark-on-dark', 'brand-logo admin-brand-logo')}</div>
           </div>
         </div>
         <div class="admin-body">
-          <div class="admin-view-header">
+          <div class="admin-view-header canopy canopy--continued">
             <div class="admin-view-heading">
               <span class="skeleton admin-skeleton-eyebrow"></span>
               <span class="skeleton admin-skeleton-title"></span>
@@ -334,7 +334,7 @@ async function renderAdminPage(container, options = {}) {
     <div class="page admin-page">
       <aside class="admin-sidebar">
         <div class="admin-sidebar-brand">
-          ${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}
+          ${renderBrandLogo('wordmark-on-dark', 'brand-logo admin-brand-logo')}
           <span class="admin-sidebar-tag">${isSuperadmin() ? 'Superadmin' : 'Admin'}</span>
         </div>
         <nav class="admin-nav" aria-label="Seções do painel">
@@ -350,7 +350,7 @@ async function renderAdminPage(container, options = {}) {
         <div class="admin-topbar">
           <header class="app-header admin-main-header">
             <div class="admin-header-brand">
-              ${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}
+              ${renderBrandLogo('wordmark-on-dark', 'brand-logo admin-brand-logo')}
               <div class="avatar admin-header-avatar" aria-hidden="true">${isSuperadmin() ? 'SA' : 'AD'}</div>
               <div class="admin-header-copy">
                 <div class="admin-header-title">${isSuperadmin() ? 'Superadmin' : 'Painel admin'}</div>

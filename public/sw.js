@@ -1,5 +1,5 @@
 // Empreende iCEV — Service Worker
-const CACHE_NAME = 'empreende-icev-v1';
+const CACHE_NAME = 'empreende-icev-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -9,6 +9,8 @@ const ASSETS = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/brand/logo.svg',
+  '/brand/logo-on-dark.svg',
+  '/brand/wordmark-on-dark.svg',
 ];
 
 self.addEventListener('install', (e) => {

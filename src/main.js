@@ -181,8 +181,10 @@ let deferredInstallPrompt = null;
 const BRAND_LOGOS = {
   wordmark: { src: '/brand/wordmark.svg', width: 1014, height: 251 },
   'wordmark-white': { src: '/brand/wordmark-white.svg', width: 1014, height: 251 },
+  'wordmark-on-dark': { src: '/brand/wordmark-on-dark.svg', width: 1014, height: 251 },
   logo: { src: '/brand/logo.svg', width: 1020, height: 589 },
   'logo-white': { src: '/brand/logo-white.svg', width: 1020, height: 589 },
+  'logo-on-dark': { src: '/brand/logo-on-dark.svg', width: 1020, height: 589 },
   symbol: { src: '/brand/symbol.svg', width: 890, height: 304 },
 };
 

@@ -15,6 +15,10 @@
 .seller-main-header {
   padding-left: max(var(--gutter), calc((100% - var(--max-width)) / 2 + var(--gutter)));
   padding-right: max(var(--gutter), calc((100% - var(--max-width)) / 2 + var(--gutter)));
+  background: var(--navy);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--on-navy);
 }
 
 .seller-body {
@@ -47,25 +51,26 @@
   min-width: 40px;
   padding: 0 14px 0 12px;
   border-radius: var(--r-md);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  color: var(--ink);
+  background: var(--on-navy-fill);
+  border: 1px solid var(--on-navy-line);
+  color: var(--on-navy);
   font-size: var(--fs-14);
   font-weight: 600;
   white-space: nowrap;
   transition: border-color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .seller-header-btn svg { width: 17px; height: 17px; stroke-width: 2; }
-.seller-header-btn:hover { border-color: var(--rule-strong); background: var(--paper-sunken); }
+.seller-header-btn:hover { border-color: rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.16); }
 .seller-header-btn:active { transform: scale(0.96); }
 
 .seller-avatar {
   width: 40px;
   height: 40px;
+  background: var(--brand);
   font-size: var(--fs-14);
   transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.seller-avatar:hover { box-shadow: 0 0 0 3px var(--rule); }
+.seller-avatar:hover { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.28); }
 .seller-avatar:active { transform: scale(0.95); }
 
 /* Tight phones: "Ver vitrine" collapses to its icon (it keeps its aria-label). */
@@ -109,12 +114,34 @@
 
 /* ---------- Page header ---------- */
 
+/* Canopy that continues the navy app bar (lifted under the body's top padding). */
 .seller-view-header {
+  --canopy-lift: 12px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 14px 0 22px;
+  padding: 14px 0 24px;
 }
+
+/* Form views put "Voltar" right above the header: the navy reaches up behind it. */
+.seller-back-btn + .seller-view-header { --canopy-lift: 60px; }
+.seller-back-btn:has(+ .seller-view-header) {
+  position: relative;
+  z-index: 1;
+  color: var(--on-navy-soft);
+}
+.seller-back-btn:has(+ .seller-view-header):hover:not(:disabled) { background: var(--on-navy-fill); color: var(--on-navy); }
+
+/* The first card after the header straddles the navy edge, like the tickets on
+   the vitrine. It needs position: relative to paint above the positioned header. */
+.seller-view-header.canopy:has(+ :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form)) {
+  padding-bottom: 62px;
+}
+.seller-view-header.canopy + :is(.seller-setup-card, .seller-ledger, .seller-coupon-hero, .seller-form) {
+  position: relative;
+  margin-top: -38px;
+}
+.seller-view-header.canopy + .seller-edit-warning { margin-top: 18px; }
 
 .seller-view-copy {
   display: flex;
@@ -129,7 +156,7 @@
   font-weight: 700;
   line-height: 1.08;
   letter-spacing: -0.035em;
-  color: var(--ink);
+  color: var(--on-navy);
   overflow-wrap: anywhere;
 }
 
@@ -138,7 +165,7 @@
   margin-top: 2px;
   font-size: var(--fs-14);
   line-height: 1.5;
-  color: var(--ink-soft);
+  color: var(--on-navy-soft);
 }
 
 .seller-view-action { display: flex; align-items: center; }

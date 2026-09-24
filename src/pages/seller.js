@@ -56,7 +56,7 @@ function getOfferStatusMeta(ad) {
 // `title` may carry static markup (e.g. a .hl span); never pass user data unescaped.
 function renderViewHead({ eyebrow, title, text = '', action = '' }) {
   return `
-    <header class="seller-view-header">
+    <header class="seller-view-header canopy canopy--continued">
       <div class="seller-view-copy">
         <p class="t-eyebrow">${eyebrow}</p>
         <h1 class="seller-view-title">${title}</h1>
@@ -302,7 +302,7 @@ async function renderSellerPage(container, { force = false } = {}) {
   container.innerHTML = `
     <div class="page seller-page">
       <header class="app-header seller-main-header">
-        <span class="seller-brand">${renderBrandLogo('wordmark', 'brand-logo seller-brand-logo')}</span>
+        <span class="seller-brand">${renderBrandLogo('wordmark-on-dark', 'brand-logo seller-brand-logo')}</span>
         <div class="seller-header-actions">
           <button class="seller-header-btn is-collapsible" id="open-buyer-mode" type="button" aria-label="Ver vitrine de ofertas">${icons.home}<span>Ver vitrine</span></button>
           <button class="user-avatar seller-avatar" id="open-seller-profile" type="button" aria-label="Abrir perfil de ${escapeHTML(displayName)}">${escapeHTML(user.avatar || 'U')}</button>
@@ -973,7 +973,7 @@ function renderEditProductForm() {
   const status = getOfferStatusMeta(ad);
   return `
     ${renderFormBackButton()}
-    <header class="seller-view-header seller-edit-header">
+    <header class="seller-view-header canopy canopy--continued seller-edit-header">
       <div class="seller-view-copy">
         <p class="t-eyebrow">Gerenciar oferta</p>
         <h1 class="seller-view-title">${escapeHTML(ad.title || 'Oferta')}</h1>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#F3F4F8" />
+  <meta name="theme-color" content="#182A50" />
   <meta name="description" content="Empreende iCEV: cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -38,11 +38,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Geist+Mono:wght@500..600&display=swap" rel="stylesheet">
   <style>
-    body{margin:0;background:#F3F4F8;color:#182A50;font-family:'Inter',system-ui,sans-serif}
+    body{margin:0;background:#ECE8F2;color:#182A50;font-family:'Inter',system-ui,sans-serif}
+    .boot-screen{background:radial-gradient(560px 300px at 100% 0%,rgba(237,30,121,.3),rgba(192,23,107,.1) 46%,transparent 72%),#182A50}
     .boot-screen{min-height:100vh;display:grid;place-items:center;align-content:center;gap:28px}
     .boot-logo{width:min(220px,58vw);height:auto;animation:boot-in .6s cubic-bezier(.22,1,.36,1) both}
-    .boot-loader{width:112px;height:3px;border-radius:3px;overflow:hidden;background:#E4E6EE}
-    .boot-loader:after{content:'';display:block;width:40%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#182A50,#C0176B 64%,#ED1E79);animation:boot-loader 1s cubic-bezier(.65,0,.35,1) infinite}
+    .boot-loader{width:112px;height:3px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.16)}
+    .boot-loader:after{content:'';display:block;width:40%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#C0176B,#ED1E79);animation:boot-loader 1s cubic-bezier(.65,0,.35,1) infinite}
     @keyframes boot-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
     @keyframes boot-loader{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
     @media (prefers-reduced-motion:reduce){.boot-logo{animation:none}.boot-loader:after{animation-duration:2.4s}}
@@ -51,7 +52,7 @@
 <body>
   <div id="app">
     <div class="boot-screen" role="status" aria-label="Carregando Empreende iCEV">
-      <img class="boot-logo" src="/brand/logo.svg" alt="Empreende iCEV — Conexões que geram negócios." width="220" height="127" />
+      <img class="boot-logo" src="/brand/logo-on-dark.svg" alt="Empreende iCEV — Conexões que geram negócios." width="220" height="127" />
       <div class="boot-loader"></div>
     </div>
   </div>

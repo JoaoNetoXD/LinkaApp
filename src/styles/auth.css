@@ -155,11 +155,25 @@
   max-width: 420px;
 }
 
+/* Phone: the header is the navy canopy, reaching up over the column's top
+   padding. Desktop has the gradient panel instead, so it goes back to plain. */
 .auth-header {
+  --canopy-lift: calc(12px + var(--safe-top));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+}
+
+@media (max-width: 959px) {
+  .canopy .auth-back-home { color: var(--on-navy-soft); }
+  .canopy .auth-back-home:hover { background: var(--on-navy-fill); color: var(--on-navy); }
+  .canopy .auth-subtitle { color: var(--on-navy-soft); }
+}
+
+@media (min-width: 960px) {
+  .auth-header.canopy { padding-bottom: 0; color: var(--ink); }
+  .auth-header.canopy::before { display: none; }
 }
 
 .auth-back-home {

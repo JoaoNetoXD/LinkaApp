@@ -4,8 +4,8 @@
   "description": "Cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F3F4F8",
-  "theme_color": "#F3F4F8",
+  "background_color": "#182A50",
+  "theme_color": "#182A50",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

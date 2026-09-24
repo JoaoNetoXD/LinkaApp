@@ -12,16 +12,25 @@
   --magenta:        #C0176B;
   --pink:           #ED1E79;
   --brand-gradient: linear-gradient(135deg, #182A50 0%, #C0176B 64%, #ED1E79 100%);
+  /* The gradient without its navy start, for surfaces that sit on navy. */
+  --brand-gradient-warm: linear-gradient(120deg, #C0176B 0%, #ED1E79 100%);
+
+  /* On navy (canopy, dock): white text in three strengths plus hairline and fill */
+  --on-navy:        #FFFFFF;
+  --on-navy-soft:   rgba(255, 255, 255, 0.74);
+  --on-navy-mute:   rgba(255, 255, 255, 0.58);
+  --on-navy-line:   rgba(255, 255, 255, 0.16);
+  --on-navy-fill:   rgba(255, 255, 255, 0.09);
 
   /* Surfaces */
-  --porcelain:      #F3F4F8;   /* page canvas */
+  --porcelain:      #ECE8F2;   /* page canvas: lilac mist between the navy and the pink */
   --paper:          #FFFFFF;   /* raised surfaces */
   --paper-sunken:   #F7F7FA;   /* inset areas inside cards */
 
   /* Text: navy-based so type always reads as the brand */
   --ink:            #182A50;   /* primary text, dark fills */
   --ink-soft:       #465070;   /* secondary text */
-  --ink-mute:       #6B7289;   /* captions, placeholders, metadata */
+  --ink-mute:       #5E6580;   /* captions, placeholders, metadata (4.5:1 on the canvas) */
   --ink-faint:      #A5AABB;   /* disabled, decorative strokes */
   --rule:           #E4E6EE;   /* hairlines */
   --rule-strong:    #CFD3DE;   /* input borders, emphasized dividers */

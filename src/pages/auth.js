@@ -299,12 +299,12 @@ export function renderAuth(container) {
 
       <main class="auth-main">
         <div class="auth-card">
-          <div class="auth-header">
+          <div class="auth-header canopy">
             <button type="button" class="auth-back-home" id="btnBackHome">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
               Voltar para a vitrine
             </button>
-            ${renderBrandLogo('wordmark', 'brand-logo auth-logo')}
+            ${renderBrandLogo('wordmark-on-dark', 'brand-logo auth-logo')}
             <h1 class="auth-title">${getTitle(mode)}</h1>
             <p class="auth-subtitle">${subtitle}</p>
           </div>
