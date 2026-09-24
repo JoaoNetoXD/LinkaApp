@@ -275,7 +275,7 @@ function normalizeCategoryPayload(body = {}, { partial = false } = {}) {
   if (!partial || has('maxSlots') || has('max_slots')) {
     const maxSlots = Number.parseInt(body.maxSlots ?? body.max_slots ?? 5, 10);
     if (!Number.isInteger(maxSlots) || maxSlots < 1 || maxSlots > 99) {
-      throw makeHttpError('As vagas por oferta precisam ficar entre 1 e 99.', 400, 'INVALID_CATEGORY_SLOTS');
+      throw makeHttpError('A quantidade de cupons por oferta precisa ficar entre 1 e 99.', 400, 'INVALID_CATEGORY_SLOTS');
     }
     updates.max_slots = maxSlots;
   }

@@ -836,7 +836,7 @@ function renderCategoryProductRow(product) {
       <div class="category-product-kpis">
         <span class="category-product-price">${formatCurrency(product.discountPrice)}</span>
         <span class="category-product-kpi">${Number(product.clicks || 0)} cliques</span>
-        <span class="category-product-kpi">${Number(product.slots?.used || 0)}/${Number(product.slots?.total || 5)} vagas</span>
+        <span class="category-product-kpi">${Number(product.slots?.used || 0)}/${Number(product.slots?.total || 5)} cupons</span>
       </div>
       <div class="category-product-actions">
         ${isModeratable ? `
@@ -918,7 +918,7 @@ function renderCategories() {
                   <span>${cat.clicks} ${cat.clicks === 1 ? 'clique' : 'cliques'}</span>
                 </div>
               </div>
-              <p class="category-rule-line">${Number(cat.maxSlots || 5)} vagas por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
+              <p class="category-rule-line">${Number(cat.maxSlots || 5)} cupons por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
               ${getCategoryRules(cat.id) ? `<p class="category-rule-preview">${escapeHTML(getCategoryRules(cat.id))}</p>` : ''}
               <div class="category-heat-actions">
                 <button class="btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver ofertas</button>
@@ -938,11 +938,11 @@ function renderCategories() {
           <div class="category-management-copy">
             <span class="t-eyebrow">Categoria selecionada</span>
             <h2>${escapeHTML(selectedCategory?.name || 'Categoria')}</h2>
-            <p>${selectedCategory?.total || 0} ${selectedCategory?.total === 1 ? 'oferta' : 'ofertas'} · ${selectedCategory?.active || 0} ${selectedCategory?.active === 1 ? 'ativa' : 'ativas'} · ${selectedCategory?.queue || 0} em análise · ${Number(selectedCategory?.maxSlots || 5)} vagas por oferta</p>
+            <p>${selectedCategory?.total || 0} ${selectedCategory?.total === 1 ? 'oferta' : 'ofertas'} · ${selectedCategory?.active || 0} ${selectedCategory?.active === 1 ? 'ativa' : 'ativas'} · ${selectedCategory?.queue || 0} em análise · ${Number(selectedCategory?.maxSlots || 5)} cupons por oferta</p>
           </div>
         </div>
         <div class="category-management-actions">
-          <button class="btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras e vagas</button>
+          <button class="btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras e cupons</button>
           <button class="btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Ver fila de aprovação</button>
           <button class="btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled title="Só é possível excluir categorias sem ofertas"' : ''}>Excluir categoria</button>
         </div>
@@ -1241,7 +1241,7 @@ function showAdminProductDetails(productId, container) {
   const slotsUsed = Number(product.slots?.used || 0);
   const couponTerms = [
     Number.isFinite(couponHours) && couponHours > 0 ? `Vale ${couponHours} h depois de retirado` : '',
-    slotsUsed > 0 ? `${slotsUsed} de ${slotsTotal} vagas usadas` : `${slotsTotal} ${slotsTotal === 1 ? 'vaga' : 'vagas'}`,
+    slotsUsed > 0 ? `${slotsUsed} de ${slotsTotal} cupons retirados` : `${slotsTotal} ${slotsTotal === 1 ? 'cupom' : 'cupons'}`,
   ].filter(Boolean).join(' · ');
 
   modalRoot.innerHTML = `
@@ -1452,7 +1452,7 @@ function showCategoryModal(mode, category, container) {
           `}
           <div class="category-editor-grid">
             <div class="input-group">
-              <label for="category-field-slots">Vagas por oferta</label>
+              <label for="category-field-slots">Cupons por oferta</label>
               <input class="input-field" id="category-field-slots" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
             </div>
             <div class="input-group">
