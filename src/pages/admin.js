@@ -65,7 +65,7 @@ function getInitials(name, fallback = 'U') {
 
 // The brand always writes "iCEV" with a lowercase i, even inside uppercase labels.
 function createFallbackInstitution() {
-  return { name: BRAND_NAME, fullName: BRAND_NAME, domain: '', primaryColor: '#C0176B', settings: {} };
+  return { name: BRAND_NAME, fullName: BRAND_NAME, domain: '', settings: {} };
 }
 
 // Accepts "@escola.edu.br", "escola.edu.br" or a pasted address ("nome@escola.edu.br").
@@ -461,10 +461,6 @@ function renderPlatformUsers() {
 }
 
 function renderPlatformInstitutions() {
-  const PLAN_LABELS = { basic: 'Básico', pro: 'Pro', enterprise: 'Empresarial' };
-  const planOptions = (selected) => Object.entries(PLAN_LABELS)
-    .map(([plan, label]) => `<option value="${plan}" ${selected === plan ? 'selected' : ''}>${label}</option>`)
-    .join('');
   return `
     ${renderViewHeader({
       eyebrow: 'Plataforma',
@@ -474,7 +470,7 @@ function renderPlatformInstitutions() {
     <section class="platform-list">
       ${platformInstitutions.length ? `
         <div class="platform-list-head platform-institution-grid" aria-hidden="true">
-          <span>Nome curto</span><span>Nome completo</span><span>Domínio</span><span>Plano</span><span></span>
+          <span>Nome curto</span><span>Nome completo</span><span>Domínio</span><span></span>
         </div>
       ` : ''}
       <div class="platform-institution-list">
@@ -483,7 +479,6 @@ function renderPlatformInstitutions() {
             <label class="platform-cell"><span class="platform-cell-label">Nome curto</span><input class="input-field admin-input-sm" name="name" required value="${escapeHTML(item.name)}" /></label>
             <label class="platform-cell"><span class="platform-cell-label">Nome completo</span><input class="input-field admin-input-sm" name="fullName" required value="${escapeHTML(item.fullName)}" /></label>
             <label class="platform-cell"><span class="platform-cell-label">Domínio</span><input class="input-field admin-input-sm" name="domain" required value="${escapeHTML(item.domain)}" /></label>
-            <label class="platform-cell"><span class="platform-cell-label">Plano</span><select class="input-field admin-input-sm" name="plan">${planOptions(item.plan)}</select></label>
             <div class="platform-row-action"><button class="btn-secondary btn-sm" type="submit">Salvar</button></div>
           </form>`).join('') || renderAdminEmpty({ icon: icons.all, title: 'Nenhuma instituição cadastrada', text: 'Cadastre a primeira no formulário abaixo.' })}
       </div>
@@ -499,7 +494,6 @@ function renderPlatformInstitutions() {
         <label class="platform-field"><span class="platform-field-label">Nome curto</span><input class="input-field admin-input-sm" name="name" required maxlength="80" placeholder="Ex.: iCEV" /></label>
         <label class="platform-field platform-field-wide"><span class="platform-field-label">Nome completo</span><input class="input-field admin-input-sm" name="fullName" required maxlength="160" placeholder="Ex.: Instituto de Ensino Superior iCEV" /></label>
         <label class="platform-field"><span class="platform-field-label">Domínio</span><input class="input-field admin-input-sm" name="domain" required placeholder="@exemplo.edu.br" /></label>
-        <label class="platform-field"><span class="platform-field-label">Plano</span><select class="input-field admin-input-sm" name="plan">${planOptions('basic')}</select></label>
         <div class="platform-create-actions">
           <button class="btn-primary btn-sm" type="submit">${icons.plus} Criar instituição</button>
         </div>
@@ -936,10 +930,10 @@ function renderCategories() {
         </div>
         ${selectedCategory?.total ? '<p class="category-delete-hint" id="category-delete-hint">Só dá para excluir uma categoria sem ofertas.</p>' : ''}
       </div>
-      ${selectedCategory ? `
+      ${selectedCategory && getCategoryRules(selectedCategory.id) ? `
         <div class="category-rule-detail">
-          <span class="t-eyebrow">Regra atual</span>
-          <span>${escapeHTML(getCategoryRules(selectedCategory.id) || 'Sem regra específica. A categoria segue só as regras gerais da instituição.')}</span>
+          <span class="t-eyebrow">Observação da equipe</span>
+          <span>${escapeHTML(getCategoryRules(selectedCategory.id))}</span>
         </div>
       ` : ''}
 
@@ -1047,30 +1041,13 @@ function renderReports() {
 }
 
 function renderSettings() {
-  const settings = {
-    autoApproveTrustedSellers: false,
-    requireMinorConsent: true,
-    requireSellerWhatsapp: true,
-    requireProductPhoto: true,
-    allowGuestBrowsing: true,
-    minDiscountPercent: 10,
-    maxDiscountPercent: 50,
-    reviewSlaHours: 24,
-    defaultAnnouncementHours: 24,
-    supportWhatsapp: '',
-    termsUrl: '',
-    ...(activeInstitution.settings || {}),
-  };
   const noInstitution = !activeInstitution?.id;
   const primaryDomain = String(activeInstitution.domain || '').trim();
-  const renderToggle = (key, isOn, label) => `
-    <button class="toggle ${isOn ? 'active' : ''}" type="button" role="switch" aria-checked="${isOn ? 'true' : 'false'}" data-setting-toggle="${key}" aria-label="${label}"></button>
-  `;
   return `
     ${renderViewHeader({
       eyebrow: `Configurações · ${brandCaseHTML(activeInstitution.name || activeInstitution.fullName || BRAND_NAME)}`,
       title: 'Configurações da instituição',
-      subtitle: 'Acesso, identidade e regras que o app usa em produção.',
+      subtitle: 'Quem pode criar conta e como a instituição aparece no painel.',
     })}
     ${noInstitution ? `
       <div class="alert alert-warning admin-inline-alert" role="status">
@@ -1104,92 +1081,13 @@ function renderSettings() {
 
       <section class="settings-group">
         <div class="settings-group-head">
-          <h2 class="settings-group-title">Identidade</h2>
-          <p>Como a instituição aparece para alunos e empresas.</p>
+          <h2 class="settings-group-title">Instituição</h2>
+          <p>Nome completo mostrado no painel da equipe.</p>
         </div>
         <div class="card settings-card">
           <div class="setting-item">
             <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
             <button class="btn btn-sm setting-edit-btn" type="button" data-setting="fullName" ${noInstitution ? 'disabled' : ''}>Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Cor principal</h4><p class="setting-color-value"><span class="setting-swatch" style="background:${escapeHTML(activeInstitution.primaryColor)};"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="primaryColor" ${noInstitution ? 'disabled' : ''}>Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>URL do logo</h4><p>${escapeHTML(activeInstitution.logoUrl || 'Não configurado')}</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="logoUrl" ${noInstitution ? 'disabled' : ''}>Editar</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="settings-group">
-        <div class="settings-group-head">
-          <h2 class="settings-group-title">Aprovação e segurança</h2>
-          <p>Regras aplicadas antes de uma oferta chegar à vitrine.</p>
-        </div>
-        <div class="card settings-card">
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Aprovação automática para empresas confiáveis</h4><p>Empresas com 5 ou mais ofertas aprovadas e nenhuma recusa</p></div>
-            ${renderToggle('autoApproveTrustedSellers', settings.autoApproveTrustedSellers, 'Aprovação automática para empresas confiáveis')}
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
-            ${renderToggle('requireMinorConsent', settings.requireMinorConsent !== false, 'Consentimento de responsável para menores')}
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>WhatsApp obrigatório para empresas</h4><p>Facilita o contato do aluno com a empresa</p></div>
-            ${renderToggle('requireSellerWhatsapp', settings.requireSellerWhatsapp !== false, 'WhatsApp obrigatório para empresas')}
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Foto real obrigatória</h4><p>Ajuda na aprovação e evita ofertas genéricas</p></div>
-            ${renderToggle('requireProductPhoto', settings.requireProductPhoto !== false, 'Foto real obrigatória')}
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Navegação de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
-            ${renderToggle('allowGuestBrowsing', settings.allowGuestBrowsing !== false, 'Navegação de visitantes')}
-          </div>
-        </div>
-      </section>
-
-      <section class="settings-group">
-        <div class="settings-group-head">
-          <h2 class="settings-group-title">Regras das ofertas</h2>
-          <p>Limites de desconto e tempo de vitrine para novas ofertas.</p>
-        </div>
-        <div class="card settings-card">
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Desconto mínimo</h4><p>${Number(settings.minDiscountPercent || 10)}% por oferta</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="minDiscountPercent">Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Desconto máximo</h4><p>${Number(settings.maxDiscountPercent || 50)}% por oferta</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="maxDiscountPercent">Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Prazo de revisão</h4><p>${Number(settings.reviewSlaHours || 24)} horas para revisar cada oferta</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="reviewSlaHours">Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>Duração padrão da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria não definir</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="defaultAnnouncementHours">Editar</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="settings-group">
-        <div class="settings-group-head">
-          <h2 class="settings-group-title">Governança e suporte</h2>
-          <p>Canais e documentos que aparecem para quem usa o app.</p>
-        </div>
-        <div class="card settings-card">
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>WhatsApp de suporte da instituição</h4><p>${escapeHTML(settings.supportWhatsapp || 'Não configurado')}</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-text="supportWhatsapp">Editar</button>
-          </div>
-          <div class="setting-item">
-            <div class="setting-item-info"><h4>URL de termos de uso</h4><p>${escapeHTML(settings.termsUrl || 'Não configurado')}</p></div>
-            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-text="termsUrl">Editar</button>
           </div>
         </div>
       </section>
@@ -1427,7 +1325,7 @@ function showCategoryModal(mode, category, container) {
         <div class="modal-handle"></div>
         <form id="category-form">
           <h3 class="modal-title" id="category-modal-title">${isEdit ? 'Editar categoria' : 'Nova categoria'}</h3>
-          <p class="modal-description">As regras ficam salvas e passam a orientar a aprovação e as novas ofertas.</p>
+          <p class="modal-description">Cupons por oferta e horas na vitrine valem para as novas ofertas desta categoria.</p>
           <div class="input-group">
             <label for="category-field-name">Nome da categoria</label>
             <input class="input-field" id="category-field-name" name="name" value="${escapeHTML(category?.name || '')}" placeholder="Ex.: Livros e apostilas" required maxlength="48" />
@@ -1450,7 +1348,7 @@ function showCategoryModal(mode, category, container) {
             </div>
           </div>
           <div class="input-group">
-            <label for="category-field-rules">Regra da categoria</label>
+            <label for="category-field-rules">Observação para a equipe (opcional)</label>
             <textarea class="input-field" id="category-field-rules" name="rules" rows="3" placeholder="Ex.: Somente produtos lacrados ou com foto real.">${escapeHTML(currentRules)}</textarea>
           </div>
           <div class="modal-inline-status" id="category-modal-status" role="status" aria-live="polite"></div>
@@ -1934,33 +1832,6 @@ function bindAdminEvents(container) {
     }
   });
 
-  // Toggles
-  container.querySelectorAll('.toggle').forEach(toggle => {
-    toggle.addEventListener('click', async () => {
-      if (toggle.classList.contains('is-saving')) return;
-      if (!activeInstitution?.id) {
-        showToast('Instituição real não encontrada para salvar.', 'error');
-        return;
-      }
-      const key = toggle.dataset.settingToggle;
-      const nextValue = !toggle.classList.contains('active');
-      toggle.classList.add('is-saving');
-      toggle.classList.toggle('active', nextValue);
-      toggle.setAttribute('aria-checked', String(nextValue));
-      const settings = { ...(activeInstitution.settings || {}), [key]: nextValue };
-      const result = await updateInstitution(activeInstitution.id, { settings });
-      if (result?.success) {
-        activeInstitution = result.institution;
-        showToast('Configuração salva.', 'success');
-      } else {
-        toggle.classList.toggle('active', !nextValue);
-        toggle.setAttribute('aria-checked', String(!nextValue));
-        showToast(result?.error || 'Não foi possível salvar.', 'error');
-      }
-      toggle.classList.remove('is-saving');
-    });
-  });
-
   // Real editable institution fields
   container.querySelectorAll('.settings-section .btn[data-setting]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1972,9 +1843,7 @@ function bindAdminEvents(container) {
       const modalRoot = document.getElementById('modal-root');
 
       let inputHtml = `<input type="text" class="input-field" id="settingEditVal" value="${escapeHTML(currentVal)}" />`;
-      if (settingKey === 'primaryColor') {
-        inputHtml = `<input type="color" class="admin-color-input" id="settingEditVal" value="${escapeHTML(activeInstitution.primaryColor || '#C0176B')}" />`;
-      } else if (isDomain) {
+      if (isDomain) {
         inputHtml = `
           <input type="text" class="input-field admin-domain-input" id="settingEditVal" value="${escapeHTML(currentVal)}" placeholder="@somosicev.com" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingEditHint" />
           <span class="input-hint" id="settingEditHint">Use o formato @escola.edu.br.</span>
@@ -2057,29 +1926,22 @@ function bindAdminEvents(container) {
     });
   });
 
-  // Values stored inside institutions.settings (text, number or a list of e-mail domains)
-  container.querySelectorAll('[data-setting-text], [data-setting-number], [data-setting-list]').forEach(btn => {
+  // Extra e-mail domains, stored inside institutions.settings
+  container.querySelectorAll('[data-setting-list]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!activeInstitution?.id) {
         showToast('Instituição real não encontrada para salvar.', 'error');
         return;
       }
-      const mode = btn.dataset.settingList ? 'list' : btn.dataset.settingNumber ? 'number' : 'text';
-      const settingKey = btn.dataset.settingList || btn.dataset.settingNumber || btn.dataset.settingText;
+      const settingKey = btn.dataset.settingList;
       const settingItem = btn.closest('.setting-item');
       const title = settingItem?.querySelector('h4')?.textContent || 'Configuração';
-      const currentValue = activeInstitution.settings?.[settingKey] ?? '';
       const primaryDomain = String(activeInstitution.domain || '').trim();
       const modalRoot = document.getElementById('modal-root');
-      let fieldHtml = `<textarea class="input-field" id="settingJsonVal" rows="3">${escapeHTML(String(currentValue || ''))}</textarea>`;
-      if (mode === 'number') {
-        fieldHtml = `<input class="input-field" id="settingJsonVal" type="number" min="0" value="${escapeHTML(String(currentValue || ''))}" />`;
-      } else if (mode === 'list') {
-        fieldHtml = `
-          <textarea class="input-field admin-domain-input" id="settingJsonVal" rows="4" placeholder="@outro-dominio.com.br" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingJsonHint">${escapeHTML(getExtraDomains().join('\n'))}</textarea>
-          <span class="input-hint" id="settingJsonHint">Um domínio por linha, no formato @escola.edu.br.${primaryDomain ? ` O domínio principal (${escapeHTML(primaryDomain)}) já está liberado.` : ''}</span>
-        `;
-      }
+      const fieldHtml = `
+        <textarea class="input-field admin-domain-input" id="settingJsonVal" rows="4" placeholder="@outro-dominio.com.br" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingJsonHint">${escapeHTML(getExtraDomains().join('\n'))}</textarea>
+        <span class="input-hint" id="settingJsonHint">Um domínio por linha, no formato @escola.edu.br.${primaryDomain ? ` O domínio principal (${escapeHTML(primaryDomain)}) já está liberado.` : ''}</span>
+      `;
       modalRoot.innerHTML = `
         <div class="modal-backdrop" id="settings-json-modal">
           <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="settings-json-title">
@@ -2087,7 +1949,7 @@ function bindAdminEvents(container) {
             <form id="settings-json-form">
               <span class="t-eyebrow">Editar configuração</span>
               <h3 class="modal-title" id="settings-json-title">${escapeHTML(title)}</h3>
-              ${mode === 'list' ? '<p class="modal-description">Só e-mails destes domínios conseguem criar conta. Deixe em branco para liberar apenas o domínio principal.</p>' : ''}
+              <p class="modal-description">Só e-mails destes domínios conseguem criar conta. Deixe em branco para liberar apenas o domínio principal.</p>
               <div class="input-group admin-modal-field">
                 <label class="sr-only" for="settingJsonVal">${escapeHTML(title)}</label>
                 ${fieldHtml}
@@ -2111,37 +1973,28 @@ function bindAdminEvents(container) {
         const saveBtn = modalRoot.querySelector('#confirm-json-setting');
         const statusEl = modalRoot.querySelector('#setting-json-status');
         const rawValue = modalRoot.querySelector('#settingJsonVal')?.value?.trim() || '';
-        let value = rawValue;
-        if (mode === 'number') {
-          value = Number(rawValue);
-          if (rawValue === '' || !Number.isFinite(value) || value < 0) {
-            showToast('Informe um número válido.', 'error');
-            return;
+        const { domains, invalid } = parseDomainList(rawValue, primaryDomain);
+        if (invalid.length) {
+          showToast('Revise os domínios.', 'error');
+          if (statusEl) {
+            statusEl.className = 'modal-inline-status error';
+            statusEl.textContent = `Formato inválido: ${invalid.join(', ')}. Use @escola.edu.br.`;
           }
-        } else if (mode === 'list') {
-          const { domains, invalid } = parseDomainList(rawValue, primaryDomain);
-          if (invalid.length) {
-            showToast('Revise os domínios.', 'error');
-            if (statusEl) {
-              statusEl.className = 'modal-inline-status error';
-              statusEl.textContent = `Formato inválido: ${invalid.join(', ')}. Use @escola.edu.br.`;
-            }
-            return;
-          }
-          value = domains;
+          return;
         }
+        const value = domains;
         saveBtn.disabled = true;
         saveBtn.textContent = 'Salvando...';
         if (statusEl) {
           statusEl.className = 'modal-inline-status info';
-          statusEl.textContent = 'Salvando configuração...';
+          statusEl.textContent = 'Salvando domínios...';
         }
         const settings = { ...(activeInstitution.settings || {}), [settingKey]: value };
         const result = await updateInstitution(activeInstitution.id, { settings });
         if (result?.success) {
           activeInstitution = result.institution;
           close();
-          showToast(mode === 'list' ? 'Domínios salvos.' : 'Configuração salva.', 'success');
+          showToast('Domínios salvos.', 'success');
           renderAdminPage(container);
         } else {
           saveBtn.disabled = false;

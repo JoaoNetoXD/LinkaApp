@@ -232,7 +232,7 @@ function normalizeInstitutionUpdates(body = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(body, 'settings')) {
     if (!body.settings || typeof body.settings !== 'object' || Array.isArray(body.settings)) {
-      throw makeHttpError('Configuracoes invalidas.', 400, 'INVALID_SETTINGS');
+      throw makeHttpError('Configurações inválidas.', 400, 'INVALID_SETTINGS');
     }
     updates.settings = body.settings;
   }
@@ -1829,7 +1829,7 @@ app.post('/api/superadmin/institutions', async (req, res) => {
     assertSuperadmin(auth);
     const updates = normalizeInstitutionUpdates(req.body || {});
     if (!updates.name || !updates.full_name || !updates.domain) {
-      throw makeHttpError('Nome, nome completo e dominio sao obrigatorios.', 400, 'INSTITUTION_FIELDS_REQUIRED');
+      throw makeHttpError('Nome, nome completo e domínio são obrigatórios.', 400, 'INSTITUTION_FIELDS_REQUIRED');
     }
     const admin = requireSupabaseAdmin();
     const { data, error } = await admin.from('institutions').insert(updates).select('*').single();

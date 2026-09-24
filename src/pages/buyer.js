@@ -196,7 +196,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'iCEV', fullName: 'iCEV', domain: '', primaryColor: '#C0176B' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'iCEV', fullName: 'iCEV', domain: '' };
 }
 
 async function syncCategories() {

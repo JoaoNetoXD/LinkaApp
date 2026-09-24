@@ -2,8 +2,7 @@
 export const institution = {
   name: 'iCEV',
   fullName: 'Instituto de Ensino Superior iCEV',
-  domain: '@somosicev.com',
-  primaryColor: '#2563eb'
+  domain: '@somosicev.com'
 };
 
 export const currentUser = {
