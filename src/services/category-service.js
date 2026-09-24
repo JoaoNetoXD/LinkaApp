@@ -82,7 +82,7 @@ export async function createCategory(payload) {
       headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-    const result = await readApiResponse(response, 'Nao foi possivel criar a categoria.');
+    const result = await readApiResponse(response, 'Não foi possível criar a categoria.');
     return normalizeCategory(result.category);
   } catch (error) {
     console.error('Erro ao criar categoria:', error);
@@ -105,7 +105,7 @@ export async function updateCategory(categoryId, payload) {
       headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-    const result = await readApiResponse(response, 'Nao foi possivel atualizar a categoria.');
+    const result = await readApiResponse(response, 'Não foi possível atualizar a categoria.');
     return normalizeCategory(result.category);
   } catch (error) {
     console.error('Erro ao atualizar categoria:', error);
@@ -127,7 +127,7 @@ export async function deleteCategory(categoryId) {
       method: 'DELETE',
       headers: await getAuthHeaders(),
     });
-    await readApiResponse(response, 'Nao foi possivel excluir a categoria.');
+    await readApiResponse(response, 'Não foi possível excluir a categoria.');
     return true;
   } catch (error) {
     console.error('Erro ao excluir categoria:', error);

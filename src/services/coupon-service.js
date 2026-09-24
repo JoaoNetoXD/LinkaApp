@@ -1,41 +1,82 @@
 /**
- * Coupon Service — Linka (Supabase)
- * Handles coupon generation, validation, and management.
+ * Coupon Service — Empreende iCEV (Supabase)
+ * Students retrieve a personal discount code (claim_coupon RPC) and buy
+ * directly from the company; sellers validate the code when it is used.
  */
 import { supabase } from '../lib/supabase.js';
 import { sellerCoupons as mockSellerCoupons } from '../data/mock.js';
+import { getCouponCodeCandidates } from '../utils/coupon-code.js';
 
 const USE_MOCKS = import.meta.env.DEV;
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-function generateCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-  return code;
+// Coupons retrieved while previewing locally without a reachable Supabase.
+const devClaimedCoupons = [];
+
+const CLAIM_ERRORS = {
+  AUTH_REQUIRED: 'Entre com seu e-mail do iCEV para retirar o cupom.',
+  INSTITUTION_REQUIRED: 'Sua conta não está vinculada ao iCEV. Entre com seu e-mail institucional.',
+  OFFER_NOT_FOUND: 'Esta oferta não existe mais.',
+  OFFER_UNAVAILABLE: 'Esta oferta não está mais disponível.',
+  OTHER_INSTITUTION: 'Esta oferta é de outra instituição.',
+  OWN_OFFER: 'Esta oferta é da sua empresa. Compartilhe com seus colegas.',
+  SOLD_OUT: 'Os cupons desta oferta acabaram.',
+};
+
+function getClaimErrorMessage(error) {
+  const message = String(error?.message || '');
+  const known = Object.keys(CLAIM_ERRORS).find((key) => message.includes(key));
+  if (known) return { code: known, message: CLAIM_ERRORS[known] };
+  if (error?.code === 'PGRST202' || /claim_coupon/.test(message)) {
+    console.error('claim_coupon RPC missing: run scripts/coupon-claim-migration.sql in Supabase.');
+    return { code: 'NOT_CONFIGURED', message: 'A retirada de cupons ainda não foi ativada. Avise a equipe Empreende iCEV.' };
+  }
+  return { code: 'UNKNOWN', message: 'Não foi possível retirar o cupom agora. Tente de novo em instantes.' };
 }
 
-/** Create a new coupon after payment */
-export async function createCoupon({ productId, buyerId, sellerId, paymentId, validHours = 24 }) {
-  const code = generateCode();
-  const validUntil = new Date(Date.now() + validHours * 60 * 60 * 1000).toISOString();
+function generateDevCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const chars = Array.from(bytes, (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]);
+  return `${chars.slice(0, 4).join('')}-${chars.slice(4).join('')}`;
+}
+
+/**
+ * Retrieve (or re-open) the student's coupon for an offer.
+ * `product` is the offer shown on screen; it fills in display fields the RPC does not return.
+ */
+export async function claimCoupon(product) {
+  const productId = product?.id;
+  const display = {
+    product: { title: product?.title, discount_price: product?.discountPrice, original_price: product?.originalPrice, discount: product?.discount },
+    seller: { name: product?.seller?.name, whatsapp: product?.seller?.whatsapp },
+  };
 
   try {
-    const { data, error } = await supabase.from('coupons').insert({
-      code, product_id: productId, buyer_id: buyerId, seller_id: sellerId,
-      payment_id: paymentId, status: 'active', valid_until: validUntil,
-    }).select(`*, product:products!product_id (title), seller:profiles!seller_id (name), buyer:profiles!buyer_id (name)`).single();
-
+    const { data, error } = await supabase.rpc('claim_coupon', { p_product_id: productId });
     if (error) throw error;
-    return { success: true, coupon: transformCoupon(data) };
+    const row = Array.isArray(data) ? data[0] : data;
+    return { success: true, coupon: transformCoupon({ ...row, ...display }) };
   } catch (err) {
-    if (USE_MOCKS) {
-      console.warn('createCoupon: Supabase unavailable, using mock.', err.message);
-      return {
-        success: true,
-        coupon: { code, productId, status: 'active', createdAt: new Date().toLocaleString(), validUntil: new Date(Date.now() + validHours * 3600000).toLocaleString() }
+    const isNetworkFailure = /fetch|network|Failed to fetch/i.test(String(err?.message || ''));
+    if (USE_MOCKS && isNetworkFailure) {
+      console.warn('claimCoupon: Supabase unavailable, issuing a local preview coupon.');
+      const existing = devClaimedCoupons.find((c) => c.product_id === productId && c.status === 'active');
+      const hours = Number(product?.couponValidHours) || 24;
+      const row = existing || {
+        id: `dev-${Date.now()}`,
+        code: generateDevCode(),
+        product_id: productId,
+        seller_id: product?.seller?.id || null,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        valid_until: new Date(Date.now() + hours * 3600000).toISOString(),
+        ...display,
       };
+      if (!existing) devClaimedCoupons.unshift(row);
+      return { success: true, coupon: transformCoupon(row) };
     }
-    return { success: false, error: err.message };
+    const { code, message } = getClaimErrorMessage(err);
+    return { success: false, code, error: message };
   }
 }
 
@@ -43,13 +84,13 @@ export async function createCoupon({ productId, buyerId, sellerId, paymentId, va
 export async function getBuyerCoupons(buyerId) {
   try {
     const { data, error } = await supabase.from('coupons')
-      .select(`*, product:products!product_id (title, discount_price, original_price), seller:profiles!seller_id (name, whatsapp)`)
+      .select(`*, product:products!product_id (title, discount_price, original_price, discount), seller:profiles!seller_id (name, whatsapp)`)
       .eq('buyer_id', buyerId).order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(transformCoupon);
   } catch (err) {
     console.warn('getBuyerCoupons: unavailable.', err.message);
-    return [];
+    return USE_MOCKS ? devClaimedCoupons.map(transformCoupon) : [];
   }
 }
 
@@ -111,9 +152,11 @@ export async function markCouponUsed(couponId) {
 /** Validate a coupon by code (seller scans/types) */
 export async function validateCoupon(code) {
   try {
+    const candidates = getCouponCodeCandidates(code);
+    if (!candidates.length) return { valid: false, error: 'Digite o código do cupom.' };
     const { data, error } = await supabase.from('coupons')
       .select(`*, product:products!product_id (title), buyer:profiles!buyer_id (name)`)
-      .eq('code', code.toUpperCase()).single();
+      .in('code', candidates).maybeSingle();
 
     if (error || !data) return { valid: false, error: 'Cupom não encontrado.' };
     if (data.status === 'used') return { valid: false, error: 'Cupom já foi utilizado.', coupon: data };
@@ -162,8 +205,11 @@ function transformCoupon(c) {
   return {
     id: c.id, code: c.code, productId: c.product_id,
     sellerId: c.seller_id,
-    product: c.product?.title || 'Produto',
-    seller: c.seller?.name || 'Vendedor',
+    product: c.product?.title || 'Oferta',
+    discountPrice: c.product?.discount_price,
+    originalPrice: c.product?.original_price,
+    discount: c.product?.discount,
+    seller: c.seller?.name || 'Empresa',
     sellerWhatsapp: c.seller?.whatsapp,
     status,
     createdAt: formatDate(c.created_at),
@@ -179,8 +225,8 @@ function transformSellerCoupon(c) {
   return {
     id: c.id, code: c.code, productId: c.product_id,
     sellerId: c.seller_id,
-    product: c.product?.title || 'Produto',
-    buyer: c.buyer?.name || 'Comprador',
+    product: c.product?.title || 'Oferta',
+    buyer: c.buyer?.name || 'Aluno',
     status,
     createdAt: formatDate(c.created_at),
     createdAtRaw: c.created_at,

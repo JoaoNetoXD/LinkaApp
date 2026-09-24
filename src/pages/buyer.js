@@ -1,8 +1,7 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, getCurrentTheme, toggleAppTheme, replayFirstRunTour } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
-import { createPixPayment, checkPaymentStatus, createCheckoutPreference, checkProductPaymentReady } from '../services/payment-service.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
-import { getBuyerCoupons } from '../services/coupon-service.js';
+import { getBuyerCoupons, claimCoupon } from '../services/coupon-service.js';
 import { getNotifications, getUnreadCount, markAllAsRead } from '../services/notification-service.js';
 import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
@@ -39,8 +38,12 @@ const CATEGORY_DESCRIPTIONS = {
   others: 'Ofertas variadas verificadas pela instituicao.',
 };
 
-function getCategoryCover(categoryId) {
-  return CATEGORY_COVERS[categoryId] || CATEGORY_COVERS.others;
+// wa.me needs the full international number; profiles store Brazilian numbers without +55.
+function getWhatsAppUrl(phone, message) {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
 function getInitials(name, fallback = 'U') {
@@ -114,13 +117,13 @@ async function openSellerFlow() {
 
   const result = await becomeSeller();
   if (!result.success) {
-    showToast(result.error === 'AUTH_REQUIRED' ? 'Entre para vender.' : result.error || 'Não foi possível ativar o modo vendedor.', 'error');
+    showToast(result.error === 'AUTH_REQUIRED' ? 'Entre para cadastrar sua empresa.' : result.error || 'Não foi possível ativar sua empresa agora.', 'error');
     if (result.error === 'AUTH_REQUIRED') window.location.hash = '#/auth?role=seller';
     return;
   }
 
   await refreshCurrentProfile();
-  showToast('Modo vendedor ativado. Vamos configurar sua loja.', 'success');
+  showToast('Empresa ativada. Crie sua primeira oferta.', 'success');
   window.location.hash = '#/seller';
 }
 
@@ -129,14 +132,12 @@ let searchQuery = '';
 let sortBy = 'newest';
 let minDiscount = '0';
 let filtersOpen = false;
-let currentView = 'home'; // home | categories | detail | coupons | payment | notifications
-let currentPayment = null;
+let currentView = 'home'; // home | categories | detail | coupons | profile | notifications
 let selectedProduct = null;
 let selectedProductImageIndex = 0;
-let paymentTimerInterval = null;
-let paymentPollInterval = null;
 let cachedProducts = null;
 let activeInstitution = institution;
+let buyerIntroPlayed = false;
 let loadedCategories = mockCategories;
 let buyerNavFocus = 'home';
 let focusCategoriesAfterRender = false;
@@ -164,31 +165,11 @@ function isBuyerRoute() {
 // Intersection Observer for card entrance animation
 let observer = null;
 let buyerCountdownInterval = null;
-let lastSyncedCheckoutRef = null;
-const PENDING_CHECKOUT_REF_KEY = 'linka_pending_checkout_ref';
-const INST_BANNER_SESSION_KEY = 'linka_inst_banner_hidden';
+const INST_BANNER_SESSION_KEY = 'empreende_inst_banner_hidden';
 
 function getMarketCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
   return includeAll ? rows : rows.filter((category) => category.id !== 'all');
-}
-
-function getPaymentRefFromParams(params) {
-  return params.get('payment_id')
-    || params.get('collection_id')
-    || params.get('external_reference')
-    || params.get('merchant_order_id')
-    || params.get('preference_id');
-}
-
-function getCheckoutRefFromHash() {
-  const rawHash = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : '';
-  const [, queryString = ''] = rawHash.split('?');
-  const hashParams = new URLSearchParams(queryString);
-  const searchParams = new URLSearchParams(window.location.search || '');
-  const urlRef = getPaymentRefFromParams(hashParams) || getPaymentRefFromParams(searchParams);
-  if (urlRef) return urlRef;
-  return isAuthenticated() ? sessionStorage.getItem(PENDING_CHECKOUT_REF_KEY) : null;
 }
 
 function shouldShowInstitutionBanner() {
@@ -203,54 +184,6 @@ function hideInstitutionBanner(container) {
   setTimeout(() => banner.remove(), 260);
 }
 
-function cleanupCheckoutReturnParams({ clearPending = true } = {}) {
-  const searchableParams = new URLSearchParams(window.location.search || '');
-  ['payment_id', 'collection_id', 'external_reference', 'merchant_order_id', 'preference_id', 'status'].forEach((key) => {
-    searchableParams.delete(key);
-  });
-
-  const rawHash = window.location.hash.startsWith('#/') ? window.location.hash.slice(2) : '';
-  const [hashPath, hashQuery = ''] = rawHash.split('?');
-  const hashParams = new URLSearchParams(hashQuery);
-  ['payment_id', 'collection_id', 'external_reference', 'merchant_order_id', 'preference_id', 'status'].forEach((key) => {
-    hashParams.delete(key);
-  });
-
-  const nextSearch = searchableParams.toString();
-  const nextHashQuery = hashParams.toString();
-  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}#/${hashPath || ''}${nextHashQuery ? `?${nextHashQuery}` : ''}`;
-  if (clearPending) sessionStorage.removeItem(PENDING_CHECKOUT_REF_KEY);
-  window.history.replaceState(null, '', nextUrl);
-}
-
-async function syncCheckoutReturnIfNeeded() {
-  const paymentRef = getCheckoutRefFromHash();
-  if (!paymentRef || paymentRef === lastSyncedCheckoutRef) return null;
-
-  lastSyncedCheckoutRef = paymentRef;
-  try {
-    const payment = await checkPaymentStatus(paymentRef);
-    if (payment?.status === 'paid') {
-      if (globalSession?.user?.id) buyerCouponsCache.delete(globalSession.user.id);
-      showToast('Pagamento confirmado com sucesso!', 'success');
-      currentPayment = null;
-      currentView = 'coupons';
-      cleanupCheckoutReturnParams();
-    }
-    return payment;
-  } catch (err) {
-    if (err?.message === 'AUTH_REQUIRED') {
-      sessionStorage.setItem(PENDING_CHECKOUT_REF_KEY, paymentRef);
-      lastSyncedCheckoutRef = null;
-      cleanupCheckoutReturnParams({ clearPending: false });
-      window.location.hash = '#/auth';
-      return null;
-    }
-    console.warn('syncCheckoutReturnIfNeeded failed:', err.message);
-    return null;
-  }
-}
-
 async function syncInstitutionForUser() {
   const institutionId = isAuthenticated()
     ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
@@ -262,7 +195,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#C8F135' };
+  activeInstitution = USE_MOCKS ? institution : { name: 'iCEV', fullName: 'iCEV', domain: '', primaryColor: '#C0176B' };
 }
 
 async function syncCategories() {
@@ -281,8 +214,6 @@ function getProductsCacheKey({ categoryId = activeCategory, search = searchQuery
 }
 
 async function loadBuyerShellData({ force = false } = {}) {
-  await syncCheckoutReturnIfNeeded();
-
   const userKey = globalSession?.user?.id || 'guest';
   const isFresh = buyerShellLoadedAt && buyerShellUserKey === userKey && Date.now() - buyerShellLoadedAt < BUYER_SHELL_TTL_MS;
   if (!force && isFresh) return;
@@ -490,9 +421,6 @@ async function renderBuyerPage(container) {
   } else if (currentView === 'profile') {
     renderProfile(container);
     resetAppScroll(container);
-  } else if (currentView === 'payment') {
-    renderPayment(container);
-    resetAppScroll(container);
   } else if (currentView === 'notifications') {
     await renderNotifications(container);
     resetAppScroll(container);
@@ -675,18 +603,6 @@ async function refreshBuyerNavBadges(container) {
   }
 }
 
-function getSlotsInfo(used, total) {
-  const percent = (used / total) * 100;
-  const available = total - used;
-  let colorClass = 'slots-green';
-  if (available / total < 0.3) {
-    colorClass = 'slots-red';
-  } else if (available / total <= 0.6) {
-    colorClass = 'slots-amber';
-  }
-  return { percent, colorClass, text: `${available} de ${total} vagas`, almostEmpty: available === 1 };
-}
-
 /**
  * Single source of truth for the buyer bottom navigation bar.
  * @param {'home'|'cats'|'coupons'|'profile'|null} activeTab
@@ -716,8 +632,8 @@ function renderEmptyProductsState() {
   return `
     <div class="market-empty-state">
       <div class="market-empty-icon">${icons.package}</div>
-      <h3>${hasFilters ? 'Nenhuma oferta encontrada' : 'As primeiras ofertas estão chegando'}</h3>
-      <p>${hasFilters ? 'Tente outra busca ou remova os filtros.' : 'Os vendedores da sua instituição ainda estão preparando as ofertas. Volte em breve!'}</p>
+      <h3>${hasFilters ? 'Nenhuma oferta encontrada' : 'Os primeiros cupons estão chegando'}</h3>
+      <p>${hasFilters ? 'Tente outra busca ou remova os filtros.' : 'As empresas dos alunos estão preparando as ofertas. Volte em breve.'}</p>
       <div class="market-empty-actions">
         ${hasFilters ? '<button class="btn-primary" id="btnClearBuyerFilters" type="button">Limpar filtros</button>' : !isAuthenticated() ? '<button class="btn-primary" id="btnEmptyLogin">Entrar na sua conta</button>' : ''}
       </div>
@@ -754,39 +670,53 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     ? [...filteredProducts].sort((a, b) => Number(b.discount || 0) - Number(a.discount || 0))[0]
     : null;
 
+  // Draw the highlighter once per session, not on every search re-render.
+  const introMark = buyerIntroPlayed ? '' : ' hl--draw';
+  if (!loading) buyerIntroPlayed = true;
+  const institutionName = activeInstitution?.name || '';
+  // Dated like the top of a notebook page.
+  const todayLabel = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+  const offersLabel = `${filteredProducts.length} ${filteredProducts.length === 1 ? 'oferta' : 'ofertas'}`;
+  const activeCategoryName = getMarketCategories().find(c => c.id === activeCategory)?.name || 'Ofertas';
+  const listTitle = searchQuery.trim()
+    ? `Resultados para “${escapeHTML(searchQuery.trim())}”`
+    : activeCategory !== 'all' ? escapeHTML(activeCategoryName) : 'Todas as ofertas';
+
   container.innerHTML = `
     <div class="page buyer-page buyer-wrapper">
-      <!-- HEADER -->
       <header class="buyer-header">
         <div class="buyer-header-top">
-          <div class="buyer-greeting">
-            <h1>${greetingName ? `Olá, ${escapeHTML(greetingName)}` : 'Explore as ofertas'}</h1>
-            <div class="inst-badge">Linka</div>
-          </div>
+          <h1 class="buyer-brand">${renderBrandLogo('wordmark', 'brand-logo buyer-brand-logo')}</h1>
           <div class="buyer-actions">
             ${showSellerAccess ? `
-              <button class="buyer-mode-btn" id="btnSellerMode" title="${canUseSellerMode() ? 'Abrir painel de vendas' : 'Ativar modo vendedor'}">
+              <button class="buyer-mode-btn" id="btnSellerMode" type="button" title="${canUseSellerMode() ? 'Abrir minha empresa' : 'Cadastrar minha empresa'}">
                 ${icons.plus}
-                <span>Vender</span>
+                <span>Anunciar</span>
               </button>
             ` : `
-              <button class="buyer-mode-btn" id="btnLoginHeader" title="Entrar">
+              <button class="buyer-mode-btn" id="btnLoginHeader" type="button">
                 ${icons.user}
                 <span>Entrar</span>
               </button>
             `}
-            <button class="icon-btn notification-btn" id="btnNotifications">
+            <button class="icon-btn notification-btn" id="btnNotifications" type="button" aria-label="Notificações">
               ${icons.bell}
-              ${isAuthenticated() ? '<span class="badge" id="notifBadge">0</span>' : ''}
+              ${isAuthenticated() ? '<span class="badge" id="notifBadge" hidden>0</span>' : ''}
             </button>
-            ${isAuthenticated() ? `<div class="user-avatar">${escapeHTML(user.avatar || 'U')}</div>` : ''}
+            ${isAuthenticated() ? `<div class="user-avatar" aria-hidden="true">${escapeHTML(user.avatar || 'U')}</div>` : ''}
           </div>
         </div>
+
+        <div class="buyer-greeting">
+          <p class="buyer-eyebrow">${institutionName ? `${escapeHTML(institutionName)} · ` : ''}${todayLabel}</p>
+          <h2 class="buyer-greeting-title">${greetingName ? `Olá, <span class="hl${introMark}">${escapeHTML(greetingName)}</span>` : `Descontos de quem <span class="hl${introMark}">empreende</span>`}</h2>
+        </div>
+
         <div class="search-wrapper">
           <div class="search-bar">
             ${icons.search}
-            <input type="text" placeholder="Buscar ofertas, categorias..." id="searchInput" value="${escapeHTML(searchQuery)}" autocomplete="off" />
-            <button class="buyer-filter-btn ${filtersOpen ? 'active' : ''}" type="button" id="btnBuyerFilter" aria-label="Abrir filtros" aria-expanded="${filtersOpen ? 'true' : 'false'}">${icons.adjustments}</button>
+            <input type="search" placeholder="Brownie, camiseta, aula…" id="searchInput" value="${escapeHTML(searchQuery)}" autocomplete="off" aria-label="Buscar ofertas" enterkeyhint="search" />
+            <button class="buyer-filter-btn ${filtersOpen ? 'active' : ''}" type="button" id="btnBuyerFilter" aria-label="Filtros" aria-expanded="${filtersOpen ? 'true' : 'false'}">${icons.adjustments}</button>
           </div>
           ${searchSuggestions.length ? `
             <div class="search-suggestions" role="listbox" aria-label="Sugestões de busca">
@@ -800,12 +730,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
             </div>
           ` : ''}
         </div>
-        
-        <!-- CATEGORY CHIPS (Now in header for stickiness) -->
+
         <div class="category-scroll">
           <div class="category-chips">
             ${getMarketCategories().map(c => `
-              <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
+              <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}" type="button" aria-pressed="${activeCategory === c.id ? 'true' : 'false'}">
                 ${icons[c.id] || icons.others}
                 <span>${escapeHTML(c.name)}</span>
               </button>
@@ -813,105 +742,100 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           </div>
         </div>
         <div class="feed-filters ${filtersOpen ? 'open' : ''}" aria-label="Filtros de ofertas">
-          <select id="sortBySelect" class="filter-select" aria-label="Ordenar ofertas">
-            <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Mais recentes</option>
-            <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Maior desconto</option>
-            <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Menor preço</option>
-            <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Maior preço</option>
-            <option value="expiring" ${sortBy === 'expiring' ? 'selected' : ''}>Expirando logo</option>
-          </select>
-          <select id="minDiscountSelect" class="filter-select" aria-label="Filtrar por desconto">
-            <option value="0" ${minDiscount === '0' ? 'selected' : ''}>Qualquer desconto</option>
-            <option value="10" ${minDiscount === '10' ? 'selected' : ''}>Acima de 10%</option>
-            <option value="20" ${minDiscount === '20' ? 'selected' : ''}>Acima de 20%</option>
-            <option value="30" ${minDiscount === '30' ? 'selected' : ''}>Acima de 30%</option>
-          </select>
+          <label class="feed-filter">
+            <span>Ordenar</span>
+            <select id="sortBySelect" class="filter-select">
+              <option value="newest" ${sortBy === 'newest' ? 'selected' : ''}>Mais recentes</option>
+              <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Maior desconto</option>
+              <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Menor preço</option>
+              <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Maior preço</option>
+              <option value="expiring" ${sortBy === 'expiring' ? 'selected' : ''}>Terminando antes</option>
+            </select>
+          </label>
+          <label class="feed-filter">
+            <span>Desconto</span>
+            <select id="minDiscountSelect" class="filter-select">
+              <option value="0" ${minDiscount === '0' ? 'selected' : ''}>Qualquer</option>
+              <option value="10" ${minDiscount === '10' ? 'selected' : ''}>A partir de 10%</option>
+              <option value="20" ${minDiscount === '20' ? 'selected' : ''}>A partir de 20%</option>
+              <option value="30" ${minDiscount === '30' ? 'selected' : ''}>A partir de 30%</option>
+            </select>
+          </label>
         </div>
       </header>
 
       ${shouldShowInstitutionBanner() ? `
-        <div class="inst-banner" style="margin-top: 16px;">
+        <div class="inst-banner">
           <div class="banner-icon">${icons.shield}</div>
           <div class="banner-text">
-            <strong>Ofertas verificadas</strong>
-            <span>Você compra com vendedores da sua instituição. O aviso sai sozinho em alguns segundos.</span>
+            <strong>Só empresas de alunos do iCEV</strong>
+            <span>Cada oferta passa pela equipe Empreende iCEV antes de aparecer aqui. Você pega o código e compra direto com a empresa.</span>
           </div>
-          <button class="inst-banner-close" id="btnHideInstBanner" type="button" aria-label="Ocultar aviso">${icons.x}</button>
+          <button class="inst-banner-close" id="btnHideInstBanner" type="button" aria-label="Fechar aviso">${icons.x}</button>
         </div>
       ` : ''}
 
-      ${featuredProduct ? `
-        <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque ${escapeHTML(featuredProduct.title)}">
-          <div class="buyer-featured-copy">
-            <span class="buyer-featured-badge">${icons.bolt} Destaque</span>
+      ${featuredProduct && hasVisibleDiscount(featuredProduct) && !searchQuery.trim() ? `
+        <button class="buyer-featured-strip" type="button" data-featured-product="${escapeHTML(featuredProduct.id)}" aria-label="Ver destaque: ${escapeHTML(featuredProduct.title)}">
+          <span class="buyer-featured-media">${getProductImage(featuredProduct.images?.[0], 240, 240, featuredProduct.category)}</span>
+          <span class="buyer-featured-copy">
+            <span class="buyer-featured-badge">Maior desconto de hoje</span>
             <strong>${escapeHTML(featuredProduct.title)}</strong>
-            <small>${formatCurrency(featuredProduct.discountPrice)} hoje</small>
-          </div>
-          <div class="buyer-featured-emoji" aria-hidden="true">%</div>
+            <span class="buyer-featured-price">
+              <span class="buyer-featured-now">${formatCurrency(featuredProduct.discountPrice)}</span>
+              <s>${formatCurrency(featuredProduct.originalPrice)}</s>
+            </span>
+          </span>
+          <span class="buyer-featured-stub" aria-hidden="true">
+            <span class="buyer-featured-percent">−${featuredProduct.discount}%</span>
+          </span>
         </button>
       ` : ''}
 
       <div class="list-header">
-        <div class="section-divider"></div>
-        <div class="offers-count">${filteredProducts.length} ofertas disponíveis</div>
+        <h2>${listTitle}</h2>
+        <span class="offers-count">${loading ? '' : offersLabel}</span>
       </div>
 
-      <!-- PRODUCTS LIST -->
       <div class="products-list ${loading ? 'buyer-home-loading' : ''}">
         ${loading && filteredProducts.length === 0 ? renderProductSkeletons() : filteredProducts.length === 0 ? renderEmptyProductsState() : filteredProducts.map(p => {
           const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
-          const catIcon = icons[p.category] || icons.others;
           const timer = getCountdownInfo(p.expiresAt, p.expiresIn);
-          const slots = getSlotsInfo(p.slots.used, p.slots.total);
-          const isSoldOut = p.slots.used >= p.slots.total;
+          const slotsLeft = Math.max((p.slots?.total || 0) - (p.slots?.used || 0), 0);
+          const isSoldOut = slotsLeft === 0;
           const hasDiscount = hasVisibleDiscount(p);
-          
+
           return `
-          <div class="product-card ${isSoldOut ? 'sold-out' : ''}" data-product-card="${p.id}" role="button" tabindex="0" aria-label="Ver detalhes de ${escapeHTML(p.title)}" style="cursor:pointer;">
+          <article class="product-card ${isSoldOut ? 'sold-out' : ''}" data-product-card="${p.id}" role="button" tabindex="0" aria-label="${escapeHTML(p.title)}, ${formatCurrency(p.discountPrice)}${isSoldOut ? ', esgotado' : ''}">
             <div class="card-image-area">
-              ${getProductImage(p.images?.[0], 400, 160, p.category)}
-              <div class="cat-badge">${catIcon} ${escapeHTML(catName)}</div>
-              ${isSoldOut 
-                ? `<div class="discount-badge soldout-badge">ESGOTADO</div>`
-                : hasDiscount ? `<div class="discount-badge">−${p.discount}%</div>` : ''
+              ${getProductImage(p.images?.[0], 400, 300, p.category)}
+              ${isSoldOut
+                ? '<span class="discount-badge soldout-badge">Esgotado</span>'
+                : hasDiscount ? `<span class="discount-badge">−${p.discount}%</span>` : ''
               }
             </div>
-            
+            <div class="perforation" aria-hidden="true"></div>
             <div class="card-body">
+              <span class="card-category">${escapeHTML(catName)}</span>
               <h3 class="card-title">${escapeHTML(p.title)}</h3>
-              ${p.description ? `<p class="card-desc">${escapeHTML(p.description)}</p>` : ''}
-
               <div class="card-price-row">
                 <span class="price-discount">${formatCurrency(p.discountPrice)}</span>
                 ${hasDiscount ? `<span class="price-original">${formatCurrency(p.originalPrice)}</span>` : ''}
               </div>
-              
-              <div class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
-                <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-                <span data-countdown-label>${escapeHTML(timer.text)}</span>
-              </div>
-
-              <div class="card-verified-pill">
-                ${icons.shield}
-                <span>Aprovado pela Linka</span>
-              </div>
-
-              <div class="card-actions">
-                <button class="btn-primary get-coupon-btn" ${isSoldOut ? 'disabled' : ''} data-id="${p.id}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                  Comprar
-                </button>
-                <button class="btn-details view-details-btn" data-id="${p.id}">
-                  Ver detalhes
-                </button>
+              <div class="card-meta">
+                ${!isSoldOut && slotsLeft <= 3
+                  ? `<span class="card-slots-low">${slotsLeft === 1 ? 'Último cupom' : `Últimos ${slotsLeft} cupons`}</span>`
+                  : `<span class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
+                      <span class="timer-icon">${icons.clock}</span>
+                      <span data-countdown-label>${escapeHTML(timer.text)}</span>
+                    </span>`}
               </div>
             </div>
-          </div>
+          </article>
         `}).join('')}
       </div>
     </div>
-    
-    <!-- BOTTOM NAV -->
+
     ${renderBuyerBottomNav(currentView === 'coupons' ? 'coupons' : buyerNavFocus === 'cats' ? 'cats' : 'home')}
   `;
 
@@ -922,13 +846,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
       nextSearch?.setSelectionRange(selectionStart, selectionEnd);
     }
   }
-
-  // Animate progress bars after render
-  setTimeout(() => {
-    container.querySelectorAll('.slots-bar-fill').forEach(bar => {
-      bar.style.width = bar.dataset.target;
-    });
-  }, 100);
 
   // Search input with debounce
   let searchTimer = null;
@@ -1000,13 +917,12 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Load notification badge count
   const userId = globalSession?.user?.id;
-  if (!userId) {
-    const badge = container.querySelector('#notifBadge');
-    if (badge) badge.style.display = 'none';
-  } else {
+  if (userId) {
     loadUnreadCount(userId).then(count => {
       const badge = container.querySelector('#notifBadge');
-      if (badge) { badge.textContent = count; badge.style.display = count > 0 ? '' : 'none'; }
+      if (!badge) return;
+      badge.textContent = count > 9 ? '9+' : String(count);
+      badge.hidden = !(count > 0);
     }).catch(() => {});
   }
   refreshBuyerNavBadges(container);
@@ -1027,26 +943,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
         activeCategory = chip.dataset.cat;
         renderBuyerPage(container);
       }, 150);
-    });
-  });
-
-  // Get coupon
-  container.querySelectorAll('.get-coupon-btn').forEach(btn => {
-    btn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (!btn.disabled) {
-        const productId = btn.dataset.id;
-        const product = filteredProducts.find(p => p.id == productId);
-        if (product) showPaymentSelectionModal(product, container);
-      }
-    });
-  });
-
-  // View details - now opens product detail page
-  container.querySelectorAll('.view-details-btn').forEach(btn => {
-    btn.addEventListener('click', (event) => {
-      event.stopPropagation();
-      openProductDetail(btn.dataset.id, container);
     });
   });
 
@@ -1088,55 +984,56 @@ async function renderCategories(container) {
       sample: categoryProducts[0],
     };
   });
+  const institutionName = activeInstitution?.name || '';
+
   container.innerHTML = `
-    <div class="page buyer-page buyer-wrapper buyer-categories-page">
-      <header class="buyer-header buyer-categories-header">
-        <div class="buyer-header-top">
-          <div class="buyer-greeting">
-            <span class="buyer-kicker">Explorar</span>
-            <h1>Categorias</h1>
-            <div class="inst-badge">${escapeHTML(activeInstitution.name)}</div>
+    <div class="page buyer-wrapper acct-page buyer-categories-page">
+      <div class="category-intro">
+        <header class="acct-header">
+          <div class="acct-heading">
+            <div class="acct-header-copy">
+              <p class="t-eyebrow">Explorar${institutionName ? ` · ${escapeHTML(institutionName)}` : ''}</p>
+              <h1 class="acct-title">Categorias</h1>
+            </div>
+            <button class="icon-btn acct-icon-btn" id="btnBackBuyerHome" type="button" aria-label="Voltar para o início">
+              ${icons.home}
+            </button>
           </div>
-          <button class="buyer-mode-btn" id="btnBackBuyerHome" type="button">
-            ${icons.home}
-            <span>Início</span>
-          </button>
-        </div>
+        </header>
+
         <button class="category-search-shortcut" id="btnFocusSearchFromCategories" type="button">
           ${icons.search}
-          <span>Buscar oferta específica</span>
+          <span>Buscar uma oferta específica</span>
         </button>
-      </header>
 
-      <section class="category-spotlight">
-        <div>
-          <span class="buyer-kicker">Vitrine ativa</span>
-          <h2>${totalOffers} ofertas verificadas</h2>
-          <p>Escolha uma área para ver apenas produtos e serviços daquela categoria.</p>
-        </div>
-        <button type="button" class="category-spotlight-action" data-open-category="all">Ver tudo</button>
-      </section>
+        <section class="category-spotlight" aria-label="Todas as ofertas">
+          <div class="category-spotlight-copy">
+            <span class="category-spotlight-eyebrow">Vitrine ativa</span>
+            <h2><span class="category-spotlight-count">${totalOffers}</span> ${totalOffers === 1 ? 'oferta verificada' : 'ofertas verificadas'}</h2>
+            <p>Escolha uma área para ver só o que interessa.</p>
+          </div>
+          <button type="button" class="category-spotlight-action" data-open-category="all">
+            <span>Ver tudo</span>
+            ${icons.arrowRight}
+          </button>
+        </section>
+      </div>
 
-      <section class="category-section">
-        <div class="category-section-heading">
-          <h2>Todas as categorias</h2>
+      <section class="category-section" aria-labelledby="categorySectionTitle">
+        <div class="acct-section-head category-section-head">
+          <h2 class="acct-section-title" id="categorySectionTitle">Todas as categorias</h2>
+          <span class="acct-count">${categories.length} ${categories.length === 1 ? 'área' : 'áreas'}</span>
         </div>
         <div class="category-app-grid">
           ${stats.map(category => `
             <button class="category-app-card ${category.count === 0 ? 'empty' : ''}" type="button" data-open-category="${escapeHTML(category.id)}">
-              <div class="category-app-image">
-                <img src="${escapeHTML(getCategoryCover(category.id))}" alt="${escapeHTML(category.name)}" loading="lazy" decoding="async">
-                <span class="category-cover-icon">${icons[category.id] || icons.others}</span>
-                ${hasVisibleDiscount(category.bestDeal) ? `<span class="category-deal-pill">Até -${Number(category.bestDeal.discount)}%</span>` : ''}
-              </div>
-              <div class="category-app-copy">
-                <span class="category-app-icon">${icons[category.id] || icons.others}</span>
-                <div>
-                  <strong>${escapeHTML(category.name)}</strong>
-                  <small>${category.count ? `${category.count} ofertas ativas` : 'Sem ofertas agora'}</small>
-                  <p>${escapeHTML(CATEGORY_DESCRIPTIONS[category.id] || CATEGORY_DESCRIPTIONS.others)}</p>
-                </div>
-              </div>
+              <span class="category-app-icon" aria-hidden="true">${icons[category.id] || icons.others}</span>
+              ${hasVisibleDiscount(category.bestDeal) ? `<span class="category-deal-pill">até −${Number(category.bestDeal.discount)}%</span>` : ''}
+              <span class="category-app-copy">
+                <strong>${escapeHTML(category.name)}</strong>
+                <small>${category.count ? `${category.count} ${category.count === 1 ? 'oferta' : 'ofertas'}` : 'Sem ofertas agora'}</small>
+                <span class="category-app-desc">${escapeHTML(CATEGORY_DESCRIPTIONS[category.id] || CATEGORY_DESCRIPTIONS.others)}</span>
+              </span>
             </button>
           `).join('')}
         </div>
@@ -1186,92 +1083,53 @@ function openProductDetail(productId, container) {
 function renderProductSkeletons() {
   return Array.from({ length: 4 }, () => `
     <div class="product-card product-card-skeleton" aria-hidden="true">
-      <div class="card-image-area skeleton-box skeleton-image-block"></div>
+      <div class="card-image-area skeleton"></div>
       <div class="card-body">
-        <div class="skeleton-box skeleton-title-line"></div>
-        <div class="skeleton-box skeleton-price"></div>
-        <div class="skeleton-box skeleton-timer-line"></div>
-        <div class="skeleton-box skeleton-button-line"></div>
+        <div class="skeleton skeleton-line is-short"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line is-price"></div>
       </div>
     </div>
   `).join('');
 }
 
-function getPaymentUnavailableMessage(message = '') {
-  if (message.includes('register_payment_intent') || message.includes('Permissao do Pix') || message.includes('PIX_PERMISSION_FIX_REQUIRED')) {
-    return 'O Pix ainda precisa da permissao final no Supabase. O administrador deve executar o script scripts/fix-permissions-supabase.sql uma vez.';
-  }
-  if (message.includes('seller-mp-migration') || message.includes('Banco de pagamentos')) {
-    return 'Pagamento ainda não configurado no banco. O administrador precisa rodar a migration de pagamentos no Supabase.';
-  }
-  if (message.includes('Mercado Pago') || message.includes('vendedor')) {
-    return 'Este vendedor ainda precisa conectar o Mercado Pago antes de receber pagamentos.';
-  }
-  return message || 'Pagamento indisponível para este produto agora.';
-}
-
-function showPaymentUnavailableModal(product, container, message) {
-  container.querySelector('#paymentSelectionModal')?.remove();
-  const modalHTML = `
-    <div class="payment-modal-overlay" id="paymentSelectionModal">
-      <div class="payment-modal-content">
-        <div class="payment-modal-header">
-          <h3>Pagamento indisponível</h3>
-          <button class="icon-btn close-modal-btn">${icons.plus}</button>
-        </div>
-        <div class="payment-modal-body">
-          <p class="payment-modal-desc">${escapeHTML(getPaymentUnavailableMessage(message))}</p>
-          ${product?.seller?.whatsapp ? `
-            <a class="btn-payment-option" href="https://wa.me/${encodeURIComponent(product.seller.whatsapp)}?text=Oi! Quero comprar ${encodeURIComponent(product.title)}, mas o pagamento ainda não está disponível." target="_blank" rel="noopener">
-              ${icons.whatsapp}
-              <span>Falar com vendedor</span>
-              <small>Avise para conectar o Mercado Pago</small>
-            </a>
-          ` : ''}
-        </div>
-      </div>
-    </div>
-  `;
-  container.insertAdjacentHTML('beforeend', modalHTML);
-  const modal = document.getElementById('paymentSelectionModal');
-  setTimeout(() => modal.classList.add('visible'), 10);
-  modal.querySelector('.close-modal-btn').addEventListener('click', () => {
-    modal.classList.remove('visible');
-    setTimeout(() => modal.remove(), 300);
-  });
-}
-
 function showLoginRequiredModal(product, container) {
-  container.querySelector('#paymentSelectionModal')?.remove();
+  container.querySelector('#couponSheet')?.remove();
   const modalHTML = `
-    <div class="payment-modal-overlay" id="paymentSelectionModal">
-      <div class="payment-modal-content login-required-modal">
-        <div class="payment-modal-header">
-          <h3>Entre para comprar</h3>
-          <button class="icon-btn close-modal-btn">${icons.plus}</button>
-        </div>
-        <div class="payment-modal-body">
-          <p class="payment-modal-desc">Para gerar Pix, pagar com cartão e receber seu cupom, acesse ou crie sua conta Linka.</p>
-          <div class="login-required-product">
-            <strong>${escapeHTML(product.title)}</strong>
-            <span>${formatCurrency(product.discountPrice)}</span>
+    <div class="coupon-sheet-overlay" id="couponSheet">
+      <div class="coupon-sheet" role="dialog" aria-modal="true" aria-labelledby="couponSheetTitle">
+        <div class="modal-handle" aria-hidden="true"></div>
+        <div class="coupon-sheet-header">
+          <div class="coupon-sheet-heading">
+            <p class="t-eyebrow">Pegar cupom</p>
+            <h3 id="couponSheetTitle">Entre com seu e-mail do iCEV</h3>
           </div>
-          <button class="btn-payment-option primary-option" id="btnLoginToBuy">
-            ${icons.user}
-            <span>Entrar e continuar</span>
-            <small>Leva menos de um minuto</small>
-          </button>
-          <button class="btn-payment-option" id="btnKeepViewingProduct">
-            ${icons.eye}
-            <span>Ver detalhes do produto</span>
-            <small>Fotos, descricao e vendedor</small>
-          </button>
+          <button class="icon-btn coupon-sheet-close" type="button" aria-label="Fechar">${icons.x}</button>
+        </div>
+        <div class="coupon-sheet-body">
+          <div class="offer-summary">
+            <div class="offer-summary-product">
+              <span class="t-eyebrow">${escapeHTML(product.seller?.name || 'Empresa de aluno')}</span>
+              <strong>${escapeHTML(product.title)}</strong>
+            </div>
+            <div class="offer-summary-price">
+              <span class="offer-summary-amount">${formatCurrency(product.discountPrice)}</span>
+            </div>
+          </div>
+          <p class="coupon-sheet-desc">Os cupons são só para alunos do iCEV. Entre ou crie sua conta com o e-mail institucional para pegar o código.</p>
+          <div class="coupon-sheet-actions">
+            <button class="btn-primary btn-block btn-lg" id="btnLoginToClaim" type="button">
+              ${icons.user}
+              <span>Entrar e pegar o cupom</span>
+            </button>
+            <button class="btn-ghost btn-block" id="btnSignupToClaim" type="button">Criar conta de aluno</button>
+          </div>
         </div>
       </div>
     </div>
   `;
   container.insertAdjacentHTML('beforeend', modalHTML);
-  const modal = document.getElementById('paymentSelectionModal');
+  const modal = document.getElementById('couponSheet');
   setTimeout(() => modal.classList.add('visible'), 10);
 
   const close = () => {
@@ -1279,147 +1137,128 @@ function showLoginRequiredModal(product, container) {
     setTimeout(() => modal.remove(), 300);
   };
 
-  modal.querySelector('.close-modal-btn').addEventListener('click', close);
-  modal.querySelector('#btnLoginToBuy').addEventListener('click', () => {
+  modal.querySelector('.coupon-sheet-close').addEventListener('click', close);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+  modal.querySelector('#btnLoginToClaim').addEventListener('click', () => {
     close();
     window.location.hash = '#/auth';
   });
-  modal.querySelector('#btnKeepViewingProduct').addEventListener('click', () => {
+  modal.querySelector('#btnSignupToClaim').addEventListener('click', () => {
     close();
-    openProductDetail(product.id, container);
+    window.location.hash = '#/auth?intent=signup';
   });
 }
 
-async function showPaymentSelectionModal(product, container) {
+// Coupons the student retrieved in this session, by offer id: lets the detail
+// page offer "Ver meu cupom" right away, before the coupon list reloads.
+const recentClaims = new Map();
+
+function getActiveCouponForProduct(productId) {
+  const key = String(productId);
+  const recent = recentClaims.get(key);
+  if (recent?.status === 'active') return recent;
+  const cached = buyerCouponsCache.get(globalSession?.user?.id || '')?.coupons || [];
+  return cached.find((coupon) => String(coupon.productId) === key && coupon.status === 'active') || null;
+}
+
+/** Retrieve the student's code for an offer; asking again returns the same live code. */
+async function claimProductCoupon(product, container, trigger) {
   if (!isAuthenticated()) {
     showLoginRequiredModal(product, container);
     return;
   }
 
-  const readiness = await checkProductPaymentReady(product.id);
-  if (!readiness.ready) {
-    showPaymentUnavailableModal(product, container, readiness.message);
+  const idleLabel = trigger?.innerHTML;
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.innerHTML = '<span class="spinner" aria-hidden="true"></span> Gerando seu código…';
+  }
+
+  const result = await claimCoupon(product);
+
+  if (trigger?.isConnected) {
+    trigger.disabled = false;
+    trigger.innerHTML = result.success ? `${icons.ticket} Ver meu cupom` : idleLabel;
+  }
+
+  if (!result.success) {
+    if (result.code === 'AUTH_REQUIRED') {
+      showLoginRequiredModal(product, container);
+      return;
+    }
+    showToast(result.error, result.code === 'SOLD_OUT' || result.code === 'OWN_OFFER' ? 'warning' : 'error');
     return;
   }
 
-  container.querySelector('#paymentSelectionModal')?.remove();
-  const modalHTML = `
-    <div class="payment-modal-overlay" id="paymentSelectionModal">
-      <div class="payment-modal-content">
-        <div class="payment-modal-header">
-          <h3>Forma de Pagamento</h3>
-          <button class="icon-btn close-modal-btn">${icons.plus}</button> <!-- reused plus, will rotate in css -->
-        </div>
-        <div class="payment-modal-body">
-          <p class="payment-modal-desc">Você está comprando <strong>${escapeHTML(product.title)}</strong> por ${formatCurrency(product.discountPrice)}</p>
-          <button class="btn-payment-option pix-option" id="btnPayPix">
-            ${icons.pix}
-            <span>Pagar com Pix</span>
-            <small>Aprovação imediata</small>
-          </button>
-          <button class="btn-payment-option card-option" id="btnPayCard">
-            ${icons.wallet || icons.ticket}
-            <span>Cartão de Crédito</span>
-            <small>Redireciona para o Mercado Pago</small>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-  container.insertAdjacentHTML('beforeend', modalHTML);
-
-  const modal = document.getElementById('paymentSelectionModal');
-  setTimeout(() => modal.classList.add('visible'), 10);
-
-  modal.querySelector('.close-modal-btn').addEventListener('click', () => {
-    modal.classList.remove('visible');
-    setTimeout(() => modal.remove(), 300);
-  });
-
-  document.getElementById('btnPayPix').addEventListener('click', async () => {
-    if (!globalSession?.user?.id) {
-      showToast('Faça login para comprar.', 'info');
-      window.location.hash = '#/auth';
-      return;
-    }
-    modal.classList.remove('visible');
-    setTimeout(() => modal.remove(), 300);
-    currentPayment = { product, method: 'pix' };
-    currentView = 'payment';
-    renderBuyerPage(container);
-  });
-
-  document.getElementById('btnPayCard').addEventListener('click', async () => {
-    if (!globalSession?.user?.id) {
-      showToast('Faça login para comprar.', 'info');
-      window.location.hash = '#/auth';
-      return;
-    }
-    const btn = document.getElementById('btnPayCard');
-    btn.innerHTML = `${icons.refresh} <span>Aguarde...</span>`;
-    btn.disabled = true;
-    try {
-      const url = await createCheckoutPreference(product, null, getUser());
-      showToast('Redirecionando para o checkout seguro...', 'info');
-      window.location.assign(url);
-    } catch (err) {
-      if (err?.message === 'AUTH_REQUIRED') {
-        window.location.hash = '#/auth';
-        return;
-      }
-      showToast(getPaymentUnavailableMessage(err.message), 'error');
-      btn.innerHTML = `<span>Tentar novamente</span>`;
-      btn.disabled = false;
-    }
-  });
+  recentClaims.set(String(product.id), result.coupon);
+  const userId = globalSession?.user?.id;
+  if (userId) buyerCouponsCache.delete(userId);
+  showBuyerCouponDetail(result.coupon, { justClaimed: true });
+  refreshBuyerNavBadges(container);
 }
 
 function getBuyerCouponStatusMeta(status) {
-  if (status === 'used') return { label: 'Usado', className: 'used', hint: 'Este codigo ja foi validado pelo vendedor.' };
-  if (status === 'expired') return { label: 'Expirado', className: 'expired', hint: 'O prazo de uso deste cupom terminou.' };
-  return { label: 'Ativo', className: 'active', hint: 'Mostre este codigo ao vendedor no atendimento.' };
+  if (status === 'used') return { label: 'Usado', className: 'used', tone: 'acct-tone-neutral', hint: 'A empresa já confirmou este código na compra.' };
+  if (status === 'expired') return { label: 'Expirado', className: 'expired', tone: 'acct-tone-danger', hint: 'O prazo deste cupom terminou. Pegue outro se a oferta ainda estiver no ar.' };
+  return { label: 'Ativo', className: 'active', tone: 'acct-tone-success', hint: 'Mostre este código para a empresa na hora da compra.' };
 }
 
 async function copyBuyerCouponCode(code) {
   if (!code) return;
   try {
     await navigator.clipboard.writeText(code);
-    showToast(`Codigo ${code} copiado!`, 'success');
+    showToast(`Código ${code} copiado.`, 'success');
   } catch {
-    showToast('Nao foi possivel copiar o codigo.', 'error');
+    showToast('Não foi possível copiar o código.', 'error');
   }
 }
 
-function showBuyerCouponDetail(coupon) {
+function showBuyerCouponDetail(coupon, { justClaimed = false } = {}) {
   const modalRoot = document.getElementById('modal-root');
   if (!modalRoot || !coupon) return;
   const meta = getBuyerCouponStatusMeta(coupon.status);
-  const whatsappUrl = coupon.status === 'active' && coupon.sellerWhatsapp
-    ? `https://wa.me/${encodeURIComponent(coupon.sellerWhatsapp)}?text=Oi! Tenho o cupom ${encodeURIComponent(coupon.code)} para ${encodeURIComponent(coupon.product)}.`
+  const whatsappUrl = coupon.status === 'active'
+    ? getWhatsAppUrl(coupon.sellerWhatsapp, `Oi! Peguei o cupom ${coupon.code} no Empreende iCEV para "${coupon.product}". Quero comprar com o desconto.`)
     : '';
+
+  const isActive = coupon.status === 'active';
+  const pill = justClaimed ? { tone: 'acct-tone-success', label: 'Cupom retirado' } : meta;
 
   modalRoot.innerHTML = `
     <div class="modal-backdrop buyer-coupon-modal-backdrop" id="buyerCouponModal">
       <div class="modal-content buyer-coupon-modal" role="dialog" aria-modal="true" aria-labelledby="buyerCouponTitle">
-        <button class="modal-close-btn buyer-coupon-close" type="button" aria-label="Fechar">x</button>
-        <span class="coupon-detail-status ${meta.className}">${meta.label}</span>
+        <div class="modal-handle" aria-hidden="true"></div>
+        <button class="icon-btn modal-close-btn buyer-coupon-close" type="button" aria-label="Fechar">${icons.x}</button>
+        <span class="status-pill ${pill.tone} coupon-detail-status">${pill.label}</span>
         <h2 id="buyerCouponTitle">${escapeHTML(coupon.product)}</h2>
-        <p>${escapeHTML(meta.hint)}</p>
-        <div class="coupon-detail-ticket">
-          <span>Codigo do cupom</span>
-          <strong>${escapeHTML(coupon.code)}</strong>
-          <button class="btn-secondary" type="button" data-copy-coupon-detail="${escapeHTML(coupon.code)}">${icons.copy} Copiar codigo</button>
+        <p class="coupon-detail-hint">${escapeHTML(meta.hint)}</p>
+        ${justClaimed ? `
+          <ol class="coupon-claim-steps" aria-label="Como usar o cupom">
+            <li><span class="coupon-claim-step-num">1</span><span>Chame a empresa${coupon.sellerWhatsapp ? ' no WhatsApp' : ''} e combine o pedido.</span></li>
+            <li><span class="coupon-claim-step-num">2</span><span>Mostre o código na hora da compra.</span></li>
+            <li><span class="coupon-claim-step-num">3</span><span>Pague direto para a empresa, já com o desconto.</span></li>
+          </ol>
+        ` : ''}
+        <div class="coupon-detail-ticket ${meta.className}">
+          <span class="t-eyebrow">Código do cupom</span>
+          <strong class="coupon-code coupon-detail-code">${escapeHTML(coupon.code)}</strong>
+          ${isActive ? '' : `<span class="coupon-stamp ${meta.className}" aria-hidden="true">${meta.label}</span>`}
+          <div class="perforation" aria-hidden="true"></div>
+          <button class="${isActive && !whatsappUrl ? 'btn-primary' : 'btn-secondary'} btn-block" type="button" data-copy-coupon-detail="${escapeHTML(coupon.code)}">${icons.copy} Copiar código</button>
         </div>
-        <div class="coupon-detail-grid">
-          <div><span>Vendedor</span><strong>${escapeHTML(coupon.seller || 'Vendedor')}</strong></div>
-          <div><span>Gerado em</span><strong>${escapeHTML(coupon.createdAt || '-')}</strong></div>
-          <div><span>Valido ate</span><strong>${escapeHTML(coupon.validUntil || '-')}</strong></div>
-          <div><span>Usado em</span><strong>${escapeHTML(coupon.usedAt || '-')}</strong></div>
-        </div>
-        <div class="coupon-detail-note">
-          O cupom e unico. Depois que o vendedor marcar como usado, ele fica bloqueado para novas validacoes.
-        </div>
-        ${whatsappUrl ? `<a class="btn-whatsapp coupon-detail-whatsapp" href="${whatsappUrl}" target="_blank" rel="noopener">${icons.whatsapp} Conversar no WhatsApp</a>` : ''}
+        <dl class="coupon-detail-grid">
+          <div class="coupon-detail-item"><dt>Empresa</dt><dd>${escapeHTML(coupon.seller || 'Empresa')}</dd></div>
+          <div class="coupon-detail-item"><dt>Retirado em</dt><dd>${escapeHTML(coupon.createdAt || '—')}</dd></div>
+          <div class="coupon-detail-item"><dt>Válido até</dt><dd>${escapeHTML(coupon.validUntil || '—')}</dd></div>
+          ${coupon.status === 'used' ? `<div class="coupon-detail-item"><dt>Usado em</dt><dd>${escapeHTML(coupon.usedAt || '—')}</dd></div>` : ''}
+        </dl>
+        <p class="coupon-detail-note">
+          ${icons.shield}
+          <span>Cada código vale uma compra. A empresa marca como usado na hora e ele deixa de valer.</span>
+        </p>
+        ${whatsappUrl ? `<a class="btn-primary btn-block btn-lg btn-whatsapp coupon-detail-whatsapp" href="${escapeHTML(whatsappUrl)}" target="_blank" rel="noopener">${icons.whatsapp} Chamar a empresa no WhatsApp</a>` : isActive ? `<p class="coupon-detail-note coupon-detail-note--contact">${icons.alertTriangle}<span>A empresa ainda não informou WhatsApp. Procure-a no campus e mostre o código.</span></p>` : ''}
       </div>
     </div>
   `;
@@ -1443,56 +1282,103 @@ async function renderCoupons(container) {
     userCoupons = [];
   }
 
-  container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header page-simple-header">
-        <h1>Meus Cupons</h1>
-      </header>
-      
-      <div class="coupons-list">
-        ${userCoupons.length === 0 ? `
-          <div class="empty-state coupons-empty-state">
-            ${icons.ticket}
-            <h2>${isLoggedIn ? 'Nenhum cupom ainda' : 'Entre para ver seus cupons'}</h2>
-            <p>${isLoggedIn ? 'Ao concluir uma compra, o cupom aparece aqui automaticamente.' : 'Seus cupons reais ficam vinculados à sua conta.'}</p>
-            ${!isLoggedIn ? `<button class="btn-primary" id="btnCouponsLogin">Entrar na conta</button>` : ''}
+  const activeCoupons = userCoupons.filter(c => c.status === 'active');
+  const pastCoupons = userCoupons.filter(c => c.status !== 'active');
+  const hasDate = (value) => Boolean(value) && value !== '—';
+
+  const renderCouponTicket = (c) => {
+    const meta = getBuyerCouponStatusMeta(c.status);
+    const dateLine = c.status === 'used' && hasDate(c.usedAt)
+      ? `Usado em ${escapeHTML(c.usedAt)}`
+      : hasDate(c.validUntil) ? `Válido até ${escapeHTML(c.validUntil)}` : '';
+    return `
+      <article class="coupon-ticket coupon-card buyer-real-coupon ${meta.className}" role="button" tabindex="0" data-coupon-detail="${escapeHTML(c.id)}" aria-label="Cupom ${escapeHTML(c.product)}, ${meta.label}">
+        <div class="coupon-ticket-main">
+          <div class="coupon-ticket-top">
+            <span class="coupon-ticket-seller">${icons.user}<span>${escapeHTML(c.seller)}</span></span>
+            <span class="status-pill ${meta.tone}">${meta.label}</span>
           </div>
-        ` : userCoupons.map(c => {
-          const meta = getBuyerCouponStatusMeta(c.status);
-          return `
-          <article class="coupon-card buyer-real-coupon ${meta.className}" role="button" tabindex="0" data-coupon-detail="${escapeHTML(c.id)}">
-            <div class="coupon-status-bar"></div>
-            <div class="coupon-body">
-              <div class="coupon-header">
-                <h3>${escapeHTML(c.product)}</h3>
-                <span class="status-badge ${meta.className}">${meta.label}</span>
-              </div>
-              <div class="coupon-code-area">
-                <div class="coupon-code">
-                  <span>Codigo real</span>
-                  <strong>${escapeHTML(c.code)}</strong>
-                </div>
-                <button class="icon-btn copy-btn" data-code="${escapeHTML(c.code)}" aria-label="Copiar cupom">${icons.copy}</button>
-              </div>
-              <div class="coupon-footer">
-                <div class="seller-info">
-                  ${icons.user} <span>${escapeHTML(c.seller)}</span>
-                </div>
-                ${c.status === 'active' && c.sellerWhatsapp ? `<a href="https://wa.me/${encodeURIComponent(c.sellerWhatsapp)}?text=Oi! Tenho o cupom ${encodeURIComponent(c.code)} para ${encodeURIComponent(c.product)}" target="_blank" class="btn-whatsapp">${icons.whatsapp} WhatsApp</a>` : c.status === 'active' ? `<button class="btn-whatsapp">${icons.whatsapp} WhatsApp</button>` : ''}
-              </div>
-              ${c.validUntil ? `<div style="font-size:11px;color:#4B5563;margin-top:8px;">Válido até: ${escapeHTML(c.validUntil)}</div>` : ''}
+          <h3 class="coupon-ticket-title">${escapeHTML(c.product)}</h3>
+          ${dateLine ? `<p class="coupon-ticket-date">${dateLine}</p>` : ''}
+        </div>
+        <div class="perforation" aria-hidden="true"></div>
+        <div class="coupon-ticket-stub">
+          <div class="coupon-ticket-code">
+            <span class="t-eyebrow">Código</span>
+            <strong class="coupon-code coupon-ticket-value">${escapeHTML(c.code)}</strong>
+          </div>
+          <div class="coupon-ticket-actions">
+            ${c.status === 'active' && getWhatsAppUrl(c.sellerWhatsapp, '') ? `<a href="${escapeHTML(getWhatsAppUrl(c.sellerWhatsapp, `Oi! Tenho o cupom ${c.code} para ${c.product}.`))}" target="_blank" rel="noopener" class="icon-btn btn-whatsapp" aria-label="Falar com ${escapeHTML(c.seller)} no WhatsApp">${icons.whatsapp}</a>` : ''}
+            <button class="icon-btn copy-btn" type="button" data-code="${escapeHTML(c.code)}" aria-label="Copiar código ${escapeHTML(c.code)}">${icons.copy}</button>
+          </div>
+        </div>
+        ${c.status === 'active' ? '' : `<span class="coupon-stamp ${meta.className}" aria-hidden="true">${meta.label}</span>`}
+      </article>
+    `;
+  };
+
+  const summary = userCoupons.length
+    ? `${activeCoupons.length} ${activeCoupons.length === 1 ? 'ativo' : 'ativos'} · ${userCoupons.length} no total`
+    : 'Sua carteira';
+
+  container.innerHTML = `
+    <div class="page buyer-wrapper acct-page acct-page--narrow coupons-page">
+      <header class="acct-header">
+        <div class="acct-header-copy">
+          <p class="t-eyebrow">${summary}</p>
+          <h1 class="acct-title">Meus <span class="hl">cupons</span></h1>
+          ${activeCoupons.length ? '<p class="acct-lede">Mostre o código para a empresa na hora da compra.</p>' : ''}
+        </div>
+      </header>
+
+      ${userCoupons.length === 0 ? `
+        <div class="coupon-empty-ticket coupons-empty-state">
+          <div class="coupon-empty-main">
+            <span class="acct-empty-icon">${icons.ticket}</span>
+            <h2>${isLoggedIn ? 'Nenhum cupom ainda' : 'Entre para ver seus cupons'}</h2>
+            <p>${isLoggedIn ? 'Pegue um cupom na vitrine e ele fica guardado aqui.' : 'Seus cupons ficam guardados na sua conta, prontos para usar.'}</p>
+          </div>
+          <div class="perforation" aria-hidden="true"></div>
+          <div class="coupon-empty-stub">
+            <span class="coupon-code coupon-empty-code" aria-hidden="true">······</span>
+            ${isLoggedIn
+              ? '<button class="btn-primary" id="btnCouponsExplore" type="button">Explorar ofertas</button>'
+              : '<button class="btn-primary" id="btnCouponsLogin" type="button">Entrar na conta</button>'}
+          </div>
+        </div>
+      ` : `
+        ${activeCoupons.length ? `
+          <section class="coupon-group" aria-labelledby="couponsActiveTitle">
+            <div class="acct-section-head">
+              <h2 class="acct-section-title" id="couponsActiveTitle">Prontos para usar</h2>
+              <span class="acct-count">${activeCoupons.length}</span>
             </div>
-          </article>
-        `;
-        }).join('')}
-      </div>
+            <div class="coupons-list">${activeCoupons.map(renderCouponTicket).join('')}</div>
+          </section>
+        ` : ''}
+        ${pastCoupons.length ? `
+          <section class="coupon-group" aria-labelledby="couponsPastTitle">
+            <div class="acct-section-head">
+              <h2 class="acct-section-title" id="couponsPastTitle">Histórico</h2>
+              <span class="acct-count">${pastCoupons.length}</span>
+            </div>
+            <div class="coupons-list">${pastCoupons.map(renderCouponTicket).join('')}</div>
+          </section>
+        ` : ''}
+      `}
     </div>
-    
+
     ${renderBuyerBottomNav('coupons')}
   `;
 
   container.querySelector('#btnCouponsLogin')?.addEventListener('click', () => {
     window.location.hash = '#/auth';
+  });
+
+  container.querySelector('#btnCouponsExplore')?.addEventListener('click', () => {
+    buyerNavFocus = 'home';
+    currentView = 'home';
+    renderBuyerPage(container);
   });
 
   // Copy coupon code to clipboard
@@ -1531,203 +1417,95 @@ async function renderCoupons(container) {
   });
 }
 
-function renderProfileLegacy(container) {
-  const user = getUser();
-  const isLoggedIn = isAuthenticated();
-  const role = getAccountRole();
-  const isSeller = ['seller', 'admin'].includes(role);
-
-  container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header">
-        <h1>Meu Perfil</h1>
-      </header>
-      
-      <div class="profile-container" style="padding: 24px 16px;">
-        <div style="text-align:center; margin-bottom: 24px;">
-           <div class="user-avatar" style="width:80px;height:80px;font-size:32px;margin:0 auto 12px;">${escapeHTML(user.avatar || 'U')}</div>
-           <h2 style="font-size:18px;margin:0 0 4px;">${escapeHTML(user.fullName || user.name)}</h2>
-           <span style="color:#6B7280;font-size:13px;">${escapeHTML(user.email || '')}</span>
-        </div>
-
-        ${!isLoggedIn ? `
-          <div style="text-align:center;padding:16px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.2);border-radius:12px;margin-bottom:20px;">
-            <p style="color:#9CA3AF;font-size:13px;margin-bottom:12px;">Faça login para salvar seu perfil</p>
-            <button class="btn-primary" id="btnGoLogin" style="padding:10px 24px;">Fazer Login</button>
-          </div>
-        ` : `
-          <div class="profile-mode-card">
-            <div>
-              <strong>${isSeller ? 'Painel de vendas ativo' : 'Modo comprador ativo'}</strong>
-              <span>${isSeller ? 'Você pode comprar e também gerenciar produtos.' : 'Ative o modo vendedor para cadastrar produtos.'}</span>
-            </div>
-            <button class="btn-primary" id="btnProfileSellerFlow">${isSeller ? 'Abrir vendas' : 'Começar a vender'}</button>
-          </div>
-        `}
-
-        <div class="form-group" style="margin-bottom: 16px;">
-          <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">Nome Completo</label>
-          <input type="text" value="${escapeHTML(user.fullName || user.name)}" id="profileName" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
-        </div>
-        
-        <div class="form-group" style="margin-bottom: 16px;">
-          <label style="display:block;font-size:12px;color:#6B7280;margin-bottom:8px;">WhatsApp (Para receber cupons)</label>
-          <input type="text" value="${escapeHTML(user.whatsapp || '')}" id="profileWhatsapp" class="profile-input" style="width:100%;background:#111118;border:1px solid #1E1E2A;border-radius:10px;color:#FFF;padding:12px;font-family:'Plus Jakarta Sans',sans-serif;" />
-        </div>
-
-        <button class="btn-primary" style="width:100%;margin-top:16px;" id="btnSaveProfile">Salvar Dados</button>
-
-        ${isLoggedIn ? `
-          <button class="btn-outline" style="width:100%;margin-top:12px;border-color:#E24B4A;color:#E24B4A;padding:12px;border-radius:10px;cursor:pointer;background:transparent;font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:600;" id="btnLogout">Sair da conta</button>
-        ` : ''}
-      </div>
-    </div>
-    
-    ${renderBuyerBottomNav('profile')}
-  `;
-
-  // Save profile to Supabase
-  document.getElementById('btnSaveProfile').addEventListener('click', async () => {
-    const name = document.getElementById('profileName').value.trim();
-    const whatsapp = document.getElementById('profileWhatsapp').value.trim();
-    if (!name) { showToast('Preencha seu nome.', 'error'); return; }
-
-    const btn = document.getElementById('btnSaveProfile');
-    btn.textContent = 'Salvando...';
-    btn.disabled = true;
-
-    try {
-      if (globalSession?.user?.id) {
-        await saveCurrentProfileFields({ name, whatsapp });
-      }
-      showToast('Perfil atualizado com sucesso!', 'success');
-    } catch (err) {
-      showToast(err.message || 'Não foi possível atualizar o perfil.', 'error');
-    }
-    btn.textContent = 'Salvar Dados';
-    btn.disabled = false;
-  });
-
-  // Login button
-  document.getElementById('btnGoLogin')?.addEventListener('click', () => {
-    window.location.hash = '#/auth';
-  });
-
-  document.getElementById('btnProfileSellerFlow')?.addEventListener('click', openSellerFlow);
-
-  // Logout button
-  document.getElementById('btnLogout')?.addEventListener('click', async () => {
-    try {
-      await signOutUser();
-      showToast('Logout realizado!', 'success');
-      window.location.hash = '#/';
-    } catch {
-      window.location.hash = '#/';
-    }
-  });
-
-}
-
 function getProfileRoleMeta(role) {
   if (role === 'admin') {
     return {
       label: 'Administrador',
       status: 'Acesso total',
-      description: 'Controle moderacao, categorias, relatorios e tambem venda produtos.',
+      description: 'Cuide da moderação, das categorias e dos relatórios.',
     };
   }
 
   if (role === 'seller') {
     return {
-      label: 'Vendedor',
-      status: 'Conta de vendas ativa',
-      description: 'Cadastre produtos, conecte o Mercado Pago e acompanhe pedidos.',
+      label: 'Empresa',
+      status: 'Empresa ativa',
+      description: 'Publique ofertas com cupom, receba os pedidos no WhatsApp e confira os códigos usados.',
     };
   }
 
   return {
-    label: 'Comprador',
-    status: 'Conta de compras ativa',
-    description: 'Explore ofertas, resgate cupons e ative vendas quando quiser vender.',
+    label: 'Aluno',
+    status: 'Conta de aluno ativa',
+    description: 'Pegue cupons das empresas dos colegas. Tem uma empresa? Cadastre e divulgue suas ofertas.',
   };
 }
 
 function renderProfileActions(role) {
   const sellerAccess = ['seller', 'admin'].includes(role);
+  const chevron = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
 
   return `
-    <div class="profile-action-grid">
-      <button type="button" class="profile-action-card" id="btnOpenBuyerHome">
-        <span class="profile-action-icon">${icons.home}</span>
-        <span>
+    <div class="profile-list profile-action-grid">
+      <button type="button" class="profile-row profile-row--link profile-action-card" id="btnOpenBuyerHome">
+        <span class="profile-row-icon">${icons.home}</span>
+        <span class="profile-row-copy">
           <strong>Vitrine</strong>
-          <small>Comprar e pegar cupons</small>
+          <small>Ver ofertas e pegar cupons</small>
         </span>
+        <span class="profile-row-chevron">${chevron}</span>
       </button>
 
       ${sellerAccess ? `
-        <button type="button" class="profile-action-card" id="btnOpenSellerPanel">
-          <span class="profile-action-icon">${icons.wallet}</span>
-          <span>
-            <strong>Vendas</strong>
-            <small>Produtos e Mercado Pago</small>
+        <button type="button" class="profile-row profile-row--link profile-action-card" id="btnOpenSellerPanel">
+          <span class="profile-row-icon">${icons.package}</span>
+          <span class="profile-row-copy">
+            <strong>Minha empresa</strong>
+            <small>Ofertas, cupons e contato</small>
           </span>
+          <span class="profile-row-chevron">${chevron}</span>
         </button>
       ` : `
-        <button type="button" class="profile-action-card profile-action-card--accent" id="btnProfileSellerFlow">
-          <span class="profile-action-icon">${icons.plus}</span>
-          <span>
-            <strong>Começar a vender</strong>
-            <small>Ativar painel de vendedor</small>
+        <button type="button" class="profile-row profile-row--link profile-action-card profile-action-card--accent" id="btnProfileSellerFlow">
+          <span class="profile-row-icon profile-row-icon--ink">${icons.plus}</span>
+          <span class="profile-row-copy">
+            <strong>Cadastrar minha empresa</strong>
+            <small>Divulgue cupons para os colegas</small>
           </span>
+          <span class="profile-row-chevron">${chevron}</span>
         </button>
       `}
 
       ${role === 'admin' ? `
-        <button type="button" class="profile-action-card profile-action-card--admin" id="btnOpenAdminPanel">
-          <span class="profile-action-icon">${icons.shield}</span>
-          <span>
-            <strong>Admin</strong>
+        <button type="button" class="profile-row profile-row--link profile-action-card profile-action-card--admin" id="btnOpenAdminPanel">
+          <span class="profile-row-icon">${icons.shield}</span>
+          <span class="profile-row-copy">
+            <strong>Administração</strong>
             <small>Moderação e relatórios</small>
           </span>
+          <span class="profile-row-chevron">${chevron}</span>
         </button>
       ` : ''}
     </div>
   `;
 }
 
-function renderProfileThemePanel(currentTheme) {
-  return `
-    <section class="profile-panel profile-theme-panel">
-      <div class="profile-panel-heading">
-        <div class="profile-panel-icon">${icons.settings}</div>
-        <div>
-          <h2>Aparência</h2>
-          <p>O Linka usa tema escuro por padrão para leitura confortável no celular.</p>
-        </div>
-      </div>
-      <div class="profile-theme-toggle" aria-label="Tema escuro ativo">
-        <span class="profile-theme-state">
-          <strong>Tema escuro ativo</strong>
-          <small>Padrão do aplicativo</small>
-        </span>
-        <span class="profile-theme-pill">Escuro</span>
-      </div>
-    </section>
-  `;
-}
-
 function renderProfileHelpPanel() {
+  const chevron = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+
   return `
-    <section class="profile-panel profile-help-panel">
-      <div class="profile-panel-heading">
-        <div class="profile-panel-icon">${icons.ticket}</div>
-        <div>
-          <h2>Como funciona</h2>
-          <p>Reveja a apresentação rápida do app sempre que precisar.</p>
-        </div>
+    <section class="profile-group profile-help-panel" aria-labelledby="profileHelpTitle">
+      <h2 class="t-eyebrow profile-group-label" id="profileHelpTitle">Ajuda</h2>
+      <div class="profile-list">
+        <button type="button" class="profile-row profile-row--link profile-tour-btn" id="btnReplayTour">
+          <span class="profile-row-icon">${icons.ticket}</span>
+          <span class="profile-row-copy">
+            <strong>Como funciona o Empreende iCEV</strong>
+            <small>Rever a apresentação rápida do app</small>
+          </span>
+          <span class="profile-row-chevron">${chevron}</span>
+        </button>
       </div>
-      <button type="button" class="profile-tour-btn" id="btnReplayTour">${icons.arrowRight} Ver mini-tour</button>
     </section>
   `;
 }
@@ -1741,92 +1519,70 @@ function renderProfile(container) {
   const email = user.email || '';
   const initials = user.avatar || displayName.split(' ').map((part) => part[0]).join('').slice(0, 2) || 'U';
   const whatsappStatus = user.whatsapp ? 'Configurado' : 'Não informado';
-  const currentTheme = getCurrentTheme();
+  const logoutIcon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
 
   container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header profile-header page-simple-header">
-        <div>
-          <span class="profile-kicker">Conta Linka</span>
-          <h1>Perfil</h1>
+    <div class="page buyer-wrapper acct-page acct-page--narrow profile-page">
+      <header class="acct-header">
+        <div class="acct-header-copy">
+          <p class="t-eyebrow">Empreende iCEV</p>
+          <h1 class="acct-title">Perfil</h1>
         </div>
-        ${isLoggedIn ? `<span class="profile-role-pill">${escapeHTML(roleMeta.label)}</span>` : ''}
       </header>
 
       <div class="profile-container">
         ${!isLoggedIn ? `
-          <section class="profile-panel profile-login-panel">
-            <div class="profile-panel-icon">${icons.user}</div>
-            <div>
-              <h2>Entre para personalizar sua experiência</h2>
-              <p>Com uma conta, você salva seus dados, resgata cupons, compra e ativa o modo vendedor.</p>
-            </div>
-            <button type="button" class="btn-primary" id="btnGoLogin">Entrar na conta</button>
+          <section class="profile-login-panel">
+            <span class="profile-login-icon">${icons.user}</span>
+            <h2>Entre para personalizar sua conta</h2>
+            <p>Com uma conta do iCEV você guarda seus cupons e pode cadastrar sua empresa quando quiser.</p>
+            <button type="button" class="btn-primary profile-login-action" id="btnGoLogin">Entrar na conta</button>
           </section>
 
           ${renderProfileHelpPanel()}
-          ${renderProfileThemePanel(currentTheme)}
         ` : `
           <section class="profile-hero-panel">
-            <div class="profile-avatar-large">${escapeHTML(initials)}</div>
+            <div class="avatar-lg profile-avatar-large" aria-hidden="true">${escapeHTML(initials)}</div>
             <div class="profile-identity">
-              <div class="profile-status-row">
-                <span class="profile-live-dot"></span>
-                <span>${escapeHTML(roleMeta.status)}</span>
-              </div>
               <h2>${escapeHTML(displayName)}</h2>
-              <p>${escapeHTML(email)}</p>
+              ${email ? `<p class="profile-email">${escapeHTML(email)}</p>` : ''}
+              <span class="status-pill acct-tone-success profile-status">${escapeHTML(roleMeta.status)}</span>
             </div>
           </section>
 
-          <section class="profile-panel profile-account-panel">
-            <div class="profile-panel-heading">
-              <div class="profile-panel-icon">${icons.shield}</div>
-              <div>
-                <h2>${escapeHTML(roleMeta.label)}</h2>
-                <p>${escapeHTML(roleMeta.description)}</p>
+          <section class="profile-group profile-account-panel" aria-labelledby="profileAccountTitle">
+            <h2 class="t-eyebrow profile-group-label" id="profileAccountTitle">Sua conta</h2>
+            <div class="profile-list">
+              <div class="profile-row profile-row--stacked">
+                <div class="profile-row-line">
+                  <span class="profile-row-label">Perfil</span>
+                  <span class="profile-row-value">${escapeHTML(roleMeta.label)}</span>
+                </div>
+                <p class="profile-row-note">${escapeHTML(roleMeta.description)}</p>
               </div>
-            </div>
-            <div class="profile-metrics-grid">
-              <div>
-                <span>Instituição</span>
-                <strong>${escapeHTML(activeInstitution.name || 'Instituição')}</strong>
+              <div class="profile-row">
+                <span class="profile-row-label">Instituição</span>
+                <span class="profile-row-value">${escapeHTML(activeInstitution.name || 'Instituição')}</span>
               </div>
-              <div>
-                <span>WhatsApp</span>
-                <strong>${escapeHTML(whatsappStatus)}</strong>
+              <div class="profile-row">
+                <span class="profile-row-label">WhatsApp</span>
+                <span class="profile-row-value ${user.whatsapp ? '' : 'is-muted'}">${escapeHTML(whatsappStatus)}</span>
               </div>
-              <div>
-                <span>Conta</span>
-                <strong>${user.verified ? 'Verificada' : 'Padrão'}</strong>
+              <div class="profile-row">
+                <span class="profile-row-label">Verificação</span>
+                <span class="profile-row-value ${user.verified ? '' : 'is-muted'}">${user.verified ? 'Verificada' : 'Padrão'}</span>
               </div>
             </div>
           </section>
 
-          <section class="profile-panel">
-            <div class="profile-panel-heading">
-              <div class="profile-panel-icon">${icons.grid}</div>
-              <div>
-                <h2>Acessos rápidos</h2>
-                <p>Entre direto no fluxo certo para sua conta.</p>
-              </div>
-            </div>
+          <section class="profile-group" aria-labelledby="profileShortcutsTitle">
+            <h2 class="t-eyebrow profile-group-label" id="profileShortcutsTitle">Acessos rápidos</h2>
             ${renderProfileActions(role)}
           </section>
 
-          ${renderProfileThemePanel(currentTheme)}
-          ${renderProfileHelpPanel()}
-
-          <section class="profile-panel">
-            <div class="profile-panel-heading">
-              <div class="profile-panel-icon">${icons.settings}</div>
-              <div>
-                <h2>Dados do perfil</h2>
-                <p>Essas informações aparecem em compras, cupons e contatos.</p>
-              </div>
-            </div>
-
-            <div class="profile-form-grid">
+          <section class="profile-group" aria-labelledby="profileDataTitle">
+            <h2 class="t-eyebrow profile-group-label" id="profileDataTitle">Dados do perfil</h2>
+            <div class="profile-list profile-form-card">
               <label class="profile-field" for="profileName">
                 <span>Nome completo</span>
                 <input type="text" value="${escapeHTML(displayName)}" id="profileName" class="profile-input" autocomplete="name" />
@@ -1836,17 +1592,25 @@ function renderProfile(container) {
                 <span>WhatsApp</span>
                 <input type="tel" value="${escapeHTML(user.whatsapp || '')}" id="profileWhatsapp" class="profile-input" autocomplete="tel" inputmode="tel" placeholder="(00) 00000-0000" />
               </label>
-            </div>
 
-            <button type="button" class="btn-primary profile-save-btn" id="btnSaveProfile">${icons.check} Salvar dados</button>
+              <p class="profile-form-hint">Aparece nos seus cupons e para as empresas quando você usar um código.</p>
+
+              <button type="button" class="btn-primary btn-block profile-save-btn" id="btnSaveProfile">${icons.check} Salvar dados</button>
+            </div>
           </section>
 
-          <section class="profile-panel profile-session-panel">
-            <div>
-              <h2>Sessão</h2>
-              <p>Saia desta conta neste navegador.</p>
+          ${renderProfileHelpPanel()}
+
+          <section class="profile-group profile-session-panel" aria-label="Sessão">
+            <div class="profile-list">
+              <button type="button" class="profile-row profile-row--link profile-row--danger profile-logout-btn" id="btnLogout">
+                <span class="profile-row-icon">${logoutIcon}</span>
+                <span class="profile-row-copy">
+                  <strong>Sair da conta</strong>
+                  <small>Encerrar a sessão neste navegador</small>
+                </span>
+              </button>
             </div>
-            <button type="button" class="profile-logout-btn" id="btnLogout">Sair da conta</button>
           </section>
         `}
       </div>
@@ -1861,14 +1625,14 @@ function renderProfile(container) {
     if (!name) { showToast('Preencha seu nome.', 'error'); return; }
 
     const btn = document.getElementById('btnSaveProfile');
-    btn.textContent = 'Salvando...';
+    btn.textContent = 'Salvando…';
     btn.disabled = true;
 
     try {
       if (globalSession?.user?.id) {
         await saveCurrentProfileFields({ name, whatsapp });
       }
-      showToast('Perfil atualizado com sucesso!', 'success');
+      showToast('Perfil atualizado.', 'success');
     } catch (err) {
       showToast(err.message || 'Não foi possível atualizar o perfil.', 'error');
     }
@@ -1887,151 +1651,18 @@ function renderProfile(container) {
     currentView = 'home';
     renderBuyerPage(container);
   });
-  document.getElementById('btnProfileThemeToggle')?.addEventListener('click', () => {
-    const theme = toggleAppTheme();
-    showToast(theme === 'dark' ? 'Tema escuro ativado.' : 'Tema claro ativado.', 'success');
-    renderProfile(container);
-  });
   document.getElementById('btnReplayTour')?.addEventListener('click', replayFirstRunTour);
 
   document.getElementById('btnLogout')?.addEventListener('click', async () => {
     try {
       await signOutUser();
-      showToast('Logout realizado!', 'success');
+      showToast('Você saiu da conta.', 'success');
       window.location.hash = '#/';
     } catch {
       window.location.hash = '#/';
     }
   });
 
-}
-
-function renderPayment(container) {
-  if (!currentPayment) {
-    currentView = 'home';
-    renderBuyerPage(container);
-    return;
-  }
-
-  const { product, method } = currentPayment;
-
-  container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header" style="display:flex;align-items:center;gap:12px;">
-        <button class="icon-btn" id="btnBackHome">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        </button>
-        <h1>Pagamento</h1>
-      </header>
-
-      <div class="payment-container" style="padding: 24px 16px; text-align:center;">
-        <h2 style="font-size:18px;margin-bottom:8px;">Finalizar via Pix</h2>
-        <p class="payment-pix-summary">Valor: <strong>${formatCurrency(product.discountPrice)}</strong></p>
-        
-        <div id="pixContainer" class="payment-pix-card">
-          <div class="payment-pix-loading">
-            ${icons.loader}
-            <span style="font-size:14px;font-weight:600;display:block;margin-top:8px;">Gerando código Pix...</span>
-          </div>
-        </div>
-
-        <div class="payment-trust-seal">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span>Pagamento seguro via <strong>Mercado Pago</strong></span>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('btnBackHome').addEventListener('click', () => {
-    if (paymentPollInterval) clearInterval(paymentPollInterval);
-    currentView = 'home';
-    renderBuyerPage(container);
-  });
-
-  // Start Pix generation
-  initPixFlow(product, container);
-}
-
-async function initPixFlow(product, container) {
-  try {
-    const pixData = await createPixPayment(product, null, getUser());
-    
-    // #pixContainer lives inside #modal-root, NOT inside `container`
-    const pixContainer = document.getElementById('pixContainer');
-    if (!pixContainer) return;
-
-    pixContainer.innerHTML = `
-      <div class="pix-qr-shell">
-        ${pixData.qrCodeSVG}
-      </div>
-      <p class="pix-expiry-note">Código expira em 10 minutos</p>
-      <button class="btn-primary pix-copy-action" id="btnCopyPix">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        Copiar código Pix
-      </button>
-      <div id="pixStatusMsg" class="pix-status-message">Aguardando pagamento...</div>
-      <div class="payment-trust-seal" style="margin-top:16px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span>Pagamento seguro via <strong>Mercado Pago</strong></span>
-      </div>
-    `;
-
-    document.getElementById('btnCopyPix')?.addEventListener('click', () => {
-      navigator.clipboard.writeText(pixData.qrCodeString).catch(() => {});
-      showToast('Código Pix copiado!', 'success');
-    });
-
-    // Start polling
-    let attempts = 0;
-    paymentPollInterval = setInterval(async () => {
-      attempts++;
-      const statusMsg = document.getElementById('pixStatusMsg');
-
-      try {
-        const statusData = await checkPaymentStatus(pixData.id);
-        if (statusData && statusData.status === 'paid') {
-          clearInterval(paymentPollInterval);
-          await handlePaymentApproved(statusData, product, container);
-          return;
-        }
-      } catch {
-        // Keep polling
-      }
-
-      // Update UI every poll
-      if (statusMsg && attempts % 2 === 0) {
-        const dots = '.'.repeat((attempts / 2) % 4);
-        statusMsg.textContent = `Aguardando pagamento${dots}`;
-      }
-
-      // Timeout after 60 attempts (2 min)
-      if (attempts >= 60) {
-        clearInterval(paymentPollInterval);
-        showToast('Tempo esgotado. Verifique seus cupons.', 'error');
-      }
-    }, 2000);
-
-  } catch (err) {
-    if (err?.message === 'AUTH_REQUIRED') {
-      window.location.hash = '#/auth';
-      return;
-    }
-    const pixContainer = document.getElementById('pixContainer');
-    if (pixContainer) {
-      pixContainer.innerHTML = `
-        <div class="pix-error-state">
-          <p class="pix-error-title">Não foi possível gerar o Pix</p>
-          <p class="pix-error-message">${escapeHTML(getPaymentUnavailableMessage(err.message))}</p>
-          <button class="btn-primary" id="btnBackAfterPixError" style="padding:10px 18px;">Voltar para ofertas</button>
-        </div>
-      `;
-      document.getElementById('btnBackAfterPixError')?.addEventListener('click', () => {
-        currentView = 'home';
-        renderBuyerPage(container);
-      });
-    }
-  }
 }
 
 // ─── PRODUCT DETAIL PAGE ────────────────────────────────
@@ -2070,41 +1701,42 @@ function renderProductDetail(container) {
 
     const catName = getMarketCategories().find(c => c.id === p.category)?.name || 'Outros';
     const timer = getCountdownInfo(p.expiresAt, p.expiresIn || '24h 00min');
-    const isSoldOut = (p.slots?.used || 0) >= (p.slots?.total || 5);
+    const slotsLeft = Math.max((p.slots?.total || 5) - (p.slots?.used || 0), 0);
+    const isSoldOut = slotsLeft === 0;
     const hasDiscount = hasVisibleDiscount(p);
     const sellerInitials = p.seller?.avatar || p.seller?.name?.split(' ').map(n => n[0]).join('').slice(0,2) || '??';
     const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : [];
     selectedProductImageIndex = Math.min(Math.max(selectedProductImageIndex, 0), Math.max(images.length - 1, 0));
-    const whatsappDigits = String(p.seller?.whatsapp || '').replace(/\D/g, '');
+    const sellerWhatsappUrl = getWhatsAppUrl(p.seller?.whatsapp, `Oi! Vi a oferta "${p.title}" no Empreende iCEV.`);
+    const ownedCoupon = getActiveCouponForProduct(p.id);
 
     container.innerHTML = `
-      <div class="buyer-wrapper">
-        <header class="buyer-header minimal-header detail-header">
-          <button class="icon-btn" id="btnBackHome" aria-label="Voltar para ofertas">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      <div class="page buyer-wrapper detail-page">
+        <header class="detail-header">
+          <button class="icon-btn" id="btnBackHome" type="button" aria-label="Voltar para ofertas">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
           </button>
-          <h1>Detalhes</h1>
+          <span class="detail-header-label">${escapeHTML(catName)}</span>
+          <span class="detail-header-spacer" aria-hidden="true"></span>
         </header>
 
-        <div class="detail-container product-detail-v2">
+        <div class="detail-container">
           <section class="detail-gallery-shell">
             <div class="detail-carousel" id="detailCarousel" aria-label="Fotos do produto" tabindex="0">
               ${(images.length ? images : ['']).map((image, index) => `
-                <button type="button" class="detail-carousel-slide" data-photo-index="${index}" aria-label="Abrir foto ${index + 1}">
-                  ${getProductImage(image, 840, 520, p.category)}
+                <button type="button" class="detail-carousel-slide" data-photo-index="${index}" aria-label="Ampliar foto ${index + 1}">
+                  ${getProductImage(image, 840, 630, p.category)}
                 </button>
               `).join('')}
             </div>
-            <div class="cat-badge detail-category-badge">${icons[p.category] || icons.others} ${escapeHTML(catName)}</div>
             ${isSoldOut
-              ? '<div class="discount-badge soldout-badge detail-discount-badge">ESGOTADO</div>'
-              : hasDiscount ? `<div class="discount-badge detail-discount-badge">−${p.discount}%</div>` : ''
+              ? '<span class="discount-badge soldout-badge detail-discount-badge">Esgotado</span>'
+              : hasDiscount ? `<span class="discount-badge detail-discount-badge">−${p.discount}%</span>` : ''
             }
             ${images.length > 1 ? `
               <div class="detail-gallery-dots" id="detailGalleryDots" aria-hidden="true">
                 ${images.map((_, index) => `<span class="${index === selectedProductImageIndex ? 'active' : ''}" data-gallery-dot="${index}"></span>`).join('')}
               </div>
-              <div class="detail-gallery-hint">Arraste para ver mais fotos</div>
             ` : ''}
           </section>
 
@@ -2118,54 +1750,61 @@ function renderProductDetail(container) {
             </div>
           ` : ''}
 
-          <section class="detail-main-card">
-            <div class="detail-title-row">
-              <div>
-                <h2>${escapeHTML(p.title)}</h2>
-                <p>${escapeHTML(p.description || 'Oferta revisada pela Linka e pronta para compra.')}</p>
-              </div>
+          <section class="detail-ticket">
+            <div class="detail-ticket-main">
+              <h1 class="detail-title">${escapeHTML(p.title)}</h1>
+              <p class="detail-desc">${escapeHTML(p.description || 'Oferta aprovada pela equipe Empreende iCEV.')}</p>
             </div>
-
-            <div class="detail-price-row">
-              <span class="detail-price-current">${formatCurrency(p.discountPrice)}</span>
-              ${hasDiscount ? `<span class="detail-price-original">${formatCurrency(p.originalPrice)}</span><span class="detail-price-discount">-${p.discount}%</span>` : ''}
-            </div>
-
-            <div class="detail-trust-grid">
-              <div class="detail-info-pill card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
-                <div class="timer-icon ${timer.isCritical ? 'pulse' : ''}">${icons.clock}</div>
-                <span data-countdown-label>${escapeHTML(timer.text)}</span>
+            <div class="perforation" aria-hidden="true"></div>
+            <div class="detail-ticket-stub">
+              <div class="detail-price-row">
+                <span class="detail-price-current"><span class="hl hl--draw">${formatCurrency(p.discountPrice)}</span></span>
+                ${hasDiscount ? `<s class="detail-price-original">${formatCurrency(p.originalPrice)}</s>` : ''}
               </div>
-              <div class="detail-info-pill detail-verified-pill">
-                ${icons.shield}
-                <span>Anúncio aprovado pela Linka</span>
-              </div>
+              <ul class="detail-facts">
+                <li class="card-timer ${timer.colorClass} ${timer.isCritical ? 'expiry--urgent' : ''}" data-countdown-expires="${escapeHTML(p.expiresAt || '')}" data-countdown-fallback="${escapeHTML(p.expiresIn || '')}">
+                  <span class="timer-icon">${icons.clock}</span>
+                  <span data-countdown-label>${escapeHTML(timer.text)}</span>
+                </li>
+                <li>
+                  ${icons.ticket}
+                  <span>${isSoldOut ? 'Sem cupons disponíveis' : `${slotsLeft} ${slotsLeft === 1 ? 'cupom disponível' : 'cupons disponíveis'}`}</span>
+                </li>
+                <li>
+                  ${icons.whatsapp}
+                  <span>Você compra direto com a empresa</span>
+                </li>
+                <li>
+                  ${icons.shield}
+                  <span>Oferta aprovada pela equipe Empreende iCEV</span>
+                </li>
+              </ul>
             </div>
           </section>
 
-          <section class="seller-detail-card-v2 seller-detail-compact">
+          <section class="seller-detail-card">
             <div class="seller-detail-head">
-              <div class="user-avatar seller-detail-avatar">${escapeHTML(sellerInitials)}</div>
+              <div class="user-avatar seller-detail-avatar" aria-hidden="true">${escapeHTML(sellerInitials)}</div>
               <div>
-                <div class="seller-detail-name">${escapeHTML(p.seller?.name || 'Vendedor')}</div>
-                <div class="seller-detail-subtitle">Vendedor no Linka</div>
+                <div class="seller-detail-name">${escapeHTML(p.seller?.name || 'Empresa')}</div>
+                <div class="seller-detail-subtitle">Empresa de aluno do iCEV</div>
               </div>
             </div>
-
-            <div class="seller-detail-status">
-              ${icons.shield}
-              <span>Anúncio aprovado pela Linka</span>
-            </div>
-
-            ${whatsappDigits ? `
-              <a href="https://wa.me/${encodeURIComponent(whatsappDigits)}?text=Oi! Vi seu anuncio '${encodeURIComponent(p.title)}' no Linka." target="_blank" rel="noopener" class="btn-whatsapp seller-whatsapp-button">
-                ${icons.whatsapp} Falar com vendedor
+            ${sellerWhatsappUrl ? `
+              <a href="${escapeHTML(sellerWhatsappUrl)}" target="_blank" rel="noopener" class="btn-secondary seller-whatsapp-button">
+                ${icons.whatsapp} Conversar
               </a>
             ` : ''}
           </section>
+        </div>
 
-          <button class="btn-primary detail-buy-button" id="btnBuyDetail" ${isSoldOut ? 'disabled' : ''}>
-            ${isSoldOut ? 'Esgotado' : `${icons.ticket} Comprar por ${formatCurrency(p.discountPrice)}`}
+        <div class="detail-buy-bar">
+          <div class="detail-buy-summary">
+            <span>Com o cupom</span>
+            <strong>${formatCurrency(p.discountPrice)}</strong>
+          </div>
+          <button class="btn-primary detail-buy-button" id="btnClaimCoupon" type="button" ${isSoldOut && !ownedCoupon ? 'disabled' : ''}>
+            ${ownedCoupon ? `${icons.ticket} Ver meu cupom` : isSoldOut ? 'Cupons esgotados' : `${icons.ticket} Pegar cupom`}
           </button>
         </div>
       </div>
@@ -2175,9 +1814,25 @@ function renderProductDetail(container) {
       currentView = 'home'; selectedProduct = null; renderBuyerPage(container);
     });
 
-    container.querySelector('#btnBuyDetail')?.addEventListener('click', () => {
-      if (!isSoldOut) showPaymentSelectionModal(p, container);
+    container.querySelector('#btnClaimCoupon')?.addEventListener('click', (event) => {
+      const existing = getActiveCouponForProduct(p.id);
+      if (existing) {
+        showBuyerCouponDetail(existing);
+        return;
+      }
+      if (!isSoldOut) claimProductCoupon(p, container, event.currentTarget);
     });
+
+    // A coupon retrieved on another visit turns the button into "Ver meu cupom".
+    const detailUserId = globalSession?.user?.id;
+    if (detailUserId && !ownedCoupon) {
+      loadBuyerCoupons(detailUserId).then(() => {
+        const button = container.querySelector('#btnClaimCoupon');
+        if (!button || currentView !== 'detail' || selectedProduct?.id !== p.id || !getActiveCouponForProduct(p.id)) return;
+        button.disabled = false;
+        button.innerHTML = `${icons.ticket} Ver meu cupom`;
+      }).catch(() => {});
+    }
 
     const carousel = container.querySelector('#detailCarousel');
     const updateGalleryState = (nextIndex) => {
@@ -2231,9 +1886,11 @@ function renderProductDetail(container) {
 function showProductImageLightbox(container, product, images, startIndex = 0) {
   let index = startIndex;
   const modalRoot = document.getElementById('modal-root');
+  const chevronLeft = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
+  const chevronRight = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
   const render = () => {
     modalRoot.innerHTML = `
-      <div class="modal-backdrop visible product-lightbox-backdrop" id="product-image-lightbox">
+      <div class="modal-backdrop visible product-lightbox-backdrop" id="product-image-lightbox" role="dialog" aria-modal="true" aria-label="Fotos de ${escapeHTML(product.title)}">
         <div class="product-lightbox-panel">
           <div class="product-lightbox-header">
             <strong>${escapeHTML(product.title)}</strong>
@@ -2242,9 +1899,9 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
           <div id="lightboxImageFrame" class="product-lightbox-frame">
             ${getProductImage(images[index], 900, 720, product.category)}
             ${images.length > 1 ? `
-              <button class="icon-btn product-lightbox-arrow is-prev" id="lightboxPrev" type="button" aria-label="Foto anterior">‹</button>
-              <button class="icon-btn product-lightbox-arrow is-next" id="lightboxNext" type="button" aria-label="Próxima foto">›</button>
-              <div class="product-lightbox-count">${index + 1}/${images.length}</div>
+              <button class="icon-btn product-lightbox-arrow is-prev" id="lightboxPrev" type="button" aria-label="Foto anterior">${chevronLeft}</button>
+              <button class="icon-btn product-lightbox-arrow is-next" id="lightboxNext" type="button" aria-label="Próxima foto">${chevronRight}</button>
+              <div class="product-lightbox-count">${index + 1} / ${images.length}</div>
             ` : ''}
           </div>
         </div>
@@ -2285,46 +1942,28 @@ function showProductImageLightbox(container, product, images, startIndex = 0) {
   render();
 }
 
-// ─── HELPER: Shared bottom nav binding ──────────────────
-
-function bindBuyerBottomNav(container) {
-  bindBottomNav(container);
-}
-
-// ─── HELPER: Payment approved handler ───────────────────
-
-async function handlePaymentApproved(pixData, product, container) {
-  if (globalSession?.user?.id) buyerCouponsCache.delete(globalSession.user.id);
-  showToast('Pagamento Aprovado! Cupom gerado.', 'success');
-  setTimeout(() => {
-    currentView = 'coupons';
-    currentPayment = null;
-    renderBuyerPage(container);
-  }, 1200);
-}
-
 // ─── NOTIFICATIONS PAGE ─────────────────────────────────
 
 async function renderNotifications(container) {
   const userId = globalSession?.user?.id;
+  const backIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>';
   if (!userId) {
     container.innerHTML = `
-      <div class="buyer-wrapper">
-        <header class="buyer-header minimal-header page-simple-header" style="display:flex;align-items:center;justify-content:space-between;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <button class="icon-btn" id="btnBackFromNotif" style="color:inherit;">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            </button>
-            <h1>Notificações</h1>
+      <div class="page buyer-wrapper acct-page acct-page--narrow notifications-page">
+        <header class="acct-header">
+          <div class="acct-topbar">
+            <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar para o início">${backIcon}</button>
+          </div>
+          <div class="acct-header-copy">
+            <p class="t-eyebrow">Atividade</p>
+            <h1 class="acct-title">Notificações</h1>
           </div>
         </header>
-        <div class="notifications-list">
-          <div class="empty-state notifications-empty-state">
-            ${icons.bell}
-            <h2>Entre para ver suas notificações</h2>
-            <p>Alertas de compra, cupons e vendas ficam salvos na sua conta.</p>
-            <button class="btn-primary" id="btnNotifLogin">Entrar na conta</button>
-          </div>
+        <div class="acct-empty notifications-empty-state">
+          <span class="acct-empty-icon">${icons.bell}</span>
+          <h2>Entre para ver suas notificações</h2>
+          <p>Avisos sobre seus cupons e ofertas ficam salvos na sua conta.</p>
+          <button class="btn-primary acct-empty-action" id="btnNotifLogin" type="button">Entrar na conta</button>
         </div>
       </div>
       ${renderBuyerBottomNav(null)}
@@ -2340,35 +1979,48 @@ async function renderNotifications(container) {
 
   const notifs = await getNotifications(userId);
   const typeIcons = { success: icons.checkCircle, warning: icons.alertTriangle, error: icons.x, info: icons.bell };
-  const typeColors = { success: 'var(--lk-success)', warning: 'var(--lk-warning)', error: 'var(--lk-danger)', info: 'var(--lk-text-muted)' };
+  const typeTones = { success: 'success', warning: 'warning', error: 'danger', info: 'info' };
+  const unreadTotal = notifs.filter(n => !n.read).length;
+  const formatNotifTime = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
 
   container.innerHTML = `
-    <div class="buyer-wrapper">
-      <header class="buyer-header minimal-header page-simple-header" style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <button class="icon-btn" id="btnBackFromNotif">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          </button>
-          <h1>Notificações</h1>
+    <div class="page buyer-wrapper acct-page acct-page--narrow notifications-page">
+      <header class="acct-header">
+        <div class="acct-topbar">
+          <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar para o início">${backIcon}</button>
+          <button class="btn-ghost btn-sm acct-topbar-action" id="btnMarkAllRead" type="button">${icons.check} Marcar como lidas</button>
         </div>
-        <button class="btn-ghost" id="btnMarkAllRead" style="font-size:12px;color:var(--lk-success);">Marcar tudo lido</button>
+        <div class="acct-header-copy">
+          <p class="t-eyebrow">${unreadTotal ? `${unreadTotal} ${unreadTotal === 1 ? 'não lida' : 'não lidas'}` : 'Tudo em dia'}</p>
+          <h1 class="acct-title">Notificações</h1>
+        </div>
       </header>
-      <div class="notifications-list">
-        ${notifs.length === 0 ? `
-          <div class="notifications-empty-state">
-            ${icons.bell}<p>Nenhuma notificação.</p>
-          </div>
-        ` : notifs.map(n => `
+      ${notifs.length === 0 ? `
+        <div class="acct-empty notifications-empty-state">
+          <span class="acct-empty-icon">${icons.bell}</span>
+          <h2>Nada por aqui ainda</h2>
+          <p>Avisos sobre seus cupons e ofertas aparecem aqui assim que acontecerem.</p>
+        </div>
+      ` : `
+        <div class="notifications-list">
+          ${notifs.map(n => `
             <div class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}" data-url="${escapeHTML(n.action_url || '')}">
-            <div class="notif-icon" style="color:${typeColors[n.type] || typeColors.info};">${typeIcons[n.type] || typeIcons.info}</div>
-            <div class="notif-content">
-              <div class="notif-title ${n.read ? '' : 'notif-title-bold'}">${escapeHTML(n.title)}</div>
-              <div class="notif-body">${escapeHTML(n.body || '')}</div>
-              <div class="notif-time">${new Date(n.created_at).toLocaleString('pt-BR')}</div>
+              <span class="notif-icon notif-icon--${typeTones[n.type] || typeTones.info}" aria-hidden="true">${typeIcons[n.type] || typeIcons.info}</span>
+              <div class="notif-content">
+                <div class="notif-head">
+                  <p class="notif-title ${n.read ? '' : 'notif-title-bold'}">${n.read ? '' : '<span class="sr-only">Não lida: </span>'}${escapeHTML(n.title)}</p>
+                  <time class="notif-time" datetime="${escapeHTML(n.created_at || '')}">${formatNotifTime(n.created_at)}</time>
+                </div>
+                ${n.body ? `<p class="notif-body">${escapeHTML(n.body)}</p>` : ''}
+              </div>
             </div>
-          </div>
-        `).join('')}
-      </div>
+          `).join('')}
+        </div>
+      `}
     </div>
     ${renderBuyerBottomNav(null)}
   `;

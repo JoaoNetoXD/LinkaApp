@@ -3,26 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0D0D12" />
-  <meta name="description" content="Linka — o marketplace da sua instituição. Compre, venda e resgate cupons com desconto entre alunos verificados." />
+  <meta name="theme-color" content="#F3F4F8" />
+  <meta name="description" content="Empreende iCEV: cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa." />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Linka" />
+  <meta name="apple-mobile-web-app-title" content="Empreende iCEV" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Linka — Marketplace Estudantil" />
-  <meta property="og:description" content="Compre e venda entre alunos da sua instituição. Cupons rastreáveis, pagamento via Pix e Mercado Pago." />
-  <meta property="og:url" content="https://linka-app.netlify.app" />
-  <meta property="og:site_name" content="Linka" />
+  <meta property="og:title" content="Empreende iCEV — Conexões que geram negócios" />
+  <meta property="og:description" content="Cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa." />
+  <meta property="og:url" content="__SITE_URL__" />
+  <meta property="og:site_name" content="Empreende iCEV" />
   <meta property="og:locale" content="pt_BR" />
+  <meta property="og:image" content="__SITE_URL__/brand/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Logo Empreende iCEV — Conexões que geram negócios." />
 
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="Linka — Marketplace Estudantil" />
-  <meta name="twitter:description" content="Compre e venda entre alunos da sua instituição. Cupons rastreáveis, pagamento via Pix e Mercado Pago." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Empreende iCEV — Conexões que geram negócios" />
+  <meta name="twitter:description" content="Cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa." />
+  <meta name="twitter:image" content="__SITE_URL__/brand/og-image.png" />
 
-  <title>Linka — Marketplace Estudantil</title>
+  <title>Empreende iCEV</title>
 
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
@@ -30,27 +35,23 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Geist+Mono:wght@500..600&display=swap" rel="stylesheet">
   <style>
-    body{margin:0;background:#0D0D12;color:#F0EEE8;font-family:'DM Sans',sans-serif}
-    .boot-screen{min-height:100vh;display:grid;place-items:center;align-content:center;gap:16px;background:#0D0D12}
-    .boot-logo{display:inline-flex;align-items:center;gap:10px;font-family:'DM Sans',sans-serif;font-size:1.9rem;font-weight:800;letter-spacing:-.01em;color:#F0EEE8}
-    .boot-logo-mark{width:40px;height:40px;display:inline-grid;place-items:center;border-radius:14px;background:rgba(200,241,53,.12);border:1px solid rgba(200,241,53,.25)}
-    .boot-logo-mark svg{width:31px;height:31px}.boot-logo-mark rect{fill:none;stroke:rgba(200,241,53,.24)}.boot-logo-mark path,.boot-logo-mark circle{fill:none;stroke:#C8F135;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
-    .boot-loader{width:148px;height:3px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.08)}
-    .boot-loader:after{content:'';display:block;width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,transparent,#C8F135,transparent);animation:boot-loader .9s ease-in-out infinite}
-    @keyframes boot-loader{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+    body{margin:0;background:#F3F4F8;color:#182A50;font-family:'Inter',system-ui,sans-serif}
+    .boot-screen{min-height:100vh;display:grid;place-items:center;align-content:center;gap:28px}
+    .boot-logo{width:min(220px,58vw);height:auto;animation:boot-in .6s cubic-bezier(.22,1,.36,1) both}
+    .boot-loader{width:112px;height:3px;border-radius:3px;overflow:hidden;background:#E4E6EE}
+    .boot-loader:after{content:'';display:block;width:40%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#182A50,#C0176B 64%,#ED1E79);animation:boot-loader 1s cubic-bezier(.65,0,.35,1) infinite}
+    @keyframes boot-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    @keyframes boot-loader{from{transform:translateX(-100%)}to{transform:translateX(260%)}}
+    @media (prefers-reduced-motion:reduce){.boot-logo{animation:none}.boot-loader:after{animation-duration:2.4s}}
   </style>
 </head>
 <body>
   <div id="app">
-    <div class="boot-screen" aria-label="Carregando Linka">
-      <div class="boot-logo">
-        <span class="boot-logo-mark" aria-hidden="true">
-          <svg viewBox="0 0 42 42" role="img" focusable="false"><rect x="5" y="5" width="32" height="32" rx="12"/><path d="M15 14v14h12"/><path d="M26.5 14.5l-11 11"/><circle cx="15" cy="14" r="2.6"/><circle cx="27" cy="28" r="2.6"/></svg>
-        </span>
-        Linka
-      </div>
+    <div class="boot-screen" role="status" aria-label="Carregando Empreende iCEV">
+      <img class="boot-logo" src="/brand/logo.svg" alt="Empreende iCEV — Conexões que geram negócios." width="220" height="127" />
       <div class="boot-loader"></div>
     </div>
   </div>

@@ -1,14 +1,9 @@
 import { supabase } from '../lib/supabase.js';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
-const DEFAULT_PUBLIC_APP_URL = 'https://linka-app.netlify.app';
 
 function cleanUrl(url = '') {
   return String(url || '').trim().replace(/\/+$/, '');
-}
-
-function isLocalOrigin(origin = '') {
-  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
 }
 
 function getPublicAppUrl() {
@@ -20,8 +15,9 @@ function getPublicAppUrl() {
   );
   if (configuredUrl) return configuredUrl;
 
-  const currentOrigin = cleanUrl(window.location.origin);
-  return isLocalOrigin(currentOrigin) ? DEFAULT_PUBLIC_APP_URL : currentOrigin;
+  // Without VITE_APP_URL, e-mail links return to the site the person is using
+  // (localhost during development is allowed in Supabase Auth redirect URLs).
+  return cleanUrl(window.location.origin);
 }
 
 function getEmailRedirectTo(role = 'buyer') {
@@ -54,7 +50,7 @@ function normalizeRole(role) {
 
 function translateAuthError(message = '') {
   const normalized = String(message || '').toLowerCase();
-  if (!normalized) return 'Nao foi possivel concluir a autenticacao.';
+  if (!normalized) return 'Não foi possível concluir a autenticação.';
 
   const knownMessages = [
     {
@@ -67,7 +63,7 @@ function translateAuthError(message = '') {
     },
     {
       match: ['user already registered', 'already registered', 'already exists'],
-      text: 'Ja existe uma conta com este e-mail. Faca login ou use outro e-mail.',
+      text: 'Já existe uma conta com este e-mail. Faça login ou use outro e-mail.',
     },
     {
       match: ['password should be at least', 'weak password'],
@@ -83,28 +79,28 @@ function translateAuthError(message = '') {
     },
     {
       match: ['unable to validate email address', 'invalid email'],
-      text: 'Informe um e-mail valido.',
+      text: 'Informe um e-mail válido.',
     },
     {
       match: ['signup is disabled', 'signups not allowed'],
-      text: 'O cadastro esta desativado neste projeto. Verifique as configuracoes do Supabase.',
+      text: 'O cadastro está desativado neste projeto. Verifique as configurações do Supabase.',
     },
     {
       match: ['email rate limit exceeded', 'rate limit', 'security purposes'],
-      text: 'O envio de e-mails atingiu o limite temporario. Aguarde alguns minutos antes de tentar de novo.',
+      text: 'O envio de e-mails atingiu o limite temporário. Aguarde alguns minutos antes de tentar de novo.',
     },
     {
       match: ['database error saving new user', 'database error'],
-      text: 'Nao foi possivel salvar seu perfil agora. Tente novamente em instantes.',
+      text: 'Não foi possível salvar seu perfil agora. Tente novamente em instantes.',
     },
     {
       match: ['network', 'failed to fetch', 'fetch'],
-      text: 'Nao foi possivel conectar ao servidor. Verifique sua conexao e tente novamente.',
+      text: 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
     },
   ];
 
   const found = knownMessages.find((item) => item.match.some((part) => normalized.includes(part)));
-  return found?.text || 'Nao foi possivel concluir a autenticacao. Revise os dados e tente novamente.';
+  return found?.text || 'Não foi possível concluir a autenticação. Revise os dados e tente novamente.';
 }
 
 export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}) {
@@ -118,7 +114,7 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
     const profile = {
       id: user.id,
       email: user.email,
-      name: extra.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario',
+      name: extra.fullName || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
       role: role === 'admin' || role === 'superadmin' ? 'buyer' : role,
       whatsapp: extra.whatsapp || user.user_metadata?.whatsapp || null,
     };
@@ -140,7 +136,7 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
 export async function signUpUser(email, password, fullName, role = 'buyer', extra = {}) {
   try {
     const accountRole = role === 'seller' ? 'seller' : 'buyer';
-    const roleLabel = accountRole === 'seller' ? 'vendedor' : 'comprador';
+    const roleLabel = accountRole === 'seller' ? 'empresa' : 'aluno';
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -150,10 +146,10 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
           full_name: fullName,
           role: accountRole,
           role_label: roleLabel,
-          app_name: 'Linka',
+          app_name: 'Empreende iCEV',
           confirmation_context: accountRole === 'seller'
-            ? 'Confirme seu e-mail para ativar sua conta de vendedor no Linka.'
-            : 'Confirme seu e-mail para comprar ofertas e receber cupons no Linka.',
+            ? 'Confirme seu e-mail para ativar sua empresa no Empreende iCEV.'
+            : 'Confirme seu e-mail para pegar cupons das empresas dos colegas no Empreende iCEV.',
           whatsapp: extra.whatsapp || '',
         },
       },
@@ -251,6 +247,22 @@ export async function getCurrentSession() {
 
 export async function getCurrentProfile(userId) {
   if (!userId) return null;
+  // DEV-only screen preview: localStorage.empreende_dev_preview_role = 'seller' | 'admin' | 'superadmin'.
+  // Stripped from production builds because import.meta.env.DEV is statically false there.
+  if (import.meta.env.DEV) {
+    const previewRole = localStorage.getItem('empreende_dev_preview_role');
+    if (previewRole) {
+      return {
+        id: userId,
+        role: normalizeRole(previewRole),
+        name: 'Maria Clara Souza',
+        full_name: 'Maria Clara Souza',
+        email: 'maria.clara@icev.edu.br',
+        whatsapp: '86999001122',
+        institution_id: null,
+      };
+    }
+  }
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
@@ -280,7 +292,7 @@ export async function becomeSeller() {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Nao foi possivel ativar o modo vendedor.');
+      throw new Error(data.error || 'Não foi possível ativar o modo vendedor.');
     }
     return { success: true, profile: data.profile, homePath: getHomePathForRole(data.profile?.role || 'seller') };
   } catch (err) {

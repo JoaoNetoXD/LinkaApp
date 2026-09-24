@@ -5,66 +5,30 @@ import './styles/tokens.css';
 import './styles/reset.css';
 import './styles/base.css';
 import './styles/components.css';
+import './styles/overlays.css';
 import './styles/buyer.css';
-import './styles/seller.css';
-import './styles/payment.css';
+import './styles/buyer-account.css';
 import './styles/auth.css';
+import './styles/seller.css';
 import './styles/admin.css';
-import './styles/app-dark.css';
-import './styles/polish.css';
-import './styles/mobile-redesign.css';
 
 const app = document.getElementById('app');
 
-const THEME_STORAGE_KEY = 'linka_theme';
-
-function normalizeTheme() {
-  return 'dark';
-}
-
-function getInitialTheme() {
-  return 'dark';
-}
-
-export function getCurrentTheme() {
-  return 'dark';
-}
-
-export function setAppTheme(theme, { persist = true } = {}) {
-  document.documentElement.dataset.theme = 'dark';
-  document.documentElement.style.colorScheme = 'dark';
-  if (persist) localStorage.setItem(THEME_STORAGE_KEY, 'dark');
-  return 'dark';
-}
-
-export function toggleAppTheme() {
-  return 'dark';
-}
-
-function updateThemeToggle() {}
-
-function mountThemeToggle() {
-  document.getElementById('themeToggleFab')?.remove();
-}
-
 // Dynamic page title
 const PAGE_TITLES = {
-  buyer: 'Linka — Marketplace',
-  seller: 'Linka — Painel de Vendas',
-  admin: 'Linka — Administração',
-  auth: 'Linka — Entrar',
-  landing: 'Linka — Marketplace Estudantil',
-  coupons: 'Linka — Meus Cupons',
-  profile: 'Linka — Perfil',
-  notifications: 'Linka — Notificações',
-  payment: 'Linka — Pagamento',
+  buyer: 'Empreende iCEV — Cupons',
+  seller: 'Empreende iCEV — Minha empresa',
+  admin: 'Empreende iCEV — Administração',
+  auth: 'Empreende iCEV — Entrar',
+  coupons: 'Empreende iCEV — Meus cupons',
+  profile: 'Empreende iCEV — Perfil',
+  notifications: 'Empreende iCEV — Notificações',
 };
 
 function setPageTitle(page) {
-  document.title = PAGE_TITLES[page] || 'Linka — Marketplace Estudantil';
+  document.title = PAGE_TITLES[page] || 'Empreende iCEV';
 }
 
-setAppTheme(getInitialTheme(), { persist: false });
 
 // SVG icons used across the app
 export const icons = {
@@ -99,7 +63,6 @@ export const icons = {
   checkCircle: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
   loader: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>',
   wallet: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z"/></svg>',
-  pix: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.59 14.41l3.89 3.89c.51.51 1.18.79 1.9.79h1.27l-5.07-5.07c-.39-.39-1.02-.39-1.41 0l-.58.39zm-3.18 0l-.58-.39c-.39-.39-1.02-.39-1.41 0L3.35 19.09h1.27c.72 0 1.39-.28 1.9-.79l3.89-3.89zm3.18-4.82c.39-.39.39-1.02 0-1.41L9.7 4.29c-.51-.51-1.18-.79-1.9-.79H6.53l5.07 5.07.58.39.39.58 5.07 5.07V13c0-.72-.28-1.39-.79-1.9l-3.89-3.89c-.39.39-.39 1.02 0 1.41l.58.39-.58.39c-.39.39-.39 1.02 0 1.41l3.89 3.89c.51.51.79 1.18.79 1.9v1.27l-5.07-5.07-.39-.58-.58-.39-5.07-5.07H6.53c-.72 0-1.39.28-1.9.79L.74 14.41h1.27c.72 0 1.39-.28 1.9-.79l3.89-3.89z"/></svg>',
   food: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
   fashion: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
   services: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
@@ -161,11 +124,11 @@ export function showToast(message, type = 'info') {
 
 // Placeholder fine line icons
 const placeholderIcons = {
-  food: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
-  fashion: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
-  services: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
-  digital: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>',
-  others: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#2A2A40" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
+  food: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>',
+  fashion: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
+  services: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+  digital: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>',
+  others: '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>'
 };
 
 const mockImages = {
@@ -186,10 +149,8 @@ const mockImages = {
 
 function renderProductImagePlaceholder(categoryId, width) {
   const icon = Object.hasOwn(placeholderIcons, categoryId) ? placeholderIcons[categoryId] : placeholderIcons.others;
-  const iconSvg = icon.replaceAll('#2A2A40', '#a6abbb');
-  const label = width >= 160 ? '<span style="font-size:11px;font-weight:700;color:#a6abbb;">Imagem indisponível</span>' : '';
-  const dotGrid = `url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 18 18' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='1' fill='%232a2a36'/%3E%3C/svg%3E")`;
-  return `<div style="width:100%;height:100%;background-color:#1e1e28;background-image:${dotGrid};background-size:18px 18px;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;">${iconSvg}${label}</div>`;
+  const label = width >= 160 ? '<span class="product-image-placeholder__label">Sem foto</span>' : '';
+  return `<div class="product-image-placeholder" role="img" aria-label="Produto sem foto">${icon}${label}</div>`;
 }
 
 // Product image renderer — handles mock keys, real URLs, and blob URLs.
@@ -198,7 +159,7 @@ export function getProductImage(imageKey, width = 400, height = 300, categoryId 
     ? sanitizeUrl(imageKey)
     : sanitizeUrl(Object.hasOwn(mockImages, imageKey) ? mockImages[imageKey] : '');
   if (!src) return renderProductImagePlaceholder(categoryId, width);
-  return `<img src="${escapeHTML(src)}" alt="Foto do produto" data-product-image data-image-category="${escapeHTML(categoryId)}" data-image-width="${width}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
+  return `<img src="${escapeHTML(src)}" alt="Foto do produto" data-product-image data-image-category="${escapeHTML(categoryId)}" data-image-width="${width}" class="product-image" loading="lazy" decoding="async" />`;
 }
 
 document.addEventListener('error', (event) => {
@@ -213,25 +174,22 @@ export function formatCurrency(value) {
   return `R$ ${num.toFixed(2).replace('.', ',')}`;
 }
 
-const INSTALL_PROMPT_SEEN_KEY = 'linka_install_prompt_seen_v1';
-const FIRST_RUN_TOUR_KEY = 'linka_first_run_tour_seen_v1';
+const INSTALL_PROMPT_SEEN_KEY = 'empreende_install_prompt_seen_v1';
+const FIRST_RUN_TOUR_KEY = 'empreende_tour_seen_v1';
 let deferredInstallPrompt = null;
 
-export function renderLinkaLogo(className = 'linka-brand-logo') {
-  return `
-    <span class="${className}" aria-label="Linka">
-      <span class="${className}__mark" aria-hidden="true">
-        <svg viewBox="0 0 42 42" role="img" focusable="false">
-          <rect x="5" y="5" width="32" height="32" rx="12" />
-          <path d="M15 14v14h12" />
-          <path d="M26.5 14.5l-11 11" />
-          <circle cx="15" cy="14" r="2.6" />
-          <circle cx="27" cy="28" r="2.6" />
-        </svg>
-      </span>
-      <span class="${className}__word">Linka</span>
-    </span>
-  `;
+const BRAND_LOGOS = {
+  wordmark: { src: '/brand/wordmark.svg', width: 1014, height: 251 },
+  'wordmark-white': { src: '/brand/wordmark-white.svg', width: 1014, height: 251 },
+  logo: { src: '/brand/logo.svg', width: 1020, height: 589 },
+  'logo-white': { src: '/brand/logo-white.svg', width: 1020, height: 589 },
+  symbol: { src: '/brand/symbol.svg', width: 890, height: 304 },
+};
+
+/** Official Empreende iCEV lockup. Size it with CSS height; width follows the artwork. */
+export function renderBrandLogo(variant = 'wordmark', className = 'brand-logo') {
+  const logo = BRAND_LOGOS[variant] || BRAND_LOGOS.wordmark;
+  return `<img class="${className}" src="${logo.src}" alt="Empreende iCEV" width="${logo.width}" height="${logo.height}" decoding="async" />`;
 }
 
 function isMobileInstallSurface() {
@@ -285,11 +243,11 @@ function showInstallPrompt(mode = 'native') {
   const shell = document.createElement('div');
   shell.className = 'install-prompt-shell';
   shell.innerHTML = `
-    <section class="install-prompt-card" role="dialog" aria-live="polite" aria-label="Instalar Linka">
-      <button class="install-prompt-close" type="button" aria-label="Fechar convite">×</button>
+    <section class="install-prompt-card" role="dialog" aria-live="polite" aria-label="Instalar Empreende iCEV">
+      <button class="install-prompt-close" type="button" aria-label="Fechar convite">${icons.x}</button>
       <div class="install-prompt-icon">${icons.package}</div>
       <div class="install-prompt-copy">
-        <strong>Instale o Linka no celular</strong>
+        <strong>Instale o Empreende iCEV</strong>
         <span>${isNative
           ? 'Acesse suas ofertas como app, com abertura mais rápida e menos distrações.'
           : 'No iPhone, toque em Compartilhar e depois em “Adicionar à Tela de Início”.'}</span>
@@ -333,12 +291,12 @@ function getTourInstallMode() {
 
 function renderTourInstallPanel(mode = 'none') {
   if (mode === 'none') return '';
-  const title = mode === 'native' ? 'Instale o Linka no celular' : 'Use como app no celular';
+  const title = mode === 'native' ? 'Instale o Empreende iCEV' : 'Use como app no celular';
   const text = mode === 'native'
-    ? 'Depois do tour, toque para instalar e abrir o Linka direto pela tela inicial.'
+    ? 'Toque em Instalar app para abrir os cupons direto pela tela inicial.'
     : mode === 'ios'
       ? 'No iPhone, abra o menu Compartilhar e escolha “Adicionar à Tela de Início”.'
-      : 'Quando o navegador mostrar a opção, instale o Linka para acessar mais rápido.';
+      : 'Quando o navegador mostrar a opção, instale o app para acessar mais rápido.';
   return `
     <div class="first-run-tour-install" data-install-mode="${mode}">
       <span class="first-run-tour-install-icon" aria-hidden="true">${icons.package}</span>
@@ -369,43 +327,39 @@ const firstRunTourSteps = [
   {
     scene: 'feed',
     kicker: 'Bem-vindo',
-    title: 'Encontre ofertas no Linka',
-    text: 'Confira fotos, preços e detalhes das ofertas em um só lugar.',
+    title: 'Cupons das empresas dos colegas',
+    text: 'Descontos de empresas criadas por alunos do iCEV: lanches, roupas, aulas, serviços e muito mais.',
   },
   {
-    scene: 'checkout',
-    kicker: 'Comprar',
-    title: 'Escolha, pague e receba o cupom',
-    text: 'Em ofertas habilitadas, pague pelo Mercado Pago do vendedor. Após a aprovação, o cupom fica na sua conta.',
+    scene: 'claim',
+    kicker: 'Retirar',
+    title: 'Pegue seu código de desconto',
+    text: 'Entre com seu e-mail do iCEV e toque em Pegar cupom. O código fica guardado em Cupons.',
   },
   {
     scene: 'coupon',
-    kicker: 'Usar',
-    title: 'Cupom seguro para usar uma vez',
-    text: 'No atendimento, o vendedor confere o código e marca como usado. Assim o mesmo cupom não é reaproveitado.',
+    kicker: 'Comprar',
+    title: 'Compre direto com a empresa',
+    text: 'Chame a empresa no WhatsApp e mostre o código. O pagamento é combinado com ela, e o desconto vale uma vez.',
   },
   {
     scene: 'seller',
-    kicker: 'Vender',
-    title: 'Venda com sua própria conta',
-    text: 'Ative o modo vendedor, cadastre produtos, acompanhe vendas e valide cupons no painel da loja.',
+    kicker: 'Empreender',
+    title: 'Tem uma empresa?',
+    text: 'Divulgue cupons para os colegas, receba os pedidos no seu WhatsApp e acompanhe quantos códigos foram usados.',
   },
 ];
 
 function renderFirstRunTourScene(scene = 'feed') {
-  if (scene === 'checkout') {
+  if (scene === 'claim') {
     return `
       <div class="first-run-tour-phone">
-        <div class="tour-scene-top">
-          <span>${icons.ticket}</span>
-          <strong>Comprar cupom</strong>
-        </div>
         <div class="tour-product-row">
           <span class="tour-product-thumb">${getProductImage('brownie', 74, 70, 'food')}</span>
-          <span><b>Brownie artesanal</b><small>Exemplo de oferta</small></span>
+          <span><b>Brownie artesanal</b><small>Doces da Maria · iCEV</small></span>
         </div>
-        <div class="tour-price-row"><span>Total</span><strong>R$ 10,20</strong></div>
-        <div class="tour-action-pill">${icons.check} Pagar e receber cupom</div>
+        <div class="tour-price-row"><span>Com o cupom</span><strong>R$ 9,00 <s>R$ 12,00</s></strong></div>
+        <div class="tour-action-pill">${icons.ticket} Pegar cupom</div>
       </div>
     `;
   }
@@ -413,17 +367,11 @@ function renderFirstRunTourScene(scene = 'feed') {
   if (scene === 'coupon') {
     return `
       <div class="first-run-tour-phone">
-        <div class="tour-scene-top">
-          <span>${icons.checkCircle}</span>
-          <strong>Validação</strong>
-        </div>
         <div class="tour-coupon-ticket">
-          <small>Código do cupom</small>
-          <b>LKA7-92Q</b>
-        </div>
-        <div class="tour-status-list">
-          <span>${icons.shield} Ativo agora</span>
-          <span>${icons.clock} Válido até o prazo da oferta</span>
+          <small>Seu código</small>
+          <b>K7QM-4TXP</b>
+          <div class="perforation" aria-hidden="true"></div>
+          <span class="tour-coupon-status">${icons.whatsapp} Mostre para a empresa ao comprar</span>
         </div>
       </div>
     `;
@@ -434,32 +382,35 @@ function renderFirstRunTourScene(scene = 'feed') {
       <div class="first-run-tour-phone">
         <div class="tour-scene-top">
           <span>${icons.package}</span>
-          <strong>Painel vendedor</strong>
+          <strong>Minha empresa</strong>
         </div>
         <div class="tour-metric-grid">
-          <span><b>3</b><small>Anúncios</small></span>
-          <span><b>2</b><small>Cupons</small></span>
+          <span><b>24</b><small>Cupons retirados</small></span>
+          <span><b>17</b><small>Usados na compra</small></span>
         </div>
-        <div class="tour-action-pill">${icons.plus} Criar anúncio</div>
+        <div class="tour-action-pill">${icons.plus} Criar cupom</div>
       </div>
     `;
   }
 
   return `
     <div class="first-run-tour-phone">
-      <div class="tour-scene-top">
-        <span>${icons.shield}</span>
-        <strong>Vitrine Linka</strong>
-      </div>
       <div class="tour-offer-card">
         <span class="tour-offer-image">${getProductImage('brownie', 74, 70, 'food')}</span>
         <span class="tour-offer-info">
+          <small>Lanches</small>
           <b>Brownie artesanal</b>
-          <small>Exemplo de oferta</small>
-          <strong>R$ 10,20</strong>
+          <strong><span class="tour-offer-price">R$ 9,00</span> <s>R$ 12,00</s></strong>
         </span>
       </div>
-      <div class="tour-action-pill">${icons.tag} Pegar cupom</div>
+      <div class="tour-offer-card is-faded" aria-hidden="true">
+        <span class="tour-offer-image">${getProductImage('camiseta', 74, 70, 'fashion')}</span>
+        <span class="tour-offer-info">
+          <small>Moda</small>
+          <b>Camiseta do curso</b>
+          <strong><span class="tour-offer-price">R$ 59,00</span></strong>
+        </span>
+      </div>
     </div>
   `;
 }
@@ -496,7 +447,7 @@ function renderFirstRunTourStep(shell, stepIndex) {
 
   card.innerHTML = `
     <div class="first-run-tour-head">
-      ${renderLinkaLogo('first-run-tour-logo')}
+      ${renderBrandLogo('wordmark', 'first-run-tour-logo')}
       <button class="first-run-tour-close" type="button" aria-label="Fechar apresentação">${icons.x}</button>
     </div>
     <div class="first-run-tour-visual" aria-hidden="true">${renderFirstRunTourScene(step.scene)}</div>
@@ -547,7 +498,7 @@ function showFirstRunTour(path = '') {
   const shell = document.createElement('div');
   shell.className = 'first-run-tour-shell';
   shell.innerHTML = `
-    <section class="first-run-tour-card" role="dialog" aria-modal="true" aria-label="Como usar o Linka"></section>
+    <section class="first-run-tour-card" role="dialog" aria-modal="true" aria-label="Como usar o Empreende iCEV"></section>
   `;
   shell.__onEsc = (event) => {
     if (event.key === 'Escape') closeFirstRunTour(shell);
@@ -704,15 +655,22 @@ async function handleRoute() {
 }
 
 // Listen to auth changes
+let signedInUserId = null;
+
 onAuthStateChange(async (event, session) => {
+  const previousUserId = signedInUserId;
+  signedInUserId = session?.user?.id || null;
   globalSession = session;
   if (event === 'PASSWORD_RECOVERY' && session) {
-    sessionStorage.setItem('linka_password_recovery_active', '1');
+    sessionStorage.setItem('empreende_password_recovery_active', '1');
     window.location.hash = '#/auth?reset=1';
     return;
   }
 
   if (event === 'SIGNED_IN' && session) {
+    // Supabase re-emits SIGNED_IN when the tab regains focus. Re-routing then
+    // would close open modals and wipe forms, so only react to a real sign-in.
+    if (previousUserId === session.user.id) return;
     try {
       globalProfile = await getCurrentProfile(session.user.id);
     } catch { globalProfile = null; }
@@ -754,7 +712,7 @@ window.addEventListener('appinstalled', () => {
   deferredInstallPrompt = null;
   markInstallPromptSeen();
   closeInstallPrompt();
-  showToast('Linka instalado com sucesso!', 'success');
+  showToast('Empreende iCEV instalado.', 'success');
 });
 
 window.addEventListener('load', () => {
@@ -766,8 +724,7 @@ window.addEventListener('load', () => {
 });
 
 // Init
-mountThemeToggle();
-handleRoute().finally(mountThemeToggle);
+handleRoute();
 
 // Register service worker
 if ('serviceWorker' in navigator) {

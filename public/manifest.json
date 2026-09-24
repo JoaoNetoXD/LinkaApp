@@ -1,15 +1,15 @@
 {
-  "name": "Linka",
-  "short_name": "Linka",
-  "description": "Fluxo real de compras, vendas e cupons dentro da instituição",
+  "name": "Empreende iCEV",
+  "short_name": "Empreende",
+  "description": "Cupons de desconto das empresas dos alunos do iCEV. Retire seu código e compre direto com a empresa.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#eaf2ff",
-  "theme_color": "#eaf2ff",
+  "background_color": "#F3F4F8",
+  "theme_color": "#F3F4F8",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
-  "categories": ["education", "shopping"]
+  "categories": ["education", "shopping", "business"]
 }

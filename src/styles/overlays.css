@@ -1,0 +1,435 @@
+/* ============================================================
+   Overlays · first-run tour, install prompt, image lightbox
+   ============================================================ */
+
+.first-run-tour-lock { overflow: hidden; }
+
+/* ---------- First-run tour ---------- */
+
+.first-run-tour-shell {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 10px 10px calc(10px + var(--safe-bottom));
+  background: rgba(24, 42, 80, 0.46);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: lk-fade-in var(--dur-2) var(--ease-out);
+}
+
+.first-run-tour-shell.closing {
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out);
+}
+
+@media (min-width: 720px) {
+  .first-run-tour-shell { align-items: center; padding: 24px; }
+}
+
+.first-run-tour-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  padding: 18px 18px 20px;
+  border-radius: var(--r-xl);
+  background: var(--paper);
+  box-shadow: var(--shadow-3);
+  animation: lk-sheet-in var(--dur-3) var(--ease-out);
+}
+
+@media (min-width: 720px) {
+  .first-run-tour-card { padding: 22px 24px 24px; animation: lk-pop-in var(--dur-3) var(--ease-out); }
+}
+
+.first-run-tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.first-run-tour-logo { height: 30px; }
+
+.first-run-tour-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-pill);
+  color: var(--ink-mute);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+.first-run-tour-close:hover { background: var(--paper-sunken); color: var(--ink); }
+.first-run-tour-close svg { width: 18px; height: 18px; }
+
+/* Stage: a porcelain desk with a dotted grid, the "phone" sits on it */
+.first-run-tour-visual {
+  display: grid;
+  place-items: center;
+  min-height: 212px;
+  padding: 20px;
+  border-radius: var(--r-md);
+  background-color: var(--porcelain);
+  background-image: radial-gradient(circle at 1px 1px, #D9DDE6 1px, transparent 0);
+  background-size: 16px 16px;
+}
+
+.first-run-tour-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 290px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
+  animation: lk-pop-in var(--dur-3) var(--ease-out);
+}
+
+.tour-scene-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tour-scene-top > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-xs);
+  background: var(--ink);
+  color: #fff;
+}
+.tour-scene-top svg { width: 15px; height: 15px; }
+.tour-scene-top strong { font-size: var(--fs-14); font-weight: 600; }
+
+.tour-offer-card,
+.tour-product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tour-offer-card.is-faded { opacity: 0.45; }
+
+.tour-offer-image,
+.tour-product-thumb {
+  width: 60px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  background: var(--paper-sunken);
+}
+.tour-offer-image .product-image-placeholder svg,
+.tour-product-thumb .product-image-placeholder svg { width: 20px; height: 20px; }
+
+.tour-offer-info,
+.tour-product-row > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tour-offer-info small {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.tour-product-row small { font-size: var(--fs-12); color: var(--ink-mute); }
+.tour-offer-info b,
+.tour-product-row b { font-size: var(--fs-14); font-weight: 600; }
+.tour-offer-info strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: var(--fs-18);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.tour-offer-price { color: var(--brand); }
+.tour-price-row strong s {
+  font-family: var(--font-body);
+  font-size: var(--fs-13);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-mute);
+}
+.tour-offer-info s {
+  font-family: var(--font-body);
+  font-size: var(--fs-12);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-mute);
+}
+
+.tour-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: var(--fs-13);
+  color: var(--ink-mute);
+}
+.tour-price-row strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-24);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
+.tour-action-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: #fff;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.tour-action-pill svg { width: 16px; height: 16px; }
+
+.tour-coupon-ticket {
+  --notch-bg: var(--porcelain);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: -14px;
+  padding: 18px 14px 16px;
+  text-align: center;
+}
+.tour-coupon-ticket small {
+  font-family: var(--font-body);
+  font-size: var(--fs-11);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.tour-coupon-ticket b {
+  font-family: var(--font-mono);
+  font-size: var(--fs-28);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+.tour-coupon-ticket .perforation { align-self: stretch; margin: 10px -2px 6px; }
+.tour-coupon-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-13);
+  font-weight: 500;
+  color: var(--success);
+}
+.tour-coupon-status svg { width: 16px; height: 16px; }
+
+.tour-metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.tour-metric-grid > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: var(--r-sm);
+  background: var(--paper-sunken);
+}
+.tour-metric-grid b {
+  font-family: var(--font-display);
+  font-size: var(--fs-24);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.tour-metric-grid small { font-size: var(--fs-12); color: var(--ink-mute); }
+
+.first-run-tour-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.first-run-tour-kicker {
+  font-family: var(--font-body);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.first-run-tour-copy h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-28);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+.first-run-tour-copy p {
+  font-size: var(--fs-15);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.first-run-tour-install {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--brand-tint);
+  color: var(--brand-ink);
+}
+.first-run-tour-install-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--r-xs);
+  background: var(--paper);
+}
+.first-run-tour-install-icon svg { width: 17px; height: 17px; }
+.first-run-tour-install-copy { display: flex; flex-direction: column; gap: 2px; }
+.first-run-tour-install-copy strong { font-size: var(--fs-14); font-weight: 600; color: var(--ink); }
+.first-run-tour-install-copy small { font-size: var(--fs-13); line-height: 1.4; }
+
+.first-run-tour-dots {
+  display: flex;
+  gap: 6px;
+}
+.first-run-tour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--rule-strong);
+  transition: width var(--dur-3) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+}
+.first-run-tour-dot.active { width: 24px; background: var(--ink); }
+
+.first-run-tour-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 10px;
+}
+
+.first-run-tour-skip,
+.first-run-tour-next {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  border-radius: var(--r-md);
+  font-size: var(--fs-15);
+  font-weight: 600;
+  transition: background-color var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.first-run-tour-skip {
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+.first-run-tour-skip:hover { background: var(--paper-sunken); color: var(--ink); }
+.first-run-tour-next {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 6px 16px -8px rgba(192, 23, 107, 0.7);
+}
+.first-run-tour-next:hover { background: var(--brand-press); }
+.first-run-tour-next svg { width: 17px; height: 17px; }
+.first-run-tour-skip:active,
+.first-run-tour-next:active { transform: scale(0.98); }
+
+/* ---------- Install prompt ---------- */
+
+.install-prompt-shell {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 22px);
+  z-index: var(--z-modal);
+  width: min(440px, calc(100vw - 20px));
+  transform: translateX(-50%);
+  animation: lk-pop-in var(--dur-3) var(--ease-out);
+}
+.install-prompt-shell.closing { opacity: 0; transition: opacity 200ms var(--ease-out); }
+
+.install-prompt-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px 14px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: var(--ink);
+  color: #fff;
+  box-shadow: var(--shadow-3);
+}
+
+.install-prompt-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  color: rgba(255, 255, 255, 0.6);
+}
+.install-prompt-close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.install-prompt-close svg { width: 16px; height: 16px; }
+
+.install-prompt-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  background: var(--brand-gradient);
+  color: #fff;
+}
+.install-prompt-icon svg { width: 20px; height: 20px; }
+
+.install-prompt-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-right: 28px;
+}
+.install-prompt-copy strong { font-size: var(--fs-15); font-weight: 600; }
+.install-prompt-copy span { font-size: var(--fs-13); line-height: 1.45; color: rgba(255, 255, 255, 0.7); }
+
+.install-prompt-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.install-prompt-primary,
+.install-prompt-secondary {
+  min-height: 42px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.install-prompt-primary { background: #fff; color: var(--ink); }
+.install-prompt-secondary { color: rgba(255, 255, 255, 0.75); background: rgba(255, 255, 255, 0.08); }
+.install-prompt-secondary:hover { color: #fff; }

@@ -13,7 +13,7 @@ async function request(path, options = {}) {
     },
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result.success) throw new Error(result.error || 'Nao foi possivel concluir a operacao.');
+  if (!response.ok || !result.success) throw new Error(result.error || 'Não foi possível concluir a operação.');
   return result;
 }
 

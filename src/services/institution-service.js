@@ -1,11 +1,11 @@
 /**
- * Institution Service — Linka (Multi-tenant)
+ * Institution Service — Empreende iCEV (Multi-tenant)
  * Handles institution CRUD and switching for multi-tenant support.
  */
 import { supabase } from '../lib/supabase.js';
 import { institution as mockInstitution } from '../data/mock.js';
 
-const STORAGE_KEY = 'linka_institution_id';
+const STORAGE_KEY = 'empreende_institution_id';
 const USE_MOCKS = import.meta.env.DEV;
 const QUERY_TIMEOUT_MS = 2500;
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -28,7 +28,7 @@ function withTimeout(promise, ms = QUERY_TIMEOUT_MS) {
   return Promise.race([
     Promise.resolve(promise).finally(() => clearTimeout(timer)),
     new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Tempo limite ao consultar instituicao.')), ms);
+      timer = setTimeout(() => reject(new Error('Tempo limite ao consultar instituição.')), ms);
     }),
   ]);
 }
@@ -57,6 +57,33 @@ export async function getInstitution(institutionId) {
       return mockInstitution;
     }
     return null;
+  }
+}
+
+function normalizeDomain(value) {
+  const domain = String(value || '').trim().toLowerCase();
+  if (!domain) return '';
+  return domain.startsWith('@') ? domain : `@${domain}`;
+}
+
+/**
+ * E-mail domains accepted at sign-up: every institution's domain plus its
+ * settings.extra_domains. The database enforces the same rule on sign-up;
+ * this list only lets the form explain it before submitting.
+ * Returns [] when the list is unknown, so the form never blocks by mistake.
+ */
+export async function getAllowedSignupDomains() {
+  try {
+    const { data, error } = await withTimeout(supabase.from('institutions').select('domain, settings'));
+    if (error) throw error;
+    const domains = (data || []).flatMap((row) => [
+      row.domain,
+      ...(Array.isArray(row.settings?.extra_domains) ? row.settings.extra_domains : []),
+    ]);
+    return [...new Set(domains.map(normalizeDomain).filter(Boolean))];
+  } catch (err) {
+    console.warn('getAllowedSignupDomains: unavailable.', err?.message || err);
+    return USE_MOCKS ? [normalizeDomain(mockInstitution.domain)] : [];
   }
 }
 
@@ -105,7 +132,7 @@ export async function createInstitution({ name, fullName, domain, logoUrl, prima
 /** Update institution settings */
 export async function updateInstitution(institutionId, updates) {
   try {
-    if (!institutionId) throw new Error('Instituicao real nao encontrada para salvar.');
+    if (!institutionId) throw new Error('Instituição real não encontrada para salvar.');
     const dbUpdates = {};
     if (hasOwn(updates, 'name')) dbUpdates.name = String(updates.name || '').trim();
     if (hasOwn(updates, 'fullName')) dbUpdates.full_name = String(updates.fullName || '').trim();
@@ -131,14 +158,14 @@ export async function updateInstitution(institutionId, updates) {
     }
 
     if (response.status !== 404 || payload.code !== 'ROUTE_NOT_FOUND') {
-      throw new Error(payload.error || 'Nao foi possivel salvar a instituicao.');
+      throw new Error(payload.error || 'Não foi possível salvar a instituição.');
     }
 
     const { data, error } = await supabase.from('institutions')
       .update(dbUpdates).eq('id', institutionId).select().maybeSingle();
     if (error) throw error;
     if (!data) {
-      throw new Error('Nada foi salvo. Verifique se seu usuario admin tem permissao/RLS para editar esta instituicao.');
+      throw new Error('Nada foi salvo. Verifique se seu usuário admin tem permissão/RLS para editar esta instituição.');
     }
     return { success: true, institution: transformInstitution(data) };
   } catch (err) {

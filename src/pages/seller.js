@@ -1,24 +1,105 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile } from '../main.js';
-import { sellerAds, sellerCoupons, categories as mockCategories, currentUser, institution, sellerStats } from '../data/mock.js';
-import { getSellerPayments, getMercadoPagoStatus, startMercadoPagoOAuth } from '../services/payment-service.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
+import { sellerAds, sellerCoupons, categories as mockCategories, currentUser } from '../data/mock.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed, validateCoupon } from '../services/coupon-service.js';
 import { uploadMultipleImages, compressImage, createPreviewURL } from '../services/storage-service.js';
-import { getInstitution } from '../services/institution-service.js';
 import { getCategories } from '../services/category-service.js';
+import { getCouponCodeCandidates } from '../utils/coupon-code.js';
 import { resetAppScroll } from '../utils/scroll.js';
 
 const USE_MOCKS = import.meta.env.DEV;
+
+const ICON_ARROW_LEFT = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>';
+const ICON_CHEVRON_RIGHT = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+
+// Students contact the company here; the buyer profile page owns the WhatsApp field.
+const PROFILE_ROUTE = '#/buyer/profile';
+
+// Coupon validity the company can pick, counted from the moment a student retrieves the code.
+const COUPON_VALIDITY_OPTIONS = [
+  [24, '24 horas'],
+  [48, '48 horas'],
+  [72, '3 dias'],
+  [168, '7 dias'],
+  [720, '30 dias'],
+];
+
+const OFFER_STATUS = {
+  active: { label: 'Ativa', tone: 'success' },
+  pending: { label: 'Em aprovação', tone: 'warning' },
+  queue: { label: 'Na fila', tone: 'info' },
+  expired: { label: 'Expirada', tone: 'neutral' },
+  rejected: { label: 'Recusada', tone: 'danger' },
+};
+
+// `pending` only exists on codes issued before the coupon-only model; they are never valid.
+const COUPON_STATUS = {
+  active: { label: 'Ativo', tone: 'info', note: 'Confira na hora da compra. Depois de marcado como usado, o código fica bloqueado.' },
+  pending: { label: 'Pendente', tone: 'warning', note: 'Este código não foi liberado e não vale para compra.' },
+  used: { label: 'Usado', tone: 'success', note: 'Já usado numa compra e bloqueado contra reuso.' },
+  expired: { label: 'Expirado', tone: 'neutral', note: 'Fora do prazo. Não aceite este código.' },
+};
+
+// Status label with a semantic tint: success | warning | danger | info | neutral
+function renderStatusPill(label, tone = 'neutral') {
+  return `<span class="seller-status is-${tone}">${escapeHTML(label)}</span>`;
+}
+
+function getOfferStatusMeta(ad) {
+  if (ad?.status === 'rejected' && String(ad.rejectionReason || '').startsWith('Ajuste solicitado:')) {
+    return { label: 'Ajuste solicitado', tone: 'warning' };
+  }
+  return OFFER_STATUS[ad?.status] || { label: 'Indefinida', tone: 'neutral' };
+}
+
+// Page header recipe: eyebrow + display title (+ optional lede and action).
+// `title` may carry static markup (e.g. a .hl span); never pass user data unescaped.
+function renderViewHead({ eyebrow, title, text = '', action = '' }) {
+  return `
+    <header class="seller-view-header">
+      <div class="seller-view-copy">
+        <p class="t-eyebrow">${eyebrow}</p>
+        <h1 class="seller-view-title">${title}</h1>
+        ${text ? `<p class="seller-view-text">${text}</p>` : ''}
+      </div>
+      ${action ? `<div class="seller-view-action">${action}</div>` : ''}
+    </header>
+  `;
+}
+
+// Metric ledger: one card, hairline-divided cells.
+function renderLedgerCell({ label, value, caption = '', attrs = '' }) {
+  const tag = attrs ? 'button' : 'div';
+  return `
+    <${tag} class="seller-ledger-cell"${tag === 'button' ? ' type="button"' : ''} ${attrs}>
+      <span class="seller-ledger-label">${label}</span>
+      <strong class="seller-ledger-value">${value}</strong>
+      ${caption ? `<small class="seller-ledger-caption">${caption}</small>` : ''}
+    </${tag}>
+  `;
+}
+
+function renderEmptyState({ icon, title, text, action = '' }) {
+  return `
+    <div class="seller-empty">
+      <span class="seller-empty-icon" aria-hidden="true">${icon}</span>
+      <h3>${title}</h3>
+      <p>${text}</p>
+      ${action ? `<div class="seller-empty-action">${action}</div>` : ''}
+    </div>
+  `;
+}
+
 const guestUser = {
   id: null,
   name: 'Visitante',
   fullName: 'Visitante',
   email: '',
   whatsapp: '',
-  avatar: 'LK',
+  avatar: 'V',
 };
 
-function getInitials(name, fallback = 'LK') {
+function getInitials(name, fallback = 'U') {
   const initials = String(name || '')
     .trim()
     .split(/\s+/)
@@ -35,7 +116,7 @@ function getUser() {
   const baseUser = USE_MOCKS ? currentUser : guestUser;
 
   if (globalProfile) {
-    const name = globalProfile.name || baseUser.name || 'Usuario';
+    const name = globalProfile.name || globalProfile.full_name || baseUser.name || 'Usuário';
     return {
       ...baseUser,
       ...globalProfile,
@@ -46,7 +127,7 @@ function getUser() {
   }
 
   if (globalSession?.user) {
-    const name = globalSession.user.user_metadata?.full_name || globalSession.user.email?.split('@')[0] || 'Usuario';
+    const name = globalSession.user.user_metadata?.full_name || globalSession.user.email?.split('@')[0] || 'Usuário';
     return {
       ...baseUser,
       id: globalSession.user.id,
@@ -60,49 +141,23 @@ function getUser() {
   return baseUser;
 }
 
-let sellerView = 'dashboard'; // dashboard | ads | insights | create | edit | coupons | payments
-let paymentsFilter = 'all';
+let sellerView = 'dashboard'; // dashboard | ads | insights | create | edit | coupons
 let couponStatusFilter = 'all';
 let activeTab = 'active';
 let loadedAds = null;
 let loadedCoupons = null;
-let activeInstitution = institution;
-let mpConnection = { connected: false, oauthConfigured: false };
-let lastMpNotice = '';
 let selectedAdId = null;
 let loadedCategories = mockCategories;
-let loadedPayments = [];
-let loadedPaymentStats = null;
 let sellerNavFocus = 'dashboard';
 
 const SELLER_SHELL_TTL_MS = 30_000;
 const SELLER_DATA_TTL_MS = 20_000;
-const SELLER_PAYMENTS_TTL_MS = 20_000;
 let sellerShellLoadedAt = 0;
 let sellerShellPromise = null;
 let sellerShellUserKey = null;
 let sellerDataLoadedAt = 0;
 let sellerDataPromise = null;
 let sellerDataUserKey = null;
-let sellerPaymentsLoadedAt = 0;
-let sellerPaymentsPromise = null;
-let sellerPaymentsUserKey = null;
-
-function hasFreshSellerPayments(user = getUser()) {
-  const userKey = getSellerUserKey(user);
-  return sellerPaymentsUserKey === userKey
-    && Date.now() - sellerPaymentsLoadedAt < SELLER_PAYMENTS_TTL_MS
-    && Array.isArray(loadedPayments)
-    && loadedPaymentStats;
-}
-
-function warmSellerPaymentsData(user, container, { force = false } = {}) {
-  if (!force && hasFreshSellerPayments(user)) return;
-  if (!force && sellerPaymentsPromise) return;
-  loadSellerPaymentsData(user, { force }).then(() => {
-    if (sellerView === 'payments') renderSellerPage(container);
-  });
-}
 
 function getSellerCategories(includeAll = true) {
   const rows = Array.isArray(loadedCategories) && loadedCategories.length ? loadedCategories : mockCategories;
@@ -117,7 +172,7 @@ function getSellerUserKey(user = getUser()) {
   return globalSession?.user?.id || user.id || 'guest';
 }
 
-function invalidateSellerCache({ shell = false, data = true, payments = false } = {}) {
+function invalidateSellerCache({ shell = false, data = true } = {}) {
   if (shell) {
     sellerShellLoadedAt = 0;
     sellerShellPromise = null;
@@ -125,10 +180,6 @@ function invalidateSellerCache({ shell = false, data = true, payments = false } 
   if (data) {
     sellerDataLoadedAt = 0;
     sellerDataPromise = null;
-  }
-  if (payments) {
-    sellerPaymentsLoadedAt = 0;
-    sellerPaymentsPromise = null;
   }
 }
 
@@ -140,30 +191,7 @@ async function loadSellerShellData(user, { force = false } = {}) {
 
   sellerShellUserKey = userKey;
   sellerShellPromise = (async () => {
-    const [institutionResult, categoriesResult, mpResult] = await Promise.allSettled([
-      syncInstitutionForUser(),
-      syncSellerCategories(),
-      getMercadoPagoStatus(),
-    ]);
-
-    if (institutionResult.status === 'rejected') {
-      activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
-    }
-
-    if (categoriesResult.status === 'rejected') {
-      loadedCategories = USE_MOCKS ? mockCategories : [{ id: 'all', name: 'Todos' }];
-    }
-
-    if (mpResult.status === 'fulfilled') {
-      mpConnection = mpResult.value || { connected: false, oauthConfigured: false };
-    } else {
-      mpConnection = {
-        connected: sessionStorage.getItem('mp_connected') === 'true',
-        oauthConfigured: false,
-        setupError: mpResult.reason?.message || 'Não foi possível consultar Mercado Pago.',
-      };
-    }
-
+    await syncSellerCategories();
     sellerShellLoadedAt = Date.now();
   })();
 
@@ -210,284 +238,6 @@ async function loadSellerMainData(user, { force = false } = {}) {
   }
 }
 
-function calculatePaymentStats(allPayments = []) {
-  const paid = allPayments.filter(p => p.status === 'paid');
-  const pending = allPayments.filter(p => p.status === 'pending');
-  const totalGross = paid.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-  const totalFees = paid.reduce((sum, p) => sum + Number(p.platformFee || 0), 0);
-  const totalNet = paid.reduce((sum, p) => sum + Number(p.sellerAmount || p.amount || 0), 0);
-
-  return {
-    totalReceived: Math.round(totalNet * 100) / 100,
-    totalGross: Math.round(totalGross * 100) / 100,
-    totalFees: Math.round(totalFees * 100) / 100,
-    totalPayments: allPayments.length,
-    paidCount: paid.length,
-    pendingCount: pending.length,
-    commissionRate: 0,
-    conversionRate: allPayments.length > 0
-      ? Math.round((paid.length / allPayments.length) * 100)
-      : 0,
-  };
-}
-
-async function loadSellerPaymentsData(user, { force = false } = {}) {
-  const userKey = getSellerUserKey(user);
-  const fresh = sellerPaymentsUserKey === userKey && Date.now() - sellerPaymentsLoadedAt < SELLER_PAYMENTS_TTL_MS;
-  if (!force && fresh && Array.isArray(loadedPayments) && loadedPaymentStats) return;
-  if (!force && sellerPaymentsPromise) return sellerPaymentsPromise;
-
-  sellerPaymentsUserKey = userKey;
-  sellerPaymentsPromise = (async () => {
-    try {
-      loadedPayments = await getSellerPayments(user.id || currentUser.id);
-      if (!Array.isArray(loadedPayments)) loadedPayments = [];
-      loadedPaymentStats = calculatePaymentStats(loadedPayments);
-    } catch (err) {
-      console.warn('loadSellerPaymentsData failed:', err.message);
-      loadedPayments = [];
-      loadedPaymentStats = shouldUseSellerMocks()
-        ? {
-          totalReceived: sellerStats.activeAds,
-          totalGross: sellerStats.couponsGenerated,
-          totalFees: 0,
-          totalPayments: sellerStats.couponsGenerated,
-          paidCount: sellerStats.couponsUsed,
-          pendingCount: 0,
-          commissionRate: 0,
-          conversionRate: 66,
-        }
-        : calculatePaymentStats([]);
-    }
-    sellerPaymentsLoadedAt = Date.now();
-  })();
-
-  try {
-    await sellerPaymentsPromise;
-  } finally {
-    sellerPaymentsPromise = null;
-  }
-}
-
-function getMercadoPagoNotice(mpResult, reason, isConnected = false) {
-  if (mpResult === 'connected') {
-    if (!isConnected) {
-      return {
-        message: 'A autorização voltou, mas a conta Mercado Pago ainda não foi gravada. Tente conectar novamente e confira se a Redirect URI termina em /api/mercadopago/oauth/callback.',
-        type: 'error',
-      };
-    }
-    return { message: 'Mercado Pago conectado com sucesso.', type: 'success' };
-  }
-
-  const normalizedReason = String(reason || '').trim();
-  const knownReasons = {
-    missing_params: 'O Mercado Pago voltou sem os dados de autorização. Tente conectar novamente.',
-    invalid_state: 'A tentativa de conexão expirou ou foi aberta em outra sessão. Tente novamente.',
-    oauth_failed: 'Não foi possível concluir a conexão com o Mercado Pago.',
-    invalid_grant: 'O código do Mercado Pago expirou. Inicie a conexão novamente.',
-    invalid_redirect_uri: 'A Redirect URL do Mercado Pago não bate com a URL configurada no Netlify.',
-    missing_code_verifier: 'A tabela OAuth ainda não tem a coluna de segurança PKCE. Rode scripts/mercadopago-pkce-migration.sql no Supabase.',
-  };
-
-  if (knownReasons[normalizedReason]) {
-    return { message: knownReasons[normalizedReason], type: 'error' };
-  }
-
-  if (normalizedReason) {
-    return { message: `Mercado Pago não conectou: ${normalizedReason}`, type: 'error' };
-  }
-
-  return { message: 'Não foi possível conectar o Mercado Pago.', type: 'error' };
-}
-
-function renderMercadoPagoRedirectState(url, redirectUri) {
-  return `
-    <div class="modal-backdrop" id="mp-modal">
-      <div class="modal-content mp-connect-modal">
-        <div class="modal-handle"></div>
-        <div class="mp-connect-logo" aria-hidden="true">
-          ${renderMercadoPagoMark()}
-        </div>
-        <h3>Redirecionando para o Mercado Pago</h3>
-        <p>Vamos abrir a autorização em uma página segura do Mercado Pago. Depois de aprovar, você volta automaticamente para a Linka.</p>
-        <a class="btn btn-mp btn-block btn-lg" id="manual-open-mp" href="${escapeHTML(url)}">Continuar no Mercado Pago</a>
-        <p class="mp-connect-helper">Se a página não abrir, use o botão acima. Redirect URL configurada: <code>${escapeHTML(redirectUri || '')}</code></p>
-      </div>
-    </div>
-  `;
-}
-
-function renderMercadoPagoMark() {
-  return `
-    <span class="mp-logo-mark" aria-hidden="true">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/9/98/Mercado_Pago.svg" alt="" loading="lazy" decoding="async">
-    </span>
-  `;
-}
-
-const MP_FEE_COPY = {
-  pix: 'Pix: 0,99%',
-  card: 'Cartão: 3,98% a 4,98%',
-  note: 'Taxas cobradas pelo Mercado Pago conforme meio e prazo de recebimento.',
-};
-
-function getPaymentMethodLabel(method) {
-  const normalized = String(method || '').toLowerCase();
-  if (normalized.includes('pix')) return 'Pix';
-  if (normalized.includes('card') || normalized.includes('credit') || normalized.includes('checkout')) return 'Cartão';
-  return method ? String(method) : 'Não informado';
-}
-
-function getEstimatedMpFeeInfo(payment) {
-  const amount = Number(payment?.amount || payment?.sellerAmount || 0);
-  const method = String(payment?.method || '').toLowerCase();
-  if (method.includes('pix')) {
-    return {
-      label: 'Pix Mercado Pago',
-      rate: '0,99%',
-      value: amount ? formatCurrency(Math.round(amount * 0.0099 * 100) / 100) : '—',
-      detail: 'Recebimento D0 conforme tabela oficial do Mercado Pago.',
-    };
-  }
-  if (method.includes('card') || method.includes('credit') || method.includes('checkout')) {
-    return {
-      label: 'Cartão Mercado Pago',
-      rate: '3,98% a 4,98%',
-      value: amount ? `${formatCurrency(Math.round(amount * 0.0398 * 100) / 100)} a ${formatCurrency(Math.round(amount * 0.0498 * 100) / 100)}` : '—',
-      detail: 'Varia pelo prazo de recebimento configurado na conta Mercado Pago.',
-    };
-  }
-  return {
-    label: 'Mercado Pago',
-    rate: `${MP_FEE_COPY.pix} · ${MP_FEE_COPY.card}`,
-    value: 'Depende do método',
-    detail: MP_FEE_COPY.note,
-  };
-}
-
-function formatMpDate(value) {
-  if (!value) return 'Não informado';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Não informado';
-  return date.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function renderMercadoPagoStatusPill() {
-  return `
-    <button class="mp-status-pill mp-status-pill--connected" id="mp-connected-info" type="button" aria-label="Ver detalhes da conexão Mercado Pago">
-      ${renderMercadoPagoMark()}
-      <span class="mp-status-copy">
-        <strong>Mercado Pago</strong>
-        <small>Conta conectada</small>
-      </span>
-      ${icons.chevronRight || ''}
-    </button>
-  `;
-}
-
-function showMercadoPagoConnectModal(container) {
-  const modalRoot = document.getElementById('modal-root');
-  modalRoot.innerHTML = `
-    <div class="modal-backdrop" id="mp-modal">
-      <div class="modal-content mp-connect-modal">
-        <div class="modal-handle"></div>
-        <div class="mp-connect-logo" aria-hidden="true">
-          ${renderMercadoPagoMark()}
-        </div>
-        <h3>Conectar Mercado Pago</h3>
-        <p>Ao conectar sua conta, você recebe pagamentos diretamente no seu Mercado Pago. A Linka cobra <strong>0% de comissão</strong>; 100% do valor do pedido vai para o vendedor.</p>
-        ${mpConnection.setupError || mpConnection.oauthConfigured === false ? `
-          <div class="mp-connect-warning">${icons.alertTriangle} ${escapeHTML(mpConnection.setupError || 'A integração OAuth ainda não foi carregada neste ambiente. Verifique as variáveis do Netlify se o botão falhar.')}</div>
-        ` : ''}
-        <button class="btn btn-mp btn-block btn-lg" id="do-connect-mp" style="margin-bottom:var(--space-3);">Conectar minha conta</button>
-        <button class="btn btn-secondary btn-block" id="cancel-mp">Agora não</button>
-      </div>
-    </div>
-  `;
-  modalRoot.querySelector('#mp-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-  modalRoot.querySelector('#cancel-mp')?.addEventListener('click', () => modalRoot.innerHTML = '');
-  modalRoot.querySelector('#do-connect-mp')?.addEventListener('click', async () => {
-    const btn = modalRoot.querySelector('#do-connect-mp');
-    btn.disabled = true;
-    btn.textContent = 'Abrindo Mercado Pago...';
-    try {
-      const url = await startMercadoPagoOAuth();
-      sessionStorage.setItem('mp_oauth_started_at', String(Date.now()));
-      modalRoot.innerHTML = renderMercadoPagoRedirectState(url, mpConnection.redirectUri);
-      modalRoot.querySelector('#manual-open-mp')?.addEventListener('click', () => {
-        sessionStorage.setItem('mp_oauth_manual_open', 'true');
-      });
-      setTimeout(() => {
-        window.location.assign(url);
-      }, 700);
-    } catch (err) {
-      btn.disabled = false;
-      btn.textContent = 'Conectar minha conta';
-      showToast(err.message || 'Não foi possível iniciar a conexão.', 'error');
-    }
-  });
-}
-
-function showMercadoPagoInfoModal(container) {
-  const account = mpConnection.account || {};
-  const modalRoot = document.getElementById('modal-root');
-  modalRoot.innerHTML = `
-    <div class="modal-backdrop" id="mp-info-modal">
-      <div class="modal-content mp-connect-modal mp-info-modal">
-        <div class="modal-handle"></div>
-        <div class="mp-connect-logo" aria-hidden="true">
-          ${renderMercadoPagoMark()}
-        </div>
-        <h3>Mercado Pago conectado</h3>
-        <p>Os pagamentos aprovados dos seus produtos vão direto para esta conta. As taxas aplicáveis são cobradas pelo Mercado Pago.</p>
-        <div class="mp-connection-grid">
-          <div class="mp-connection-row"><span>Status</span><strong>Pronto para receber</strong></div>
-          <div class="mp-connection-row"><span>Taxa Pix</span><strong>0,99%</strong></div>
-          <div class="mp-connection-row"><span>Taxa cartão</span><strong>3,98% a 4,98%</strong></div>
-          <div class="mp-connection-row"><span>Modo</span><strong>${account.liveMode ? 'Produção' : 'Conta autorizada'}</strong></div>
-          <div class="mp-connection-row"><span>Conta Mercado Pago</span><strong>${escapeHTML(account.collectorId || 'Autorizada via OAuth')}</strong></div>
-          <div class="mp-connection-row"><span>Conectado em</span><strong>${escapeHTML(formatMpDate(account.connectedAt))}</strong></div>
-          <div class="mp-connection-row"><span>Renovação segura</span><strong>${escapeHTML(formatMpDate(account.expiresAt))}</strong></div>
-        </div>
-        <button class="btn btn-mp btn-block" id="refresh-mp-status">Atualizar status</button>
-        <button class="btn btn-secondary btn-block" id="reconnect-mp" style="margin-top:var(--space-3);">Reconectar conta</button>
-      </div>
-    </div>
-  `;
-  modalRoot.querySelector('#mp-info-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-  modalRoot.querySelector('#refresh-mp-status')?.addEventListener('click', async () => {
-    invalidateSellerCache({ shell: true, data: false });
-    modalRoot.innerHTML = '';
-    await renderSellerPage(container, { force: true });
-    showToast('Status do Mercado Pago atualizado.', 'success');
-  });
-  modalRoot.querySelector('#reconnect-mp')?.addEventListener('click', () => {
-    modalRoot.innerHTML = '';
-    showMercadoPagoConnectModal(container);
-  });
-}
-
-async function syncInstitutionForUser() {
-  const institutionId = globalSession?.user?.id
-    ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
-    : null;
-  if (institutionId) {
-    const realInstitution = await getInstitution(institutionId);
-    if (realInstitution) {
-      activeInstitution = realInstitution;
-      return;
-    }
-  }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
-}
-
 async function syncSellerCategories() {
   try {
     loadedCategories = await getCategories();
@@ -503,9 +253,6 @@ export function renderSeller(container, subpage) {
   } else if (subpage === 'coupons') {
     sellerView = 'coupons';
     sellerNavFocus = 'coupons';
-  } else if (subpage === 'payments') {
-    sellerView = 'payments';
-    sellerNavFocus = 'payments';
   } else if (subpage === 'ads') {
     sellerView = 'ads';
     sellerNavFocus = 'ads';
@@ -519,45 +266,50 @@ export function renderSeller(container, subpage) {
   renderSellerPage(container);
 }
 
+// Guards async renders: a slow fetch must not paint the seller panel over
+// a newer render or over another route the user already navigated to.
+let sellerRenderId = 0;
+
+function isSellerRoute() {
+  const hash = window.location.hash || '';
+  return hash === '#/seller' || hash.startsWith('#/seller/') || hash.startsWith('#/seller?');
+}
+
+function renderNavItem(id, icon, label) {
+  const isActive = sellerNavFocus === id;
+  return `
+    <div class="bottom-nav-item ${isActive ? 'active' : ''}" data-nav="${id}" role="button" tabindex="0"${isActive ? ' aria-current="page"' : ''}>
+      ${icon}<span>${label}</span>
+      <div class="nav-indicator"></div>
+    </div>
+  `;
+}
+
 async function renderSellerPage(container, { force = false } = {}) {
+  const renderId = ++sellerRenderId;
+  const isStale = () => renderId !== sellerRenderId || !isSellerRoute();
   const user = getUser();
-  const mpParams = new URLSearchParams((window.location.hash.split('?')[1] || ''));
-  const mpResult = mpParams.get('mp');
-  const mpReason = mpParams.get('reason');
-  await loadSellerShellData(user, { force: force || Boolean(mpResult) });
+  await loadSellerShellData(user, { force });
+  if (isStale()) return;
   const needsMainData = ['dashboard', 'ads', 'insights', 'edit', 'coupons'].includes(sellerView);
   if (needsMainData) {
     await loadSellerMainData(user, { force });
+    if (isStale()) return;
   }
-  if (sellerView === 'payments') warmSellerPaymentsData(user, container, { force });
 
-  const isMPConnected = Boolean(mpConnection.connected);
-  const mpNoticeKey = `${mpResult || ''}:${mpReason || ''}`;
-  if (mpResult && mpNoticeKey !== lastMpNotice) {
-    lastMpNotice = mpNoticeKey;
-    const notice = getMercadoPagoNotice(mpResult, mpReason, isMPConnected);
-    showToast(notice.message, notice.type);
-  }
+  const displayName = user.fullName || user.name || 'Usuário';
 
   container.innerHTML = `
     <div class="page seller-page">
       <header class="app-header seller-main-header">
-        <div class="seller-identity">
-          <div class="user-avatar" style="width: 40px; height: 40px;">${escapeHTML(user.avatar || 'U')}</div>
-          <div>
-            <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-bold);">${escapeHTML(user.fullName || user.name)}</div>
-            <div style="font-size:var(--font-size-xs);color:var(--text-secondary);">${escapeHTML(activeInstitution.name)}</div>
-          </div>
-        </div>
+        <span class="seller-brand">${renderBrandLogo('wordmark', 'brand-logo seller-brand-logo')}</span>
         <div class="seller-header-actions">
-          <button class="btn btn-secondary btn-sm" id="open-buyer-mode" style="padding: 6px 12px; font-size: 12px;">${icons.home} Comprar</button>
-          ${isMPConnected ? renderMercadoPagoStatusPill() : `
-            <button class="btn btn-mp btn-sm connect-mp-trigger" style="padding: 6px 12px; font-size: 12px;">${icons.wallet} Conectar</button>
-          `}
+          <button class="seller-header-btn is-collapsible" id="open-buyer-mode" type="button" aria-label="Ver vitrine de ofertas">${icons.home}<span>Ver vitrine</span></button>
+          <button class="user-avatar seller-avatar" id="open-seller-profile" type="button" aria-label="Abrir perfil de ${escapeHTML(displayName)}">${escapeHTML(user.avatar || 'U')}</button>
         </div>
       </header>
 
-      <div class="app-body" id="seller-content">
+      <div class="app-body seller-body" id="seller-content">
         ${sellerView === 'create'
           ? renderCreateForm()
           : sellerView === 'edit'
@@ -568,27 +320,12 @@ async function renderSellerPage(container, { force = false } = {}) {
                 ? renderSellerInsights()
                 : sellerView === 'coupons'
                   ? renderSellerCoupons()
-                  : sellerView === 'payments'
-                    ? renderSellerPayments(container)
-                    : renderDashboard()}
+                  : renderDashboard()}
       </div>
-      <nav class="bottom-nav">
-        <div class="bottom-nav-item ${sellerNavFocus === 'dashboard' ? 'active' : ''}" data-nav="dashboard" role="button" tabindex="0" style="cursor:pointer;">
-          ${icons.home}<span>Dashboard</span>
-          <div class="nav-indicator"></div>
-        </div>
-        <div class="bottom-nav-item ${sellerNavFocus === 'ads' ? 'active' : ''}" data-nav="ads" role="button" tabindex="0" style="cursor:pointer;">
-          ${icons.package}<span>Anúncios</span>
-          <div class="nav-indicator"></div>
-        </div>
-        <div class="bottom-nav-item ${sellerNavFocus === 'payments' ? 'active' : ''}" data-nav="payments" role="button" tabindex="0" style="cursor:pointer;">
-          ${icons.wallet}<span>Vendas</span>
-          <div class="nav-indicator"></div>
-        </div>
-        <div class="bottom-nav-item ${sellerNavFocus === 'coupons' ? 'active' : ''}" data-nav="coupons" role="button" tabindex="0" style="cursor:pointer;">
-          ${icons.ticket}<span>Cupons</span>
-          <div class="nav-indicator"></div>
-        </div>
+      <nav class="bottom-nav seller-nav" aria-label="Navegação de Minha empresa">
+        ${renderNavItem('dashboard', icons.chart, 'Painel')}
+        ${renderNavItem('ads', icons.tag, 'Ofertas')}
+        ${renderNavItem('coupons', icons.ticket, 'Cupons')}
       </nav>
     </div>
   `;
@@ -618,19 +355,25 @@ function getSellerStatusCounts(ads = getSellerAdsData()) {
 
 function getSellerComputedStats(ads = getSellerAdsData(), coupons = getSellerCouponData()) {
   const statusCounts = getSellerStatusCounts(ads);
-  const couponsGenerated = ads.reduce((sum, ad) => sum + (ad.couponsGenerated || 0), 0) || coupons.length;
+  const couponsClaimed = ads.reduce((sum, ad) => sum + (ad.couponsGenerated || 0), 0) || coupons.length;
   const couponsUsed = ads.reduce((sum, ad) => sum + (ad.couponsUsed || 0), 0) || coupons.filter(c => c.status === 'used').length;
   return {
     totalAds: statusCounts.all,
     activeAds: statusCounts.active,
-    pendingAds: statusCounts.pending + statusCounts.queue,
-    expiredAds: statusCounts.expired,
-    rejectedAds: statusCounts.rejected,
-    couponsGenerated,
+    couponsClaimed,
     couponsUsed,
     totalClicks: ads.reduce((sum, ad) => sum + (ad.clicks || 0), 0),
-    conversionRate: couponsGenerated > 0 ? Math.round((couponsUsed / couponsGenerated) * 100) : 0,
+    // Taxa de uso: coupons used ÷ coupons retrieved. Null until a student retrieves one.
+    useRate: couponsClaimed > 0 ? Math.round((couponsUsed / couponsClaimed) * 100) : null,
   };
+}
+
+function formatUseRate(rate) {
+  return rate === null ? '—' : `${rate}%`;
+}
+
+function pluralize(count, singular, plural) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function getSellerCategoryName(categoryId) {
@@ -644,47 +387,79 @@ function formatSellerDate(value) {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
-function renderSellerStatCard({ icon, value, label, action, hint }) {
+function renderSellerStatCard({ icon, value, label, hint, attrs, detail = '', featured = false }) {
+  const accessibleLabel = [`${label}: ${value}`, detail, hint].filter(Boolean).join('. ');
   return `
-    <button class="stat-card glass-card seller-stat-card" type="button" data-seller-action="${escapeHTML(action)}" aria-label="${escapeHTML(label)}">
-      <div class="stat-icon">${icon}</div>
-      <div class="stat-info">
-        <div class="stat-value">${escapeHTML(String(value))}</div>
-        <div class="stat-label">${escapeHTML(label)}</div>
-        ${hint ? `<div class="stat-hint">${escapeHTML(hint)}</div>` : ''}
-      </div>
+    <button class="stat-card card seller-stat-card${featured ? ' is-featured' : ''}" type="button" ${attrs} aria-label="${escapeHTML(accessibleLabel)}">
+      <span class="stat-icon" aria-hidden="true">${icon}</span>
+      <span class="stat-info">
+        <span class="stat-value">${escapeHTML(String(value))}</span>
+        <span class="stat-label">${escapeHTML(label)}</span>
+        ${detail ? `<span class="seller-stat-detail">${escapeHTML(detail)}</span>` : ''}
+      </span>
+      ${hint ? `<span class="seller-stat-hint">${escapeHTML(hint)}${ICON_CHEVRON_RIGHT}</span>` : ''}
     </button>
   `;
 }
 
 function renderDashboard() {
+  const user = getUser();
   const ads = getSellerAdsData();
-  const computedStats = getSellerComputedStats(ads);
-  const convRate = `${computedStats.conversionRate}%`;
-  const setupBlock = renderSellerOnboarding(ads, Boolean(mpConnection.connected));
+  const stats = getSellerComputedStats(ads);
+  const firstName = String(user.name || '').trim().split(/\s+/)[0];
+  const couponDetail = stats.couponsClaimed > 0
+    ? `${pluralize(stats.couponsUsed, 'usado', 'usados')} · ${formatUseRate(stats.useRate)} de uso`
+    : 'Nenhum cupom retirado ainda';
 
   return `
-    <div class="seller-stats-grid">
-      ${renderSellerStatCard({ icon: icons.package, value: computedStats.totalAds, label: 'Anúncios', action: 'ads', hint: 'Gerenciar' })}
-      ${renderSellerStatCard({ icon: icons.ticket, value: computedStats.couponsGenerated, label: 'Cupons', action: 'coupons', hint: 'Ver detalhes' })}
-      ${renderSellerStatCard({ icon: icons.checkCircle, value: convRate, label: 'Conversão', action: 'payments', hint: 'Ver vendas' })}
-      ${renderSellerStatCard({ icon: icons.eye, value: computedStats.totalClicks, label: 'Cliques', action: 'clicks', hint: 'Analisar' })}
-    </div>
+    ${renderViewHead({
+      eyebrow: 'Minha empresa',
+      title: firstName ? `Olá, <span class="hl">${escapeHTML(firstName)}</span>` : 'Sua <span class="hl">empresa</span>',
+      action: `<button class="btn-primary create-ad-cta seller-view-cta" type="button">${icons.plus} Criar oferta</button>`,
+    })}
 
-    ${setupBlock}
+    ${renderSellerOnboarding(ads, user)}
 
-    <div class="seller-cta-inline">
-      <button class="btn btn-primary create-ad-cta btn-block" style="display:flex; justify-content:center; align-items:center; gap:8px;">${icons.plus} Criar Novo Anúncio</button>
-    </div>
-    <section class="seller-dashboard-card">
-      <div>
-        <span class="seller-setup-kicker">Operação da loja</span>
-        <h3>Continue de onde faz sentido</h3>
-        <p>Use as áreas detalhadas para gerenciar anúncios, validar cupons e acompanhar vendas reais sem se perder em uma tela única.</p>
+    <section class="seller-section" aria-labelledby="seller-overview-title">
+      <div class="seller-section-head">
+        <h2 class="seller-section-title" id="seller-overview-title">Visão geral</h2>
       </div>
-      <div class="seller-dashboard-actions">
-        <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Abrir anúncios</button>
-        <button class="btn btn-secondary" type="button" data-seller-action="clicks">${icons.eye} Ver análise</button>
+      <div class="seller-stats-grid">
+        ${renderSellerStatCard({
+          featured: true,
+          icon: icons.ticket,
+          value: stats.couponsClaimed,
+          label: 'Cupons retirados',
+          detail: couponDetail,
+          hint: 'Ver cupons',
+          attrs: 'data-seller-action="coupons"',
+        })}
+        ${renderSellerStatCard({ icon: icons.tag, value: stats.activeAds, label: 'Ofertas ativas', hint: 'Gerenciar', attrs: 'data-tab-shortcut="active"' })}
+        ${renderSellerStatCard({ icon: icons.eye, value: stats.totalClicks, label: 'Cliques', hint: 'Analisar', attrs: 'data-seller-action="clicks"' })}
+      </div>
+    </section>
+
+    <section class="seller-section" aria-labelledby="seller-shortcuts-title">
+      <div class="seller-section-head">
+        <h2 class="seller-section-title" id="seller-shortcuts-title">Atalhos</h2>
+      </div>
+      <div class="seller-list seller-shortcuts">
+        <button class="seller-shortcut" type="button" data-seller-action="ads">
+          <span class="seller-shortcut-icon" aria-hidden="true">${icons.tag}</span>
+          <span class="seller-shortcut-copy">
+            <strong>Gerenciar ofertas</strong>
+            <small>Edite, renove ou tire ofertas da vitrine</small>
+          </span>
+          <span class="seller-shortcut-arrow" aria-hidden="true">${ICON_CHEVRON_RIGHT}</span>
+        </button>
+        <button class="seller-shortcut" type="button" data-seller-action="clicks">
+          <span class="seller-shortcut-icon" aria-hidden="true">${icons.chart}</span>
+          <span class="seller-shortcut-copy">
+            <strong>Ver análise</strong>
+            <small>Cliques, cupons e categorias com mais procura</small>
+          </span>
+          <span class="seller-shortcut-arrow" aria-hidden="true">${ICON_CHEVRON_RIGHT}</span>
+        </button>
       </div>
     </section>
   `;
@@ -706,45 +481,84 @@ function enrichAdsWithCouponStats() {
   });
 }
 
-function renderSellerOnboarding(ads, isMPConnected) {
+// Setup checklist: contact channel, first offer, approval. Hidden once all three are done.
+function renderSellerOnboarding(ads, user = getUser()) {
+  const hasWhatsapp = Boolean(String(user.whatsapp || '').trim());
   const hasAds = ads.length > 0;
-  const hasCurrentAds = ads.some((ad) => ad.status !== 'expired');
   const hasActive = ads.some((ad) => ad.status === 'active');
-  const hasPending = ads.some((ad) => ad.status === 'pending' || ad.status === 'queue');
+  const pendingCount = ads.filter((ad) => ad.status === 'pending' || ad.status === 'queue').length;
+  const hasPending = pendingCount > 0;
+  if (hasWhatsapp && hasAds && hasActive) return '';
 
-  if (isMPConnected && hasCurrentAds) {
-    if (hasActive) return '';
-    return `
-      <section class="seller-setup-card">
-        <div>
-          <span class="seller-setup-kicker">Quase pronto</span>
-          <h3>Seu produto já foi criado</h3>
-          <p>Agora falta a aprovação para ele aparecer na vitrine dos compradores. Quando estiver ativo, o pagamento cai direto no seu Mercado Pago.</p>
-        </div>
-      </section>
-    `;
+  const steps = [
+    {
+      done: hasWhatsapp,
+      label: 'WhatsApp para contato',
+      state: hasWhatsapp ? 'Os alunos chamam sua empresa por lá' : 'Adicione o número no seu perfil',
+      attrs: 'data-seller-action="profile"',
+    },
+    {
+      done: hasAds,
+      label: 'Primeira oferta criada',
+      state: hasAds ? pluralize(ads.length, 'oferta criada', 'ofertas criadas') : 'Crie sua primeira oferta',
+      attrs: hasAds ? 'data-tab-shortcut="all"' : 'data-seller-action="create"',
+    },
+    {
+      done: hasActive,
+      label: 'Oferta aprovada na vitrine',
+      state: hasActive
+        ? 'Na vitrine para os alunos'
+        : hasPending
+          ? 'Em análise pela equipe Empreende iCEV'
+          : hasAds
+            ? 'Nenhuma oferta ativa agora'
+            : 'Depois da aprovação, ela aparece para os alunos',
+      attrs: hasActive
+        ? 'data-tab-shortcut="active"'
+        : hasPending
+          ? 'data-tab-shortcut="pending"'
+          : hasAds ? 'data-tab-shortcut="all"' : 'data-seller-action="create"',
+    },
+  ];
+  const doneCount = steps.filter((step) => step.done).length;
+
+  let title = 'Deixe sua empresa pronta para os alunos';
+  let text = 'Os alunos pegam o cupom no app e compram direto com sua empresa, geralmente pelo WhatsApp.';
+  if (hasAds && !hasActive && hasPending) {
+    title = pendingCount === 1 ? 'Sua oferta está em análise' : 'Suas ofertas estão em análise';
+    text = pendingCount === 1
+      ? 'Assim que a equipe Empreende iCEV aprovar, ela aparece na vitrine para os alunos.'
+      : 'Assim que a equipe Empreende iCEV aprovar, elas aparecem na vitrine para os alunos.';
+  } else if (hasAds && !hasActive) {
+    title = 'Nenhuma oferta na vitrine agora';
+    text = 'Crie uma nova oferta ou renove uma expirada para voltar a aparecer para os alunos.';
+  } else if (hasAds && !hasWhatsapp) {
+    title = 'Falta o WhatsApp para contato';
+    text = 'É por lá que os alunos chamam sua empresa para comprar. Adicione o número no seu perfil.';
   }
 
   return `
-    <section class="seller-setup-card">
-      <div>
-        <span class="seller-setup-kicker">${hasCurrentAds ? 'Configuração de venda' : 'Primeiro acesso de vendedor'}</span>
-        <h3>${hasCurrentAds ? 'Conecte o Mercado Pago para receber' : 'Configure sua loja em dois passos'}</h3>
-        <p>${hasPending
-          ? 'Você já tem anúncio em análise. Conecte sua conta Mercado Pago para estar pronto quando ele for aprovado.'
-          : hasAds
-            ? 'Você não tem produto em venda agora. Cadastre uma nova oferta ou renove um produto expirado quando fizer sentido.'
-            : 'Conecte o Mercado Pago, cadastre um produto e acompanhe a aprovação por aqui.'}</p>
+    <section class="seller-setup-card" aria-labelledby="seller-setup-title">
+      <div class="seller-setup-copy">
+        <p class="t-eyebrow">Primeiros passos · ${doneCount} de 3</p>
+        <h2 class="seller-setup-title" id="seller-setup-title">${title}</h2>
+        <p class="seller-setup-text">${text}</p>
       </div>
-      <div class="seller-setup-steps">
-        <button type="button" class="${isMPConnected ? 'done' : ''}" data-seller-action="${isMPConnected ? 'mp-info' : 'ads'}"><span>1</span> Mercado Pago ${isMPConnected ? 'conectado' : 'pendente'}</button>
-        <button type="button" class="${hasCurrentAds ? 'done' : ''}" data-seller-action="ads"><span>2</span> Produto ${hasCurrentAds ? 'cadastrado' : 'não cadastrado'}</button>
-        <button type="button" class="${hasActive ? 'done' : ''}" data-seller-action="ads"><span>3</span> Vitrine ${hasActive ? 'ativa' : 'aguardando aprovação'}</button>
-      </div>
-      <div class="seller-setup-actions">
-        ${!isMPConnected ? `<button class="btn btn-mp connect-mp-trigger">${icons.wallet} Conectar Mercado Pago</button>` : ''}
-        <button class="btn btn-primary new-ad-trigger">${icons.plus} ${hasCurrentAds ? 'Criar outro produto' : 'Cadastrar produto'}</button>
-      </div>
+      <div class="progress-bar seller-setup-progress" aria-hidden="true"><div class="progress-fill" style="width:${Math.round((doneCount / 3) * 100)}%"></div></div>
+      <ol class="seller-setup-steps">
+        ${steps.map((step, index) => `
+          <li>
+            <button type="button" class="seller-setup-step${step.done ? ' done' : ''}" ${step.attrs}>
+              <span class="seller-setup-num" aria-hidden="true">${step.done ? icons.check : index + 1}</span>
+              <span class="seller-setup-step-copy">
+                <strong>${step.label}<span class="sr-only">${step.done ? ' (concluído)' : ' (pendente)'}</span></strong>
+                <small>${step.state}</small>
+              </span>
+              <span class="seller-setup-step-arrow" aria-hidden="true">${ICON_CHEVRON_RIGHT}</span>
+            </button>
+          </li>
+        `).join('')}
+      </ol>
     </section>
   `;
 }
@@ -753,39 +567,44 @@ function renderAdsByStatus() {
   const ads = getSellerAdsData();
   const filtered = activeTab === 'all' ? ads : ads.filter(a => a.status === activeTab);
   if (ads.length === 0) {
-    return `
-      <div class="empty-state seller-first-empty">
-        ${icons.package}
-        <h3>Nenhum produto cadastrado</h3>
-        <p>Cadastre uma oferta para ela entrar em aprovação e aparecer na vitrine depois de liberada.</p>
-        <button class="btn btn-primary new-ad-trigger">${icons.plus} Criar primeiro anúncio</button>
-      </div>
-    `;
+    return renderEmptyState({
+      icon: icons.tag,
+      title: 'Crie sua primeira oferta',
+      text: 'Ela passa por uma aprovação rápida e depois aparece na vitrine para os alunos do iCEV.',
+      action: `<button class="btn-secondary new-ad-trigger" type="button">${icons.plus} Criar primeira oferta</button>`,
+    });
   }
   if (filtered.length === 0) {
     const messages = {
-      all: 'Nenhum anúncio cadastrado.',
-      active: 'Nenhum anúncio ativo no momento.',
-      pending: 'Nenhum anúncio aguardando aprovação.',
-      queue: 'Nenhum anúncio na fila.',
-      expired: 'Nenhum anúncio expirado.',
-      rejected: 'Nenhum anúncio recusado.'
+      all: 'Nenhuma oferta cadastrada',
+      active: 'Nenhuma oferta ativa agora',
+      pending: 'Nada aguardando aprovação',
+      queue: 'Nenhuma oferta na fila',
+      expired: 'Nenhuma oferta expirada',
+      rejected: 'Nenhuma oferta recusada'
     };
-    return `<div class="empty-state">${icons.package}<h3>${messages[activeTab]}</h3><p>Seu primeiro anúncio pode aparecer na vitrine da instituição.</p></div>`;
+    return renderEmptyState({
+      icon: icons.tag,
+      title: messages[activeTab],
+      text: 'Troque o filtro acima para ver ofertas em outros status.',
+    });
   }
-  return filtered.map(ad => renderSellerAdCard(ad)).join('');
+  return `<div class="seller-list seller-ad-list">${filtered.map(ad => renderSellerAdCard(ad)).join('')}</div>`;
 }
 
 function renderSellerAdsTabs(statusCounts) {
+  const tab = (id, label, count) => `
+    <button class="tab ${activeTab === id ? 'active' : ''}" type="button" aria-pressed="${activeTab === id}" data-tab="${id}">${label} <span class="tab-count">${count}</span></button>
+  `;
   return `
     <div class="seller-tabs-container" id="seller-ads-section">
-      <div class="tabs">
-        <button class="tab ${activeTab === 'all' ? 'active' : ''}" data-tab="all">Todos <span class="tab-count">${statusCounts.all}</span></button>
-        <button class="tab ${activeTab === 'active' ? 'active' : ''}" data-tab="active">Ativos <span class="tab-count">${statusCounts.active}</span></button>
-        <button class="tab ${activeTab === 'pending' ? 'active' : ''}" data-tab="pending">Em aprovação <span class="tab-count">${statusCounts.pending}</span></button>
-        ${statusCounts.queue > 0 ? `<button class="tab ${activeTab === 'queue' ? 'active' : ''}" data-tab="queue">Na fila <span class="tab-count">${statusCounts.queue}</span></button>` : ''}
-        <button class="tab ${activeTab === 'expired' ? 'active' : ''}" data-tab="expired">Expirados <span class="tab-count">${statusCounts.expired}</span></button>
-        <button class="tab ${activeTab === 'rejected' ? 'active' : ''}" data-tab="rejected">Recusados <span class="tab-count">${statusCounts.rejected}</span></button>
+      <div class="tabs" role="group" aria-label="Filtrar ofertas por status">
+        ${tab('all', 'Todas', statusCounts.all)}
+        ${tab('active', 'Ativas', statusCounts.active)}
+        ${tab('pending', 'Em aprovação', statusCounts.pending)}
+        ${statusCounts.queue > 0 ? tab('queue', 'Na fila', statusCounts.queue) : ''}
+        ${tab('expired', 'Expiradas', statusCounts.expired)}
+        ${tab('rejected', 'Recusadas', statusCounts.rejected)}
       </div>
     </div>
   `;
@@ -798,20 +617,18 @@ function renderSellerAdsManager() {
   if (!['all', 'active', 'pending', 'queue', 'expired', 'rejected'].includes(activeTab)) activeTab = 'all';
 
   return `
-    <section class="seller-view-header">
-      <div>
-        <span class="seller-setup-kicker">Gestão de anúncios</span>
-        <h2>Anúncios da loja</h2>
-        <p>Produtos reais do vendedor, separados por status. Edite, renove ou remova da vitrine quando necessário.</p>
-      </div>
-      <button class="btn btn-primary new-ad-trigger" type="button">${icons.plus} Novo anúncio</button>
-    </section>
+    ${renderViewHead({
+      eyebrow: 'Gestão de ofertas',
+      title: 'Ofertas da empresa',
+      text: 'Suas ofertas separadas por status. Edite, renove ou tire da vitrine quando precisar.',
+      action: `<button class="btn-primary new-ad-trigger seller-view-cta" type="button">${icons.plus} Nova oferta</button>`,
+    })}
 
-    <div class="seller-detail-grid">
-      <button class="seller-detail-card" type="button" data-tab-shortcut="all"><span>Total</span><strong>${statusCounts.all}</strong><small>Cadastrados</small></button>
-      <button class="seller-detail-card" type="button" data-tab-shortcut="active"><span>Ativos</span><strong>${statusCounts.active}</strong><small>Na vitrine</small></button>
-      <button class="seller-detail-card" type="button" data-tab-shortcut="pending"><span>Em análise</span><strong>${statusCounts.pending + statusCounts.queue}</strong><small>Aguardando admin</small></button>
-      <button class="seller-detail-card" type="button" data-tab-shortcut="expired"><span>Expirados</span><strong>${statusCounts.expired}</strong><small>Fora da vitrine</small></button>
+    <div class="seller-ledger">
+      ${renderLedgerCell({ label: 'Total', value: statusCounts.all, caption: 'Cadastradas', attrs: 'data-tab-shortcut="all"' })}
+      ${renderLedgerCell({ label: 'Ativas', value: statusCounts.active, caption: 'Na vitrine', attrs: 'data-tab-shortcut="active"' })}
+      ${renderLedgerCell({ label: 'Em análise', value: statusCounts.pending + statusCounts.queue, caption: 'Aguardando a equipe', attrs: 'data-tab-shortcut="pending"' })}
+      ${renderLedgerCell({ label: 'Expiradas', value: statusCounts.expired, caption: 'Fora da vitrine', attrs: 'data-tab-shortcut="expired"' })}
     </div>
 
     ${renderSellerAdsTabs(statusCounts)}
@@ -820,10 +637,10 @@ function renderSellerAdsManager() {
       ${renderAdsByStatus()}
     </div>
 
-    <section class="seller-view-footer">
-      <strong>${stats.totalClicks} cliques registrados</strong>
-      <span>${stats.couponsGenerated} cupons gerados · ${stats.couponsUsed} usados · ${stats.conversionRate}% de conversão</span>
-    </section>
+    <footer class="seller-view-footer">
+      <span class="seller-view-footer-icon" aria-hidden="true">${icons.eye}</span>
+      <p><strong>${pluralize(stats.totalClicks, 'clique registrado', 'cliques registrados')}</strong><span>${pluralize(stats.couponsClaimed, 'cupom retirado', 'cupons retirados')} · ${stats.couponsUsed} ${stats.couponsUsed === 1 ? 'usado' : 'usados'} · ${formatUseRate(stats.useRate)} de uso</span></p>
+    </footer>
   `;
 }
 
@@ -845,180 +662,275 @@ function renderSellerInsights() {
   });
   const categories = [...categoryMap.values()].sort((a, b) => b.clicks - a.clicks);
 
+  const maxCategoryClicks = Math.max(1, ...categories.map((item) => item.clicks));
+
   return `
-    <section class="seller-view-header">
-      <div>
-        <span class="seller-setup-kicker">Análise real</span>
-        <h2>Cliques e conversão</h2>
-        <p>Dados calculados a partir dos anúncios, cupons e interações registradas no banco.</p>
-      </div>
-      <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Ver anúncios</button>
-    </section>
+    ${renderViewHead({
+      eyebrow: 'Análise da empresa',
+      title: 'Cliques e cupons',
+      text: 'Números calculados a partir das suas ofertas, dos cupons retirados e das visitas registradas.',
+      action: `<button class="btn-secondary btn-sm" type="button" data-seller-action="ads">${icons.tag} Ver ofertas</button>`,
+    })}
 
-    <div class="seller-detail-grid">
-      <div class="seller-detail-card"><span>Cliques</span><strong>${stats.totalClicks}</strong><small>Total registrado</small></div>
-      <div class="seller-detail-card"><span>Cupons</span><strong>${stats.couponsGenerated}</strong><small>Gerados</small></div>
-      <div class="seller-detail-card"><span>Usados</span><strong>${stats.couponsUsed}</strong><small>Validados</small></div>
-      <div class="seller-detail-card"><span>Conversão</span><strong>${stats.conversionRate}%</strong><small>Cupom usado/gerado</small></div>
+    <div class="seller-ledger">
+      ${renderLedgerCell({ label: 'Cliques', value: stats.totalClicks, caption: 'Total registrado' })}
+      ${renderLedgerCell({ label: 'Retirados', value: stats.couponsClaimed, caption: 'Cupons pegos pelos alunos' })}
+      ${renderLedgerCell({ label: 'Usados', value: stats.couponsUsed, caption: 'Confirmados na compra' })}
+      ${renderLedgerCell({ label: 'Taxa de uso', value: formatUseRate(stats.useRate), caption: 'Usados ÷ retirados' })}
     </div>
 
-    <div class="performance-section seller-insights-chart">
-      <div class="chart-container">
-        <h4>Cupons gerados nos últimos 7 dias</h4>
-        <canvas id="seller-chart" height="200"></canvas>
-      </div>
+    <div class="seller-insights-grid">
+      <section class="card seller-panel seller-insights-chart" aria-labelledby="seller-chart-title">
+        <div class="seller-panel-head">
+          <h2 class="seller-panel-title" id="seller-chart-title">Cupons retirados</h2>
+          <span class="t-eyebrow">Últimos 7 dias</span>
+        </div>
+        <canvas id="seller-chart" class="seller-chart-canvas" height="200" role="img" aria-label="Gráfico de cupons retirados nos últimos 7 dias"></canvas>
+      </section>
+
+      <section class="card seller-panel" aria-labelledby="seller-top-ads-title">
+        <div class="seller-panel-head">
+          <h2 class="seller-panel-title" id="seller-top-ads-title">Ofertas com mais cliques</h2>
+        </div>
+        <div class="seller-insight-list">
+          ${topAds.length ? topAds.map((ad, index) => `
+            <button class="seller-insight-row" type="button" data-open-ad-id="${escapeHTML(ad.id)}" aria-label="Abrir ${escapeHTML(ad.title)}">
+              <span class="seller-insight-rank" aria-hidden="true">${String(index + 1).padStart(2, '0')}</span>
+              <span class="seller-insight-thumb">${getProductImage(ad.images?.[0], 80, 80, ad.category)}</span>
+              <span class="seller-insight-main">
+                <strong>${escapeHTML(ad.title)}</strong>
+                <small>${escapeHTML(getSellerCategoryName(ad.category))} · ${escapeHTML(formatSellerDate(ad.createdAt))}</small>
+              </span>
+              <span class="seller-insight-metric">${ad.clicks || 0}<small>cliques</small></span>
+            </button>
+          `).join('') : `
+            <p class="seller-muted-text">Quando os alunos abrirem suas ofertas, o ranking aparece aqui.</p>
+          `}
+        </div>
+      </section>
+
+      <section class="card seller-panel" aria-labelledby="seller-categories-title">
+        <div class="seller-panel-head">
+          <h2 class="seller-panel-title" id="seller-categories-title">Categorias</h2>
+        </div>
+        <div class="seller-category-insights">
+          ${categories.length ? categories.map((item) => `
+            <div class="seller-category-insight">
+              <div class="seller-category-insight-head">
+                <strong>${escapeHTML(item.name)}</strong>
+                <span class="t-mono">${item.clicks} cliques</span>
+              </div>
+              <div class="progress-bar" aria-hidden="true"><div class="progress-fill" style="width:${Math.round((item.clicks / maxCategoryClicks) * 100)}%"></div></div>
+              <span class="seller-category-insight-meta">${pluralize(item.ads, 'oferta', 'ofertas')} · ${pluralize(item.coupons, 'cupom retirado', 'cupons retirados')}</span>
+            </div>
+          `).join('') : '<p class="seller-muted-text">Crie ofertas para medir o desempenho por categoria.</p>'}
+        </div>
+      </section>
     </div>
+  `;
+}
 
-    <section class="seller-insight-panel">
-      <h3>Produtos com mais cliques</h3>
-      <div class="seller-insight-list">
-        ${topAds.length ? topAds.map((ad) => `
-          <button class="seller-insight-row" type="button" data-open-ad-id="${ad.id}">
-            <span class="seller-insight-thumb">${getProductImage(ad.images?.[0], 80, 80, ad.category)}</span>
-            <span class="seller-insight-main">
-              <strong>${escapeHTML(ad.title)}</strong>
-              <small>${escapeHTML(getSellerCategoryName(ad.category))} · ${escapeHTML(formatSellerDate(ad.createdAt))}</small>
-            </span>
-            <span class="seller-insight-metric">${ad.clicks || 0}<small>cliques</small></span>
-          </button>
-        `).join('') : `
-          <div class="empty-state seller-first-empty">${icons.eye}<h3>Sem cliques ainda</h3><p>Quando compradores abrirem seus produtos, a análise aparece aqui.</p></div>
-        `}
-      </div>
-    </section>
-
-    <section class="seller-insight-panel">
-      <h3>Categorias</h3>
-      <div class="seller-category-insights">
-        ${categories.length ? categories.map((item) => `
-          <div class="seller-category-insight">
-            <strong>${escapeHTML(item.name)}</strong>
-            <span>${item.ads} anúncios · ${item.clicks} cliques · ${item.coupons} cupons</span>
-          </div>
-        `).join('') : '<p class="seller-muted-text">Cadastre anúncios para medir categorias.</p>'}
-      </div>
-    </section>
+// Offer price: the discounted price is the brand accent, the original is struck through.
+function renderOfferPrice(ad) {
+  const original = Number(ad.originalPrice) || 0;
+  const final = Number(ad.discountPrice) || original;
+  const hasDiscount = original > 0 && final > 0 && final < original;
+  return `
+    <p class="seller-ad-price">
+      <span class="seller-ad-price-final${hasDiscount ? ' is-discounted' : ''}">${formatCurrency(final)}</span>
+      ${hasDiscount ? `<s class="seller-ad-price-original"><span class="sr-only">Preço original: </span>${formatCurrency(original)}</s>` : ''}
+    </p>
   `;
 }
 
 function renderSellerAdCard(ad) {
-  const isAct = ad.status === 'active';
-  const needsAdjustment = ad.status === 'rejected' && ad.rejectionReason?.startsWith('Ajuste solicitado:');
-  const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: needsAdjustment ? 'Ajuste solicitado' : 'Recusado' };
-  const statusBadge = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
+  const status = getOfferStatusMeta(ad);
+  const title = escapeHTML(ad.title);
+  const adId = escapeHTML(ad.id);
+  // Coupon quantity: each retrieved code uses one unit (slots_used of slots_total).
+  const slotsTotal = Math.max(0, Number(ad.slots?.total) || 0);
+  const slotsUsed = Math.min(Math.max(0, Number(ad.slots?.used) || 0), slotsTotal);
   return `
-    <div class="seller-ad-card glass-card">
-      <div class="seller-ad-card-inner" data-open-ad-id="${ad.id}" role="button" tabindex="0" aria-label="Gerenciar anúncio ${escapeHTML(ad.title)}">
+    <article class="seller-ad-card${ad.status === 'active' ? ' is-live' : ''}">
+      <div class="seller-ad-card-inner" data-open-ad-id="${adId}" role="button" tabindex="0" aria-label="Gerenciar oferta ${title}">
         <div class="seller-ad-thumb">${getProductImage(ad.images?.[0], 120, 120, ad.category)}</div>
         <div class="seller-ad-info">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <h4 class="ad-title">${escapeHTML(ad.title)}</h4>
-            ${isAct ? '<div class="pulse-light"></div>' : ''}
-          </div>
-          <div class="ad-category">${escapeHTML(getSellerCategoryName(ad.category))}</div>
+          <span class="seller-ad-category">${escapeHTML(getSellerCategoryName(ad.category))}</span>
+          <h3 class="seller-ad-title">${title}</h3>
+          ${renderOfferPrice(ad)}
           <div class="seller-ad-metrics">
-            <span title="Cliques">${icons.eye} ${ad.clicks}</span>
-            <span title="Gerados">${icons.ticket} ${ad.couponsGenerated}</span>
-            <span title="Usados" class="highlight">${icons.checkCircle} ${ad.couponsUsed}</span>
+            <span title="Cliques">${icons.eye}<span class="sr-only">Cliques:</span> ${ad.clicks || 0}</span>
+            ${slotsTotal ? `<span title="Cupons retirados da quantidade">${icons.ticket}<span class="sr-only">Cupons retirados: ${slotsUsed} de ${slotsTotal}</span><span aria-hidden="true">${slotsUsed}/${slotsTotal}</span></span>` : ''}
+            <span title="Cupons usados">${icons.checkCircle}<span class="sr-only">Cupons usados:</span> ${ad.couponsUsed || 0}</span>
           </div>
         </div>
       </div>
       <div class="seller-ad-status">
-        <span class="badge ${statusBadge[ad.status]}">${statusLabels[ad.status]}</span>
+        ${renderStatusPill(status.label, status.tone)}
         <div class="seller-ad-actions">
-          <button class="btn btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${ad.id}">${icons.fileText}<span>Editar</span></button>
-          ${ad.status === 'expired' ? `<button class="btn btn-primary btn-sm renew-btn" type="button" data-ad-id="${ad.id}">${icons.refresh}<span>Renovar</span></button>` : ''}
-          <button class="btn btn-danger btn-sm delete-ad-btn" type="button" data-ad-id="${ad.id}">${icons.x}<span>Excluir</span></button>
+          <button class="btn-secondary btn-sm edit-ad-btn" type="button" data-ad-id="${adId}" aria-label="Editar ${title}">${icons.fileText}<span>Editar</span></button>
+          ${ad.status === 'expired' ? `<button class="btn-secondary btn-sm renew-btn" type="button" data-ad-id="${adId}">${icons.refresh}<span>Renovar</span></button>` : ''}
+          <button class="btn-ghost btn-sm seller-ad-delete delete-ad-btn" type="button" data-ad-id="${adId}" aria-label="Excluir ${title}" title="Excluir">${icons.x}<span class="seller-ad-delete-label">Excluir</span></button>
         </div>
       </div>
-      ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${escapeHTML(ad.rejectionReason)}</div>` : ''}
-    </div>
+      ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="seller-ad-note">${icons.alertTriangle}<span>${escapeHTML(ad.rejectionReason)}</span></div>` : ''}
+    </article>
+  `;
+}
+
+function renderFormBackButton() {
+  return `<button class="btn-ghost btn-sm seller-back-btn" id="back-to-dashboard" type="button">${ICON_ARROW_LEFT} Voltar</button>`;
+}
+
+function formatCouponValidity(hours) {
+  const value = Number(hours || 24);
+  if (value < 24) return `${value} hora${value === 1 ? '' : 's'}`;
+  const days = Math.round(value / 24);
+  return `${days} dia${days === 1 ? '' : 's'}`;
+}
+
+function renderCouponValidityOptions(selectedHours = 24) {
+  const selected = Number.parseInt(selectedHours, 10) || 24;
+  const options = COUPON_VALIDITY_OPTIONS.some(([hours]) => hours === selected)
+    ? COUPON_VALIDITY_OPTIONS
+    : [...COUPON_VALIDITY_OPTIONS, [selected, formatCouponValidity(selected)]].sort((a, b) => a[0] - b[0]);
+  return options
+    .map(([hours, label]) => `<option value="${hours}"${hours === selected ? ' selected' : ''}>${label}</option>`)
+    .join('');
+}
+
+// The coupon quantity (slots_total) follows the category limit on create and on edit.
+function getCategoryCouponQuantity(categoryId) {
+  if (!categoryId) return null;
+  const category = getSellerCategories(false).find((item) => item.id === categoryId);
+  const slots = Number(category?.maxSlots);
+  return Number.isFinite(slots) && slots > 0 ? slots : 5;
+}
+
+function formatCouponQuantity(total) {
+  return total ? pluralize(total, 'cupom', 'cupons') : 'Escolha a categoria';
+}
+
+// Shared "Preço e cupom" fieldset for the create and edit forms.
+function renderPriceSection(ad = null) {
+  const hasPreview = Boolean(ad);
+  return `
+    <fieldset class="seller-form-section">
+      <legend class="seller-form-legend">Preço e cupom</legend>
+      <p class="seller-form-note">${icons.ticket}<span>Os alunos pegam o código no app e compram direto com sua empresa.</span></p>
+      <div class="form-row">
+        <div class="input-group">
+          <label for="ad-price">Preço original (R$)</label>
+          <input type="number" class="input-field" ${ad ? `value="${Number(ad.originalPrice || 0).toFixed(2)}"` : 'placeholder="0,00"'} id="ad-price" min="1" step="0.01" inputmode="decimal">
+        </div>
+        <div class="input-group">
+          <label for="ad-discount">Desconto (%)</label>
+          <input type="number" class="input-field" ${ad ? `value="${Number(ad.discount || 10)}"` : 'placeholder="10 a 50"'} id="ad-discount" min="10" max="50" inputmode="numeric">
+        </div>
+      </div>
+      <div class="input-hint seller-form-hint">O desconto precisa ficar entre 10% e 50%.</div>
+      <div class="discount-preview" id="discount-preview"${hasPreview ? '' : ' hidden'}>
+        <span class="discount-preview-label">Preço final</span>
+        <span class="final-price" id="final-price">${formatCurrency(ad?.discountPrice || 0)}</span>
+      </div>
+      <div class="seller-quantity">
+        <span class="seller-quantity-label">Quantidade de cupons</span>
+        <strong class="seller-quantity-value" id="coupon-quantity-value" aria-live="polite">${formatCouponQuantity(getCategoryCouponQuantity(ad?.category))}</strong>
+      </div>
+      <p class="input-hint seller-quantity-hint">Definida pela categoria. Cada aluno que pega o código usa 1 cupom.</p>
+      <div class="input-group">
+        <label for="ad-coupon-valid-hours">Validade do cupom</label>
+        <select class="input-field" id="ad-coupon-valid-hours">
+          ${renderCouponValidityOptions(ad?.couponValidHours || 24)}
+        </select>
+        <div class="input-hint">${ad
+          ? 'A nova validade vale para os próximos cupons retirados desta oferta.'
+          : 'Conta a partir do momento em que o aluno pega o código.'}</div>
+      </div>
+    </fieldset>
+  `;
+}
+
+function renderContactSection() {
+  return `
+    <fieldset class="seller-form-section">
+      <legend class="seller-form-legend">Contato</legend>
+      <div class="input-group">
+        <label for="ad-whatsapp">WhatsApp para contato</label>
+        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" autocomplete="tel" inputmode="tel" value="${escapeHTML(getUser().whatsapp || '')}">
+        <div class="input-hint">É por aqui que os alunos chamam sua empresa para comprar.</div>
+      </div>
+    </fieldset>
   `;
 }
 
 function renderCreateForm() {
   return `
-    <div style="padding:var(--space-4) var(--space-5) 0;">
-      <button class="btn btn-ghost btn-sm" id="back-to-dashboard" style="margin-bottom:var(--space-3);">← Voltar</button>
-      <h2 style="font-size:var(--font-size-xl);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Criar novo anúncio</h2>
-      <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Preencha os dados do seu produto ou serviço.</p>
-    </div>
-    <form class="create-ad-form" id="create-ad-form">
-      <div class="input-group">
-        <label>Título do anúncio</label>
-        <input type="text" class="input-field" placeholder="Ex: Brownie Artesanal" maxlength="60" id="ad-title">
-        <div class="char-count"><span id="title-count">0</span>/60</div>
-      </div>
-      <div class="input-group">
-        <label>Descrição</label>
-        <textarea class="input-field" placeholder="Descreva seu produto..." maxlength="200" id="ad-desc"></textarea>
-        <div class="char-count"><span id="desc-count">0</span>/200</div>
-      </div>
-      <div class="input-group">
-        <label>Categoria</label>
-        <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
-          <option value="">Selecione...</option>
-          ${getSellerCategories(false).map(c => `<option value="${c.id}">${escapeHTML(c.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
+    ${renderFormBackButton()}
+    ${renderViewHead({
+      eyebrow: 'Nova oferta',
+      title: 'Criar oferta',
+      text: 'Preencha os dados do produto ou serviço. A oferta passa pela equipe Empreende iCEV antes de aparecer na vitrine.',
+    })}
+    <form class="create-ad-form seller-form" id="create-ad-form">
+      <fieldset class="seller-form-section">
+        <legend class="seller-form-legend">Produto</legend>
         <div class="input-group">
-          <label>Preço original (R$)</label>
-          <input type="number" class="input-field" placeholder="0,00" id="ad-price" min="1" step="0.01">
+          <label for="ad-title">Título da oferta</label>
+          <input type="text" class="input-field" placeholder="Ex.: Brownie artesanal" maxlength="60" id="ad-title">
+          <div class="char-count"><span id="title-count">0</span>/60</div>
         </div>
         <div class="input-group">
-          <label>Desconto (%)</label>
-          <input type="number" class="input-field" placeholder="10-50" id="ad-discount" min="10" max="50">
-          <div class="input-hint">Mínimo 10%, máximo 50%</div>
+          <label for="ad-desc">Descrição</label>
+          <textarea class="input-field" placeholder="Conte o que vem no pedido, tamanho, sabor, horário de entrega…" maxlength="200" id="ad-desc"></textarea>
+          <div class="char-count"><span id="desc-count">0</span>/200</div>
         </div>
-      </div>
-      <div class="discount-preview" id="discount-preview" style="display:none;">
-        <span style="font-size:var(--font-size-sm);color:var(--text-secondary);">Preço final:</span>
-        <span class="final-price" id="final-price">R$ 0,00</span>
-      </div>
-      <div class="input-group">
-        <label>Validade do cupom após pagamento</label>
-        <select class="input-field" id="ad-coupon-valid-hours">
-          <option value="24">24 horas</option>
-          <option value="48">48 horas</option>
-          <option value="72">3 dias</option>
-          <option value="168">7 dias</option>
-          <option value="720">30 dias</option>
-        </select>
-        <div class="input-hint">O comprador só recebe o cupom depois do pagamento confirmado.</div>
-      </div>
-      <div class="input-group">
-        <label>Fotos do produto (até 3)</label>
+        <div class="input-group">
+          <label for="ad-category">Categoria</label>
+          <select class="input-field" id="ad-category">
+            <option value="">Selecione uma categoria</option>
+            ${getSellerCategories(false).map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`).join('')}
+          </select>
+        </div>
+      </fieldset>
+
+      ${renderPriceSection()}
+
+      <fieldset class="seller-form-section">
+        <legend class="seller-form-legend">Fotos <span class="seller-form-legend-note">até 3</span></legend>
         <div class="photo-upload">
           ${renderPhotoSlot(1)}
           ${renderPhotoSlot(2)}
           ${renderPhotoSlot(3)}
         </div>
-        <p class="field-error image-required-error" id="image-required-error" hidden>Adicione uma foto do produto para continuar</p>
-      </div>
-      <div class="input-group">
-        <label>WhatsApp para contato</label>
-        <input type="tel" class="input-field" placeholder="(86) 99900-1122" id="ad-whatsapp" value="${escapeHTML(getUser().whatsapp || '')}">
-      </div>
+        <p class="input-error image-required-error" id="image-required-error" hidden>Adicione uma foto do produto para continuar.</p>
+        <p class="input-hint">A primeira foto vira a capa da oferta.</p>
+      </fieldset>
 
-      <!-- Live Preview -->
-      <div class="ad-preview-container">
-        <div class="ad-preview-label">Preview do anúncio</div>
-        <div id="ad-preview-card" class="product-card" style="pointer-events:none;">
-          <div class="product-image" style="height:120px;">
-            <div style="width:100%;height:100%;background:var(--gray-200);display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:var(--font-size-sm);">Imagem do produto</div>
+      ${renderContactSection()}
+
+      <aside class="seller-form-aside ad-preview-container" aria-label="Prévia da oferta">
+        <p class="t-eyebrow ad-preview-label">Prévia na vitrine</p>
+        <div id="ad-preview-card" class="product-card seller-preview-card" aria-hidden="true">
+          <div class="card-image-area">
+            <div class="product-image-placeholder">${icons.upload}<span class="product-image-placeholder__label">Foto do produto</span></div>
           </div>
-          <div class="product-body">
-            <h3 class="product-title" id="preview-title" style="color:var(--text-tertiary);">Título do anúncio</h3>
-            <div class="product-pricing">
-              <span class="price-original" id="preview-original">R$ 0,00</span>
+          <div class="perforation"></div>
+          <div class="card-body">
+            <span class="card-category" id="preview-category">Categoria</span>
+            <h3 class="card-title is-placeholder" id="preview-title">Título da oferta</h3>
+            <div class="card-price-row">
               <span class="price-discount" id="preview-discount">R$ 0,00</span>
+              <span class="price-original" id="preview-original">R$ 0,00</span>
             </div>
           </div>
         </div>
-      </div>
+        <p class="seller-form-aside-note">É assim que os alunos veem sua oferta na vitrine.</p>
+      </aside>
 
-      <button type="submit" class="btn btn-primary btn-block btn-lg" id="create-submit-btn" disabled>Enviar para aprovação</button>
+      <div class="seller-form-submit">
+        <button type="submit" class="btn-primary btn-block btn-lg" id="create-submit-btn" disabled>Enviar para aprovação</button>
+      </div>
     </form>
   `;
 }
@@ -1030,105 +942,95 @@ function getSelectedAd() {
 function renderPhotoSlot(index, imageUrl = '') {
   const label = `Foto ${index}`;
   return `
-    <label class="photo-upload-slot" id="photo-slot-${index}" data-label="${label}" data-existing-url="${escapeHTML(imageUrl || '')}">
+    <label class="photo-upload-slot${imageUrl ? ' has-image' : ''}" id="photo-slot-${index}" data-label="${label}" data-existing-url="${escapeHTML(imageUrl || '')}">
       ${imageUrl ? `
         <img src="${escapeHTML(imageUrl)}" alt="${label}" />
-        <button class="photo-remove-btn" type="button" data-slot-id="photo-slot-${index}" aria-label="Remover ${label}">×</button>
-      ` : `${icons.upload}<span>${label}</span>`}
-      <input type="file" accept="image/*" style="display:none" />
+        <button class="photo-remove-btn" type="button" data-slot-id="photo-slot-${index}" aria-label="Remover ${label}">${icons.x}</button>
+      ` : renderPhotoSlotEmpty(label, index)}
+      <input type="file" accept="image/*" class="photo-upload-input" aria-label="Escolher ${label}" />
     </label>
   `;
+}
+
+function renderPhotoSlotEmpty(label, index = 0) {
+  return `${icons.upload}<span class="photo-upload-label">${escapeHTML(label)}</span>${index === 1 ? '<span class="photo-upload-tag">Capa</span>' : ''}`;
 }
 
 function renderEditProductForm() {
   const ad = getSelectedAd();
   if (!ad) {
     return `
-      <div class="empty-state" style="padding:var(--space-6);">
-        ${icons.package}
-        <h3>Anúncio não encontrado</h3>
-        <p>Volte para a lista e tente novamente.</p>
-        <button class="btn btn-primary" id="back-to-dashboard">Voltar</button>
-      </div>
+      ${renderFormBackButton()}
+      ${renderEmptyState({
+        icon: icons.tag,
+        title: 'Oferta não encontrada',
+        text: 'Ela pode ter sido excluída. Volte para a lista e escolha outra oferta.',
+      })}
     `;
   }
 
   const needsReview = ad.status === 'active';
-  const needsAdjustment = ad.status === 'rejected' && ad.rejectionReason?.startsWith('Ajuste solicitado:');
-  const statusLabels = { active: 'Ativo', pending: 'Em aprovação', queue: 'Na fila', expired: 'Expirado', rejected: needsAdjustment ? 'Ajuste solicitado' : 'Recusado' };
-  const statusBadges = { active: 'badge-success', pending: 'badge-warning', queue: 'badge-primary', expired: 'badge-neutral', rejected: needsAdjustment ? 'badge-warning' : 'badge-danger' };
+  const status = getOfferStatusMeta(ad);
   return `
-    <div style="padding:var(--space-4) var(--space-5) 0;">
-      <button class="btn btn-ghost btn-sm" id="back-to-dashboard" style="margin-bottom:var(--space-3);">← Voltar</button>
-      <div class="seller-edit-header">
-        <div>
-          <h2>Gerenciar anúncio</h2>
-          <p>Edite dados reais do produto. Alterações voltam para aprovação antes de aparecerem na vitrine.</p>
-        </div>
-        <span class="badge ${statusBadges[ad.status] || 'badge-neutral'}">${escapeHTML(statusLabels[ad.status] || 'Indefinido')}</span>
+    ${renderFormBackButton()}
+    <header class="seller-view-header seller-edit-header">
+      <div class="seller-view-copy">
+        <p class="t-eyebrow">Gerenciar oferta</p>
+        <h1 class="seller-view-title">${escapeHTML(ad.title || 'Oferta')}</h1>
+        <p class="seller-view-text">Alterações voltam para aprovação antes de aparecer na vitrine.</p>
       </div>
-      ${needsReview ? `<div class="seller-edit-warning">${icons.alertTriangle} Ao salvar, este produto sai temporariamente da vitrine e volta para moderação.</div>` : ''}
-    </div>
-    <form class="create-ad-form" id="edit-ad-form" data-ad-id="${ad.id}">
-      <div class="input-group">
-        <label>Título do anúncio</label>
-        <input type="text" class="input-field" maxlength="60" id="ad-title" value="${escapeHTML(ad.title || '')}">
-        <div class="char-count"><span id="title-count">${String(ad.title || '').length}</span>/60</div>
-      </div>
-      <div class="input-group">
-        <label>Descrição</label>
-        <textarea class="input-field" maxlength="200" id="ad-desc">${escapeHTML(ad.description || '')}</textarea>
-        <div class="char-count"><span id="desc-count">${String(ad.description || '').length}</span>/200</div>
-      </div>
-      <div class="input-group">
-        <label>Categoria</label>
-        <select class="input-field" id="ad-category" style="padding-right:var(--space-8);">
-          ${getSellerCategories(false).map(c => `<option value="${c.id}" ${c.id === ad.category ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
+      <div class="seller-view-action">${renderStatusPill(status.label, status.tone)}</div>
+    </header>
+    ${needsReview ? `<div class="alert alert-warning seller-edit-warning">${icons.alertTriangle}<span>Ao salvar, esta oferta sai da vitrine por um tempo e volta para aprovação.</span></div>` : ''}
+    ${ad.status === 'rejected' && ad.rejectionReason ? `<div class="alert alert-danger seller-edit-warning">${icons.alertTriangle}<span>${escapeHTML(ad.rejectionReason)}</span></div>` : ''}
+    <form class="create-ad-form seller-form" id="edit-ad-form" data-ad-id="${escapeHTML(ad.id)}">
+      <fieldset class="seller-form-section">
+        <legend class="seller-form-legend">Produto</legend>
         <div class="input-group">
-          <label>Preço original (R$)</label>
-          <input type="number" class="input-field" id="ad-price" min="1" step="0.01" value="${Number(ad.originalPrice || 0).toFixed(2)}">
+          <label for="ad-title">Título da oferta</label>
+          <input type="text" class="input-field" maxlength="60" id="ad-title" value="${escapeHTML(ad.title || '')}">
+          <div class="char-count"><span id="title-count">${String(ad.title || '').length}</span>/60</div>
         </div>
         <div class="input-group">
-          <label>Desconto (%)</label>
-          <input type="number" class="input-field" id="ad-discount" min="10" max="50" value="${Number(ad.discount || 10)}">
-          <div class="input-hint">Mínimo 10%, máximo 50%</div>
+          <label for="ad-desc">Descrição</label>
+          <textarea class="input-field" maxlength="200" id="ad-desc">${escapeHTML(ad.description || '')}</textarea>
+          <div class="char-count"><span id="desc-count">${String(ad.description || '').length}</span>/200</div>
         </div>
-      </div>
-      <div class="discount-preview" id="discount-preview">
-        <span style="font-size:var(--font-size-sm);color:var(--text-secondary);">Preço final:</span>
-        <span class="final-price" id="final-price">${formatCurrency(ad.discountPrice || 0)}</span>
-      </div>
-      <div class="input-group">
-        <label>Validade do cupom após pagamento</label>
-        <select class="input-field" id="ad-coupon-valid-hours">
-          ${[24, 48, 72, 168, 720].map((hours) => `<option value="${hours}" ${Number(ad.couponValidHours || 24) === hours ? 'selected' : ''}>${formatCouponValidity(hours)}</option>`).join('')}
-        </select>
-        <div class="input-hint">Essa validade passa a valer para novos pagamentos deste anúncio.</div>
-      </div>
-      <div class="input-group">
-        <label>Fotos do produto (até 3)</label>
+        <div class="input-group">
+          <label for="ad-category">Categoria</label>
+          <select class="input-field" id="ad-category">
+            ${getSellerCategories(false).map(c => `<option value="${escapeHTML(c.id)}" ${c.id === ad.category ? 'selected' : ''}>${escapeHTML(c.name)}</option>`).join('')}
+          </select>
+        </div>
+      </fieldset>
+
+      ${renderPriceSection(ad)}
+
+      <fieldset class="seller-form-section">
+        <legend class="seller-form-legend">Fotos <span class="seller-form-legend-note">até 3</span></legend>
         <div class="photo-upload">
           ${renderPhotoSlot(1, ad.images?.[0] || '')}
           ${renderPhotoSlot(2, ad.images?.[1] || '')}
           ${renderPhotoSlot(3, ad.images?.[2] || '')}
         </div>
-      </div>
-      <div class="input-group">
-        <label>WhatsApp para contato</label>
-        <input type="tel" class="input-field" id="ad-whatsapp" value="${escapeHTML(getUser().whatsapp || '')}">
-      </div>
+        <p class="input-hint">A primeira foto vira a capa da oferta.</p>
+      </fieldset>
 
-      <div class="seller-edit-metrics">
-        <div><strong>${ad.clicks || 0}</strong><span>Cliques</span></div>
-        <div><strong>${ad.couponsGenerated || 0}</strong><span>Cupons</span></div>
-        <div><strong>${ad.couponsUsed || 0}</strong><span>Usados</span></div>
-      </div>
+      ${renderContactSection()}
 
-      <button type="submit" class="btn btn-primary btn-block btn-lg">Salvar e enviar para aprovação</button>
-      ${ad.status !== 'expired' ? `<button type="button" class="btn btn-danger btn-block delete-ad-btn" data-ad-id="${ad.id}">${icons.x} Excluir da vitrine</button>` : ''}
+      <aside class="seller-form-aside" aria-label="Desempenho da oferta">
+        <p class="t-eyebrow">Desempenho</p>
+        <div class="seller-ledger seller-edit-metrics">
+          ${renderLedgerCell({ label: 'Cliques', value: ad.clicks || 0 })}
+          ${renderLedgerCell({ label: 'Retirados', value: ad.couponsGenerated || 0 })}
+          ${renderLedgerCell({ label: 'Usados', value: ad.couponsUsed || 0 })}
+        </div>
+      </aside>
+
+      <div class="seller-form-submit">
+        <button type="submit" class="btn-primary btn-block btn-lg">Salvar e enviar para aprovação</button>
+        ${ad.status !== 'expired' ? `<button type="button" class="btn-ghost btn-block seller-danger-link delete-ad-btn" data-ad-id="${escapeHTML(ad.id)}">${icons.x} Excluir oferta</button>` : ''}
+      </div>
     </form>
   `;
 }
@@ -1146,21 +1048,14 @@ function readProductFormValues(container) {
 }
 
 function validateProductForm(values) {
-  if (!values.title || values.title.length < 3) return 'Informe um titulo claro para o produto.';
-  if (!values.description || values.description.length < 10) return 'Descreva o produto com pelo menos 10 caracteres.';
+  if (!values.title || values.title.length < 3) return 'Informe um título claro para a oferta.';
+  if (!values.description || values.description.length < 10) return 'Descreva a oferta com pelo menos 10 caracteres.';
   if (!values.categoryId) return 'Selecione uma categoria.';
   if (values.originalPrice <= 0) return 'Informe o preço original.';
   if (values.discount < 10 || values.discount > 50) return 'O desconto precisa ficar entre 10% e 50%.';
   if (!Number.isInteger(values.couponValidHours) || values.couponValidHours < 1 || values.couponValidHours > 720) return 'Escolha uma validade de cupom entre 1 hora e 30 dias.';
   if (!values.whatsapp) return 'Informe o WhatsApp para contato.';
   return null;
-}
-
-function formatCouponValidity(hours) {
-  const value = Number(hours || 24);
-  if (value < 24) return `${value} hora${value === 1 ? '' : 's'}`;
-  const days = Math.round(value / 24);
-  return `${days} dia${days === 1 ? '' : 's'}`;
 }
 
 async function collectProductImageUrls(container, selectedPhotoFiles) {
@@ -1182,7 +1077,7 @@ async function collectProductImageUrls(container, selectedPhotoFiles) {
 }
 
 function renderSellerCoupons() {
-  const coupons = loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : []);
+  const coupons = getSellerCouponData();
   const counts = {
     all: coupons.length,
     active: coupons.filter(c => c.status === 'active').length,
@@ -1196,238 +1091,87 @@ function renderSellerCoupons() {
     ['used', 'Usados'],
     ['expired', 'Expirados'],
   ];
+  const hasTime = (value) => Boolean(value) && value !== '—';
   return `
-    <div class="seller-view-header seller-coupon-hero">
-      <div class="seller-coupon-copy">
-        <span class="seller-setup-kicker">Validação manual</span>
-        <h2>Cupons recebidos</h2>
-        <p>Use esta área no atendimento: cupom ativo pode ser validado uma única vez, depois fica bloqueado como usado.</p>
-      </div>
-      <form class="seller-coupon-validator" id="coupon-validator-form">
-        <input class="input-field" id="coupon-validator-code" type="text" placeholder="Código do cupom" autocomplete="off" />
-        <button class="btn btn-primary" type="submit">${icons.check} Verificar</button>
+    ${renderViewHead({
+      eyebrow: 'Na hora da compra',
+      title: 'Cupons retirados',
+      text: 'Quando o aluno comprar, confira o código e marque como usado. Cada cupom vale uma única vez.',
+    })}
+
+    <div class="seller-coupon-hero">
+      <form class="card seller-coupon-validator" id="coupon-validator-form">
+        <div class="seller-coupon-validator-head">
+          <span class="seller-coupon-validator-icon" aria-hidden="true">${icons.ticket}</span>
+          <div>
+            <label class="seller-coupon-validator-title" for="coupon-validator-code">Confira o código do aluno</label>
+            <p class="seller-coupon-validator-text">Digite o código que o aluno mostrar na hora da compra.</p>
+          </div>
+        </div>
+        <div class="perforation" aria-hidden="true"></div>
+        <div class="seller-coupon-validator-row">
+          <input class="input-field seller-coupon-input" id="coupon-validator-code" type="text" placeholder="Ex.: K7QM-2XPA" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+          <button class="btn-primary" type="submit">${icons.check} Conferir</button>
+        </div>
       </form>
-      <div class="seller-coupon-summary">
-        <div><strong>${counts.active}</strong><span>Ativos</span></div>
-        <div><strong>${counts.used}</strong><span>Usados</span></div>
-        <div><strong>${counts.expired}</strong><span>Expirados</span></div>
+      <div class="seller-ledger seller-coupon-summary">
+        ${renderLedgerCell({ label: 'Ativos', value: counts.active, caption: 'Prontos para usar' })}
+        ${renderLedgerCell({ label: 'Usados', value: counts.used, caption: 'Já confirmados' })}
+        ${renderLedgerCell({ label: 'Expirados', value: counts.expired, caption: 'Fora do prazo' })}
       </div>
     </div>
-    <div class="seller-coupon-filters">
+
+    <div class="seller-chip-row seller-coupon-filters" role="group" aria-label="Filtrar cupons por status">
       ${filterItems.map(([value, label]) => `
-        <button type="button" class="${couponStatusFilter === value ? 'active' : ''}" data-coupon-filter="${value}">
-          ${label} <span>${counts[value]}</span>
+        <button type="button" class="chip ${couponStatusFilter === value ? 'active' : ''}" aria-pressed="${couponStatusFilter === value}" data-coupon-filter="${value}">
+          ${label} <span class="seller-chip-count">${counts[value]}</span>
         </button>
       `).join('')}
     </div>
+
     <div class="seller-coupons-list">
-      ${filteredCoupons.length ? filteredCoupons.map(c => `
-        <div class="coupon-item seller-coupon-card ${c.status}">
-          <div class="coupon-item-header">
-            <span class="coupon-item-code">${escapeHTML(c.code)}</span>
-            <span class="badge ${c.status === 'active' || c.status === 'pending' ? 'badge-warning' : c.status === 'used' ? 'badge-success' : 'badge-neutral'}">
-              ${c.status === 'active' ? 'Ativo' : c.status === 'pending' ? 'Pendente' : c.status === 'used' ? 'Usado' : 'Expirado'}
-            </span>
-          </div>
-          <div class="coupon-item-product">${escapeHTML(c.product)}</div>
-          <div class="coupon-item-meta">Comprador: ${escapeHTML(c.buyer)} · Gerado em ${escapeHTML(c.createdAt)}</div>
-          <div class="coupon-item-meta">Validade: ${escapeHTML(c.validUntil || 'não informada')}${c.status === 'used' && c.usedAt ? ` · Usado em ${escapeHTML(c.usedAt)}` : ''}</div>
-          <div class="coupon-validation-note">
-            ${c.status === 'active'
-              ? 'Pronto para validar no atendimento. Depois de confirmado, este código não poderá ser usado novamente.'
-              : c.status === 'used'
-                ? 'Cupom já utilizado e bloqueado contra reuso.'
-                : 'Cupom expirado. Não valide este código.'}
+      ${filteredCoupons.length ? `<div class="seller-list">${filteredCoupons.map(c => {
+        const status = COUPON_STATUS[c.status] || COUPON_STATUS.expired;
+        return `
+        <article class="seller-coupon-card is-${escapeHTML(c.status)}">
+          <span class="seller-coupon-code coupon-code">${escapeHTML(c.code)}</span>
+          <div class="seller-coupon-status">${renderStatusPill(status.label, status.tone)}</div>
+          <div class="seller-coupon-info">
+            <strong class="seller-coupon-product">${escapeHTML(c.product)}</strong>
+            <p class="seller-coupon-meta">${escapeHTML(c.buyer || 'Aluno')} · retirado em <span class="t-mono">${escapeHTML(c.createdAt)}</span></p>
+            <p class="seller-coupon-meta">Validade: <span class="t-mono">${escapeHTML(c.validUntil || 'não informada')}</span>${c.status === 'used' && hasTime(c.usedAt) ? ` · usado em <span class="t-mono">${escapeHTML(c.usedAt)}</span>` : ''}</p>
+            <p class="seller-coupon-note">${status.note}</p>
           </div>
           ${c.status === 'active' ? `
-            <button class="btn btn-success btn-sm btn-block mark-used-btn" data-id="${escapeHTML(c.id)}" data-code="${escapeHTML(c.code)}" style="margin-top:var(--space-3);">
-              ${icons.check} Validar uso manualmente
-            </button>
+            <div class="seller-coupon-action">
+              <button class="btn-secondary btn-sm mark-used-btn" type="button" data-id="${escapeHTML(c.id)}" data-code="${escapeHTML(c.code)}">
+                ${icons.check} Marcar como usado
+              </button>
+            </div>
           ` : ''}
-        </div>
-      `).join('') : `
-        <div class="empty-state seller-first-empty">
-          ${icons.ticket}
-          <h3>${coupons.length ? 'Nenhum cupom neste filtro' : 'Nenhum cupom gerado ainda'}</h3>
-          <p>${coupons.length ? 'Troque o filtro para consultar outros status.' : 'Quando um pagamento for confirmado, o cupom aparece aqui para você acompanhar a validade e validar o uso manualmente.'}</p>
-          ${coupons.length ? '' : `<button class="btn btn-primary new-ad-trigger">${icons.plus} Criar anúncio</button>`}
-        </div>
-      `}
+        </article>
+      `;
+      }).join('')}</div>` : renderEmptyState({
+        icon: icons.ticket,
+        title: coupons.length ? 'Nenhum cupom neste filtro' : 'Nenhum cupom retirado ainda',
+        text: coupons.length
+          ? 'Troque o filtro para consultar outros status.'
+          : 'Quando um aluno pegar o cupom de uma oferta sua, ele aparece aqui para você conferir na hora da compra.',
+        action: coupons.length ? '' : `<button class="btn-secondary new-ad-trigger" type="button">${icons.plus} Criar oferta</button>`,
+      })}
     </div>
   `;
-}
-
-function renderSellerPayments() {
-  const user = getUser();
-  const stats = loadedPaymentStats || calculatePaymentStats([]);
-  const allPayments = loadedPayments || [];
-  const filtered = paymentsFilter === 'all' ? allPayments : allPayments.filter(p => p.status === paymentsFilter);
-  const isLoadingPayments = Boolean(sellerPaymentsPromise) && !hasFreshSellerPayments(user);
-  const statusLabels = { paid: 'Pago', pending: 'Pendente', expired: 'Expirado' };
-  const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
-  const filters = [
-    { id: 'all', label: 'Todos', count: allPayments.length },
-    { id: 'paid', label: 'Pagos', count: allPayments.filter(p => p.status === 'paid').length },
-    { id: 'pending', label: 'Pendentes', count: allPayments.filter(p => p.status === 'pending').length },
-    { id: 'expired', label: 'Expirados', count: allPayments.filter(p => p.status === 'expired').length },
-  ];
-  const formatDate = (d) => {
-    if (!d) return '—';
-    const dt = new Date(d);
-    return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-  };
-  const feeSummary = `${MP_FEE_COPY.pix} · ${MP_FEE_COPY.card}`;
-  return `
-    <section class="seller-view-header seller-payments-hero">
-      <div>
-        <span class="seller-setup-kicker">Financeiro</span>
-        <h2>Minhas vendas</h2>
-        <p>Acompanhe pagamentos Pix e cartão recebidos pelo Mercado Pago, com status real e detalhes por venda.</p>
-      </div>
-      <button class="btn btn-secondary" type="button" data-seller-action="ads">${icons.package} Ver anúncios</button>
-    </section>
-
-    <div class="payments-stats-grid">
-      <div class="payment-stat-card revenue">
-        <div class="payment-stat-label">Recebido (líquido)</div>
-        <div class="payment-stat-value revenue-value">${formatCurrency(stats.totalReceived)}</div>
-      </div>
-      <div class="payment-stat-card confirmed">
-        <div class="payment-stat-label">Confirmados</div>
-        <div class="payment-stat-value success-value">${stats.paidCount}</div>
-      </div>
-      <div class="payment-stat-card pending-stat">
-        <div class="payment-stat-label">Pendentes</div>
-        <div class="payment-stat-value">${stats.pendingCount}</div>
-      </div>
-      <div class="payment-stat-card conversion">
-        <div class="payment-stat-label">Conversão</div>
-        <div class="payment-stat-value">${stats.conversionRate}%</div>
-      </div>
-    </div>
-
-    <div class="commission-info-bar">
-      <div class="commission-info-inner">
-        <span class="commission-label">Taxas Mercado Pago: <strong>${feeSummary}</strong></span>
-        <span class="commission-detail">${MP_FEE_COPY.note} Total bruto confirmado: ${formatCurrency(stats.totalGross)}</span>
-      </div>
-    </div>
-
-    <div class="payments-filter">
-      ${filters.map((filter) => `
-        <button class="chip ${paymentsFilter === filter.id ? 'active' : ''}" data-pfilter="${filter.id}">
-          ${filter.label} <span class="tab-count">${filter.count}</span>
-        </button>
-      `).join('')}
-    </div>
-
-    <div class="payment-list-container seller-payment-list-container">
-      ${isLoadingPayments ? `
-        <div class="seller-payments-loading">
-          <div class="loading-spinner"></div>
-          <strong>Carregando vendas reais...</strong>
-          <span>Buscando pagamentos no Supabase sem travar a navegação.</span>
-        </div>
-      ` : filtered.length > 0 ? filtered.map(p => `
-        <button class="payment-list-item payment-list-button" type="button" data-payment-id="${escapeHTML(p.paymentRowId || p.id)}" aria-label="Ver detalhes do pagamento de ${escapeHTML(p.productTitle)}">
-          <div class="payment-list-item-header">
-            <div class="payment-list-buyer">
-              <div class="avatar-sm avatar">${escapeHTML((p.buyerName || 'U').split(' ').map(n => n[0]).join('').slice(0,2))}</div>
-              <div>
-                <div class="payment-list-buyer-name">${escapeHTML(p.buyerName || 'Comprador')}</div>
-                <div class="payment-list-buyer-date">${formatDate(p.createdAt)}</div>
-              </div>
-            </div>
-            <span class="badge ${statusBadges[p.status] || 'badge-neutral'}">${statusLabels[p.status] || p.status}</span>
-          </div>
-          <div class="payment-list-item-body">
-            <div>
-              <div class="payment-list-product">${escapeHTML(p.productTitle)}</div>
-              <div class="payment-list-coupon">Método: ${escapeHTML(getPaymentMethodLabel(p.method))}</div>
-              <div class="payment-list-coupon">${p.couponCode ? `Cupom: ${escapeHTML(p.couponCode)}` : 'Sem cupom vinculado'}</div>
-              ${p.status === 'paid' ? `<div class="confirmed-indicator">${icons.checkCircle} Pagamento confirmado</div>` : ''}
-            </div>
-            <div>
-              <div class="payment-list-amount ${p.status === 'paid' ? 'paid-amount' : ''}">${formatCurrency(p.sellerAmount || p.amount)}</div>
-              ${p.platformFee ? `<div style="font-size:var(--font-size-xs);color:var(--text-tertiary);text-align:right;">-${formatCurrency(p.platformFee)} taxa</div>` : ''}
-            </div>
-          </div>
-        </button>
-      `).join('') : `
-        <div class="empty-payments">
-          <div class="empty-payments-icon">${icons.wallet}</div>
-          <h3>Nenhum pagamento encontrado</h3>
-          <p>Seus pagamentos via Pix e cartão aparecerão aqui.</p>
-        </div>
-      `}
-    </div>
-  `;
-}
-
-function showSellerPaymentDetailModal(paymentId) {
-  const payment = (loadedPayments || []).find((p) => String(p.paymentRowId || p.id) === String(paymentId));
-  if (!payment) {
-    showToast('Pagamento não encontrado.', 'error');
-    return;
-  }
-
-  const statusLabels = { paid: 'Concluído', pending: 'Pendente', expired: 'Expirado' };
-  const statusBadges = { paid: 'badge-success', pending: 'badge-warning', expired: 'badge-neutral' };
-  const fee = getEstimatedMpFeeInfo(payment);
-  const modalRoot = document.getElementById('modal-root');
-  const formatDetailDate = (value) => value ? new Date(value).toLocaleString('pt-BR') : 'Não informado';
-  modalRoot.innerHTML = `
-    <div class="modal-backdrop seller-payment-detail-backdrop" id="payment-detail-modal">
-      <div class="modal-content seller-payment-detail-modal">
-        <div class="modal-handle"></div>
-        <div class="payment-detail-header">
-          <div>
-            <span class="seller-setup-kicker">Detalhes da venda</span>
-            <h3>${escapeHTML(payment.productTitle || 'Produto')}</h3>
-          </div>
-          <span class="badge ${statusBadges[payment.status] || 'badge-neutral'}">${escapeHTML(statusLabels[payment.status] || payment.status || 'Indefinido')}</span>
-        </div>
-
-        <div class="payment-detail-amount">
-          <span>Valor bruto</span>
-          <strong>${formatCurrency(payment.amount || payment.sellerAmount || 0)}</strong>
-        </div>
-
-        <div class="payment-detail-grid">
-          <div class="payment-detail-row"><span>Comprador</span><strong>${escapeHTML(payment.buyerName || 'Comprador')}</strong></div>
-          <div class="payment-detail-row"><span>Método</span><strong>${escapeHTML(getPaymentMethodLabel(payment.method))}</strong></div>
-          <div class="payment-detail-row"><span>Criado em</span><strong>${escapeHTML(formatDetailDate(payment.createdAt))}</strong></div>
-          <div class="payment-detail-row"><span>Pago em</span><strong>${escapeHTML(formatDetailDate(payment.paidAt))}</strong></div>
-          <div class="payment-detail-row"><span>Cupom</span><strong>${payment.couponCode ? escapeHTML(payment.couponCode) : 'Ainda não emitido'}</strong></div>
-          <div class="payment-detail-row"><span>Referência</span><strong>${escapeHTML(payment.externalReference || payment.mpId || payment.preferenceId || 'Não informada')}</strong></div>
-        </div>
-
-        <div class="mp-fee-detail-card">
-          <div>
-            <span>${escapeHTML(fee.label)}</span>
-            <strong>${escapeHTML(fee.rate)}</strong>
-          </div>
-          <p>Estimativa de taxa: ${escapeHTML(fee.value)}. ${escapeHTML(fee.detail)}</p>
-        </div>
-
-        <button class="btn btn-primary btn-block" id="close-payment-detail">Fechar</button>
-      </div>
-    </div>
-  `;
-  modalRoot.querySelector('#payment-detail-modal')?.addEventListener('click', (event) => {
-    if (event.target === event.currentTarget) modalRoot.innerHTML = '';
-  });
-  modalRoot.querySelector('#close-payment-detail')?.addEventListener('click', () => {
-    modalRoot.innerHTML = '';
-  });
 }
 
 function bindSellerEvents(container) {
-  // New ad button
-  container.querySelector('#new-ad-btn')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
-  container.querySelector('.create-ad-cta')?.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
-  container.querySelectorAll('.new-ad-trigger').forEach((btn) => {
-    btn.addEventListener('click', () => { selectedAdId = null; sellerView = 'create'; sellerNavFocus = 'ads'; renderSellerPage(container); });
+  const openCreateForm = () => {
+    selectedAdId = null;
+    sellerView = 'create';
+    sellerNavFocus = 'ads';
+    renderSellerPage(container);
+  };
+  container.querySelectorAll('#new-ad-btn, .create-ad-cta, .new-ad-trigger').forEach((btn) => {
+    btn.addEventListener('click', openCreateForm);
   });
   container.querySelector('#back-to-dashboard')?.addEventListener('click', () => {
     selectedAdId = null;
@@ -1437,8 +1181,8 @@ function bindSellerEvents(container) {
   container.querySelector('#open-buyer-mode')?.addEventListener('click', () => {
     window.location.hash = '#/buyer';
   });
-  container.querySelector('#mp-connected-info')?.addEventListener('click', () => {
-    showMercadoPagoInfoModal(container);
+  container.querySelector('#open-seller-profile')?.addEventListener('click', () => {
+    window.location.hash = PROFILE_ROUTE;
   });
   container.querySelectorAll('[data-seller-action]').forEach((control) => {
     control.addEventListener('click', () => {
@@ -1452,17 +1196,14 @@ function bindSellerEvents(container) {
         sellerView = 'coupons';
         sellerNavFocus = 'coupons';
         renderSellerPage(container);
-      } else if (action === 'payments') {
-        sellerView = 'payments';
-        paymentsFilter = 'all';
-        sellerNavFocus = 'payments';
-        renderSellerPage(container);
-      } else if (action === 'mp-info') {
-        showMercadoPagoInfoModal(container);
+      } else if (action === 'create') {
+        openCreateForm();
       } else if (action === 'clicks') {
         sellerView = 'insights';
         sellerNavFocus = 'dashboard';
         renderSellerPage(container);
+      } else if (action === 'profile') {
+        window.location.hash = PROFILE_ROUTE;
       }
     });
   });
@@ -1484,7 +1225,7 @@ function bindSellerEvents(container) {
   };
 
   container.querySelectorAll('[data-open-ad-id]').forEach(card => {
-    card.addEventListener('click', (event) => {
+    card.addEventListener('click', () => {
       openProductManager(card.dataset.openAdId);
     });
     card.addEventListener('keydown', (event) => {
@@ -1510,19 +1251,9 @@ function bindSellerEvents(container) {
     });
   });
 
-  // Mercado Pago connect button
-  container.querySelectorAll('.connect-mp-trigger').forEach((trigger) => {
-    trigger.addEventListener('click', () => showMercadoPagoConnectModal(container));
-  });
-
   // Tabs
   container.querySelectorAll('[data-tab]').forEach(tab => {
     tab.addEventListener('click', () => { activeTab = tab.dataset.tab; sellerNavFocus = 'ads'; renderSellerPage(container); });
-  });
-
-  // Payment filter chips
-  container.querySelectorAll('[data-pfilter]').forEach(chip => {
-    chip.addEventListener('click', () => { paymentsFilter = chip.dataset.pfilter; renderSellerPage(container); });
   });
 
   container.querySelectorAll('[data-coupon-filter]').forEach(chip => {
@@ -1535,8 +1266,8 @@ function bindSellerEvents(container) {
   container.querySelector('#coupon-validator-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = container.querySelector('#coupon-validator-code');
-    const code = input?.value?.trim().toUpperCase();
-    if (!code) {
+    const candidates = getCouponCodeCandidates(input?.value);
+    if (!candidates.length) {
       showToast('Digite o código do cupom.', 'error');
       input?.focus();
       return;
@@ -1545,9 +1276,9 @@ function bindSellerEvents(container) {
     const previousLabel = submitBtn?.innerHTML;
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Verificando...';
+      submitBtn.textContent = 'Conferindo…';
     }
-    const result = await validateCoupon(code);
+    const result = await validateCoupon(input.value);
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = previousLabel;
@@ -1556,17 +1287,13 @@ function bindSellerEvents(container) {
       showToast(result.error || 'Cupom inválido.', 'error');
       return;
     }
-    const coupon = (loadedCoupons || []).find(item => String(item.code).toUpperCase() === code) || result.coupon;
+    const coupon = getSellerCouponData().find(item => candidates.includes(String(item.code || '').toUpperCase())) || result.coupon;
     const couponSellerId = String(coupon?.seller_id || coupon?.sellerId || coupon?.seller?.id || '');
     if (!coupon || (couponSellerId && couponSellerId !== String(getUser().id))) {
-      showToast('Este cupom não pertence à sua loja.', 'error');
+      showToast('Este cupom é de outra empresa.', 'error');
       return;
     }
     showCouponValidationModal(coupon, container);
-  });
-
-  container.querySelectorAll('[data-payment-id]').forEach((item) => {
-    item.addEventListener('click', () => showSellerPaymentDetailModal(item.dataset.paymentId));
   });
 
   // Form character counters
@@ -1574,6 +1301,7 @@ function bindSellerEvents(container) {
   const descInput = container.querySelector('#ad-desc');
   const priceInput = container.querySelector('#ad-price');
   const discountInput = container.querySelector('#ad-discount');
+  const categorySelect = container.querySelector('#ad-category');
   const selectedPhotoFiles = new Map();
   const createForm = container.querySelector('#create-ad-form');
   const createSubmitBtn = container.querySelector('#create-submit-btn');
@@ -1597,8 +1325,8 @@ function bindSellerEvents(container) {
       container.querySelector('#title-count').textContent = titleInput.value.length;
       const previewTitle = container.querySelector('#preview-title');
       if (previewTitle) {
-        previewTitle.textContent = titleInput.value || 'Título do anúncio';
-        previewTitle.style.color = titleInput.value ? 'var(--text-primary)' : 'var(--text-tertiary)';
+        previewTitle.textContent = titleInput.value || 'Título da oferta';
+        previewTitle.classList.toggle('is-placeholder', !titleInput.value);
       }
     });
   }
@@ -1608,10 +1336,17 @@ function bindSellerEvents(container) {
     });
   }
 
+  categorySelect?.addEventListener('change', () => {
+    const quantityValue = container.querySelector('#coupon-quantity-value');
+    if (quantityValue) quantityValue.textContent = formatCouponQuantity(getCategoryCouponQuantity(categorySelect.value));
+    const previewCategory = container.querySelector('#preview-category');
+    if (previewCategory) previewCategory.textContent = categorySelect.value ? getSellerCategoryName(categorySelect.value) : 'Categoria';
+  });
+
   const updatePrice = () => {
     if (!priceInput || !discountInput) return;
     const price = parseFloat(priceInput.value) || 0;
-    const disc = parseInt(discountInput.value) || 0;
+    const disc = parseInt(discountInput.value, 10) || 0;
     const preview = container.querySelector('#discount-preview');
     const finalEl = container.querySelector('#final-price');
     const previewOriginal = container.querySelector('#preview-original');
@@ -1619,20 +1354,16 @@ function bindSellerEvents(container) {
 
     if (price > 0 && disc >= 10 && disc <= 50) {
       const final = price * (1 - disc / 100);
-      if (preview) preview.style.display = 'flex';
+      if (preview) preview.hidden = false;
       if (finalEl) finalEl.textContent = formatCurrency(final);
       if (previewOriginal) previewOriginal.textContent = formatCurrency(price);
       if (previewDiscount) previewDiscount.textContent = formatCurrency(final);
-    } else {
-      if (preview) preview.style.display = 'none';
+    } else if (preview) {
+      preview.hidden = true;
     }
 
     // Alert for discount out of range
-    if (discountInput.value && (disc < 10 || disc > 50)) {
-      discountInput.classList.add('error');
-    } else {
-      discountInput.classList.remove('error');
-    }
+    discountInput.classList.toggle('error', Boolean(discountInput.value) && (disc < 10 || disc > 50));
   };
 
   priceInput?.addEventListener('input', updatePrice);
@@ -1647,8 +1378,8 @@ function bindSellerEvents(container) {
     const label = slot.dataset.label || 'Foto';
     selectedPhotoFiles.delete(slot.id);
     slot.dataset.existingUrl = '';
-    slot.style.border = '';
-    slot.innerHTML = `${icons.upload}<span>${escapeHTML(label)}</span><input type="file" accept="image/*" style="display:none" />`;
+    slot.classList.remove('has-image', 'is-new');
+    slot.innerHTML = `${renderPhotoSlotEmpty(label, slot.id === 'photo-slot-1' ? 1 : 0)}<input type="file" accept="image/*" class="photo-upload-input" aria-label="Escolher ${escapeHTML(label)}" />`;
     bindPhotoInput(slot);
     updateCreateSubmitState();
   };
@@ -1662,8 +1393,8 @@ function bindSellerEvents(container) {
     selectedPhotoFiles.set(slot.id, file);
     const url = createPreviewURL(file);
     slot.dataset.existingUrl = '';
-    slot.innerHTML = `<img src="${url}" alt="${escapeHTML(slot.dataset.label || 'Foto')}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" /><button class="photo-remove-btn" type="button" data-slot-id="${slot.id}" aria-label="Remover foto">×</button><input type="file" accept="image/*" style="display:none" />`;
-    slot.style.border = '2px solid var(--primary-500)';
+    slot.innerHTML = `<img src="${url}" alt="${escapeHTML(slot.dataset.label || 'Foto')}" /><button class="photo-remove-btn" type="button" data-slot-id="${slot.id}" aria-label="Remover ${escapeHTML(slot.dataset.label || 'foto')}">${icons.x}</button><input type="file" accept="image/*" class="photo-upload-input" aria-label="Trocar ${escapeHTML(slot.dataset.label || 'foto')}" />`;
+    slot.classList.add('has-image', 'is-new');
     bindPhotoInput(slot);
     updateCreateSubmitState();
     slot.querySelector('.photo-remove-btn')?.addEventListener('click', (removeEvent) => {
@@ -1704,14 +1435,14 @@ function bindSellerEvents(container) {
 
     const btn = e.target.querySelector('button[type="submit"]');
     const origText = btn.textContent;
-    btn.textContent = 'Enviando...';
+    btn.textContent = 'Enviando…';
     btn.disabled = true;
 
     try {
       const imageUrls = await collectProductImageUrls(container, selectedPhotoFiles);
 
       if (selectedPhotoFiles.size > 0 && imageUrls.length === 0) {
-        throw new Error('Falha ao enviar as imagens.');
+        throw new Error('Não foi possível enviar as fotos.');
       }
 
       const user = getUser();
@@ -1728,20 +1459,20 @@ function bindSellerEvents(container) {
       });
 
       if (result.success) {
-        showToast('Anúncio enviado para aprovação!', 'success');
-        invalidateSellerCache({ data: true, payments: true });
+        showToast('Oferta enviada para aprovação.', 'success');
+        invalidateSellerCache({ data: true });
         sellerView = 'ads';
         sellerNavFocus = 'ads';
         activeTab = 'pending';
         renderSellerPage(container, { force: true });
       } else {
-        showToast(result.error || 'Erro ao criar anúncio. Tente novamente.', 'error');
+        showToast(result.error || 'Não foi possível criar a oferta. Tente de novo.', 'error');
         btn.textContent = origText;
         btn.disabled = false;
       }
     } catch (err) {
-      console.error('Create ad error:', err);
-      showToast(err.message || 'Erro ao criar anúncio. Tente novamente.', 'error');
+      console.error('Create offer error:', err);
+      showToast(err.message || 'Não foi possível criar a oferta. Tente de novo.', 'error');
       btn.textContent = origText;
       btn.disabled = false;
     }
@@ -1759,7 +1490,7 @@ function bindSellerEvents(container) {
 
     const btn = e.target.querySelector('button[type="submit"]');
     const origText = btn.textContent;
-    btn.textContent = 'Salvando...';
+    btn.textContent = 'Salvando…';
     btn.disabled = true;
 
     try {
@@ -1770,20 +1501,20 @@ function bindSellerEvents(container) {
       });
 
       if (result.success) {
-        showToast('Anúncio atualizado e enviado para aprovação.', 'success');
-        invalidateSellerCache({ data: true, payments: true });
+        showToast('Oferta atualizada e enviada para aprovação.', 'success');
+        invalidateSellerCache({ data: true });
         selectedAdId = null;
         sellerView = 'ads';
         sellerNavFocus = 'ads';
         activeTab = 'pending';
         renderSellerPage(container, { force: true });
       } else {
-        showToast(result.error || 'Não foi possível salvar o produto.', 'error');
+        showToast(result.error || 'Não foi possível salvar a oferta.', 'error');
         btn.textContent = origText;
         btn.disabled = false;
       }
     } catch (err) {
-      showToast(err.message || 'Não foi possível salvar o produto.', 'error');
+      showToast(err.message || 'Não foi possível salvar a oferta.', 'error');
       btn.textContent = origText;
       btn.disabled = false;
     }
@@ -1794,7 +1525,7 @@ function bindSellerEvents(container) {
     btn.addEventListener('click', () => {
       const couponId = btn.dataset.id;
       const code = btn.dataset.code;
-      const coupon = (loadedCoupons || (shouldUseSellerMocks() ? sellerCoupons : [])).find(c => String(c.id) === String(couponId) || c.code === code);
+      const coupon = getSellerCouponData().find(c => String(c.id) === String(couponId) || c.code === code);
       if (!coupon) {
         showToast('Cupom não encontrado.', 'error');
         return;
@@ -1808,19 +1539,19 @@ function bindSellerEvents(container) {
     btn.addEventListener('click', async () => {
       const adId = btn.dataset.adId;
       if (adId) {
-        btn.textContent = 'Renovando...';
+        btn.textContent = 'Renovando…';
         btn.disabled = true;
         const result = await renewProduct(adId);
         if (result?.success) {
-          showToast('Anúncio renovado e enviado para aprovação!', 'success');
+          showToast('Oferta renovada e enviada para aprovação.', 'success');
           invalidateSellerCache({ data: true });
           sellerView = 'ads';
           sellerNavFocus = 'ads';
           activeTab = 'pending';
           renderSellerPage(container, { force: true });
         } else {
-          showToast(result?.error || 'Não foi possível renovar o anúncio.', 'error');
-          btn.textContent = 'Renovar';
+          showToast(result?.error || 'Não foi possível renovar a oferta.', 'error');
+          btn.innerHTML = `${icons.refresh}<span>Renovar</span>`;
           btn.disabled = false;
         }
       }
@@ -1833,82 +1564,125 @@ function bindSellerEvents(container) {
     if (canvas) drawSimpleChart(canvas, loadedCoupons || []);
   }, 100);
 
-  // Bottom nav — event delegation on <nav> for reliable click detection
+  // Bottom nav — event delegation on <nav>; the items are role="button", so Enter/Space act too.
   const sellerNav = container.querySelector('.bottom-nav');
   if (sellerNav) {
-    sellerNav.addEventListener('click', (e) => {
-      const item = e.target.closest('[data-nav]');
-      if (!item) return;
-      const nav = item.dataset.nav;
+    const goToSection = (nav) => {
       if (nav === 'dashboard') {
         sellerView = 'dashboard';
         sellerNavFocus = 'dashboard';
         activeTab = 'active';
-        renderSellerPage(container);
       } else if (nav === 'ads') {
         sellerView = 'ads';
         sellerNavFocus = 'ads';
         activeTab = 'all';
-        renderSellerPage(container);
       } else if (nav === 'coupons') {
-        sellerView = 'coupons'; sellerNavFocus = 'coupons'; renderSellerPage(container);
-      } else if (nav === 'payments') {
-        sellerView = 'payments'; sellerNavFocus = 'payments'; paymentsFilter = 'all'; renderSellerPage(container);
+        sellerView = 'coupons';
+        sellerNavFocus = 'coupons';
+      } else {
+        return;
       }
+      renderSellerPage(container);
+    };
+    sellerNav.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-nav]');
+      if (item) goToSection(item.dataset.nav);
+    });
+    sellerNav.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const item = e.target.closest('[data-nav]');
+      if (!item) return;
+      e.preventDefault();
+      goToSection(item.dataset.nav);
     });
   }
 }
 
+// Renders a modal into #modal-root; closes on backdrop click and Escape.
+function openSellerModal(markup) {
+  const modalRoot = document.getElementById('modal-root');
+  if (!modalRoot) return null;
+  modalRoot.innerHTML = markup;
+  const backdrop = modalRoot.firstElementChild;
+  const onKeydown = (event) => {
+    if (!backdrop?.isConnected) {
+      document.removeEventListener('keydown', onKeydown);
+      return;
+    }
+    if (event.key === 'Escape') close();
+  };
+  const close = () => {
+    document.removeEventListener('keydown', onKeydown);
+    if (backdrop?.isConnected) modalRoot.innerHTML = '';
+  };
+  document.addEventListener('keydown', onKeydown);
+  backdrop?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) close();
+  });
+  modalRoot.querySelector('[data-autofocus]')?.focus();
+  return { root: modalRoot, close };
+}
+
 function showCouponValidationModal(coupon, container) {
   const code = coupon.code;
-  const modalRoot = document.getElementById('modal-root');
   if (coupon.status === 'used') {
-    showToast('Este cupom já foi utilizado.', 'error');
+    showToast('Este cupom já foi usado.', 'error');
     return;
   }
   if (coupon.status === 'expired') {
     showToast('Este cupom está expirado.', 'error');
     return;
   }
-  modalRoot.innerHTML = `
+  if (coupon.status === 'pending') {
+    showToast('Este cupom não foi liberado e não vale para compra.', 'error');
+    return;
+  }
+  const modal = openSellerModal(`
     <div class="modal-backdrop" id="confirm-modal">
-      <div class="modal-content coupon-validation-modal" style="text-align:center;">
+      <div class="modal-content coupon-validation-modal" role="dialog" aria-modal="true" aria-labelledby="coupon-validation-title">
         <div class="modal-handle"></div>
-        <div class="coupon-validation-icon">${icons.ticket}</div>
-        <h3>Validar uso do cupom?</h3>
-        <p>Confirme somente depois de entregar o produto ou serviço. O cupom <strong>${escapeHTML(code)}</strong> será bloqueado para novo uso.</p>
-        <div class="coupon-modal-details">
-          <div><span>Produto</span><strong>${escapeHTML(coupon.product || 'Produto')}</strong></div>
-          <div><span>Comprador</span><strong>${escapeHTML(coupon.buyer || 'Comprador')}</strong></div>
-          <div><span>Validade</span><strong>${escapeHTML(coupon.validUntil || 'Não informada')}</strong></div>
+        <p class="t-eyebrow seller-modal-kicker">Na hora da compra</p>
+        <h3 class="modal-title" id="coupon-validation-title">Marcar cupom como usado?</h3>
+        <p class="coupon-validation-text">Confirme só quando o aluno comprar. Depois disso, o código fica bloqueado para novo uso.</p>
+        <div class="coupon-validation-ticket">
+          <div class="coupon-validation-stub">
+            <span class="t-eyebrow">Código</span>
+            <strong class="coupon-code coupon-validation-code">${escapeHTML(code)}</strong>
+          </div>
+          <div class="perforation" aria-hidden="true"></div>
+          <dl class="seller-facts coupon-modal-details">
+            <div class="seller-fact"><dt>Oferta</dt><dd>${escapeHTML(coupon.product || 'Oferta')}</dd></div>
+            <div class="seller-fact"><dt>Aluno</dt><dd>${escapeHTML(coupon.buyer || 'Aluno')}</dd></div>
+            <div class="seller-fact"><dt>Validade</dt><dd class="t-mono">${escapeHTML(coupon.validUntil || 'Não informada')}</dd></div>
+          </dl>
         </div>
-        <div style="display:flex;gap:var(--space-3);">
-          <button class="btn btn-secondary" style="flex:1;" id="cancel-confirm">Cancelar</button>
-          <button class="btn btn-success" style="flex:1;" id="do-confirm">Confirmar uso</button>
+        <div class="seller-modal-actions is-stacked">
+          <button class="btn-primary btn-block" id="do-confirm" type="button">${icons.check} Marcar como usado</button>
+          <button class="btn-ghost btn-block" id="cancel-confirm" type="button" data-autofocus>Cancelar</button>
         </div>
       </div>
     </div>
-  `;
-  modalRoot.querySelector('#confirm-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
-  modalRoot.querySelector('#cancel-confirm').addEventListener('click', () => modalRoot.innerHTML = '');
-  modalRoot.querySelector('#do-confirm').addEventListener('click', async () => {
+  `);
+  if (!modal) return;
+  modal.root.querySelector('#cancel-confirm')?.addEventListener('click', modal.close);
+  modal.root.querySelector('#do-confirm')?.addEventListener('click', async () => {
     if (!coupon?.id) {
       showToast('Cupom não encontrado.', 'error');
       return;
     }
-    const confirmBtn = modalRoot.querySelector('#do-confirm');
+    const confirmBtn = modal.root.querySelector('#do-confirm');
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Validando...';
+    confirmBtn.textContent = 'Marcando…';
     const result = await markCouponUsed(coupon.id);
     if (result?.success) {
-      modalRoot.innerHTML = '';
+      modal.close();
       showToast(`Cupom ${code} marcado como usado.`, 'success');
-      invalidateSellerCache({ data: true, payments: true });
+      invalidateSellerCache({ data: true });
       couponStatusFilter = 'used';
       renderSellerPage(container, { force: true });
     } else {
       confirmBtn.disabled = false;
-      confirmBtn.textContent = 'Confirmar uso';
+      confirmBtn.innerHTML = `${icons.check} Marcar como usado`;
       showToast(result?.error || 'Não foi possível atualizar o cupom.', 'error');
     }
   });
@@ -1917,42 +1691,38 @@ function showCouponValidationModal(coupon, container) {
 function showDeleteProductModal(adId, container) {
   const ad = (loadedAds || (shouldUseSellerMocks() ? sellerAds : [])).find(item => String(item.id) === String(adId));
   if (!ad) {
-    showToast('Produto não encontrado.', 'error');
+    showToast('Oferta não encontrada.', 'error');
     return;
   }
 
-  const modalRoot = document.getElementById('modal-root');
-  modalRoot.innerHTML = `
+  const modal = openSellerModal(`
     <div class="modal-backdrop" id="delete-product-modal">
-      <div class="modal-content">
+      <div class="modal-content seller-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-product-title" aria-describedby="delete-product-text">
         <div class="modal-handle"></div>
-        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Excluir anúncio?</h3>
-        <p style="font-size:var(--font-size-sm);color:var(--text-secondary);line-height:1.6;margin-bottom:var(--space-4);">
-          O produto <strong>${escapeHTML(ad.title)}</strong> sairá do painel e deixará de aparecer para compradores. Pagamentos, cupons e histórico financeiro serão preservados.
+        <span class="seller-confirm-icon" aria-hidden="true">${icons.alertTriangle}</span>
+        <h3 class="modal-title" id="delete-product-title">Excluir oferta?</h3>
+        <p class="seller-confirm-text" id="delete-product-text">
+          <strong>${escapeHTML(ad.title)}</strong> sai do painel e deixa de aparecer para os alunos. Os cupons já retirados continuam no histórico.
         </p>
-        <div style="display:flex;gap:var(--space-3);">
-          <button class="btn btn-secondary" style="flex:1;" id="cancel-delete-product">Cancelar</button>
-          <button class="btn btn-danger" style="flex:1;" id="confirm-delete-product">Excluir</button>
+        <div class="seller-modal-actions">
+          <button class="btn-secondary" id="cancel-delete-product" type="button" data-autofocus>Cancelar</button>
+          <button class="btn-danger" id="confirm-delete-product" type="button">Excluir</button>
         </div>
       </div>
     </div>
-  `;
+  `);
+  if (!modal) return;
 
-  modalRoot.querySelector('#delete-product-modal')?.addEventListener('click', (event) => {
-    if (event.target === event.currentTarget) modalRoot.innerHTML = '';
-  });
-  modalRoot.querySelector('#cancel-delete-product')?.addEventListener('click', () => {
-    modalRoot.innerHTML = '';
-  });
-  modalRoot.querySelector('#confirm-delete-product')?.addEventListener('click', async () => {
-    const confirmBtn = modalRoot.querySelector('#confirm-delete-product');
+  modal.root.querySelector('#cancel-delete-product')?.addEventListener('click', modal.close);
+  modal.root.querySelector('#confirm-delete-product')?.addEventListener('click', async () => {
+    const confirmBtn = modal.root.querySelector('#confirm-delete-product');
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Excluindo...';
+    confirmBtn.textContent = 'Excluindo…';
     const result = await deleteSellerProduct(adId);
     if (result?.success) {
-      modalRoot.innerHTML = '';
-      showToast('Anúncio excluído com segurança.', 'success');
-      invalidateSellerCache({ data: true, payments: true });
+      modal.close();
+      showToast('Oferta excluída.', 'success');
+      invalidateSellerCache({ data: true });
       selectedAdId = null;
       sellerView = 'ads';
       sellerNavFocus = 'ads';
@@ -1961,9 +1731,17 @@ function showDeleteProductModal(adId, container) {
     } else {
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Excluir';
-      showToast(result?.error || 'Não foi possível remover o produto.', 'error');
+      showToast(result?.error || 'Não foi possível excluir a oferta.', 'error');
     }
   });
+}
+
+// '#RRGGBB' token → rgba() with the given alpha (canvas gradients need explicit colors).
+function withAlpha(color, alpha) {
+  const hex = String(color || '').trim().replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return 'transparent';
+  const [r, g, b] = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function drawSimpleChart(canvas, coupons = []) {
@@ -2004,15 +1782,25 @@ function drawSimpleChart(canvas, coupons = []) {
   const padding = { top: 30, right: 20, bottom: 30, left: 40 };
   const chartW = w - padding.left - padding.right;
   const chartH = h - padding.top - padding.bottom;
-  const maxVal = Math.max(1, ...data) + 1;
+  // Round the scale up to a multiple of 4 so the four gridline labels are distinct integers.
+  const maxVal = Math.max(4, Math.ceil((Math.max(0, ...data) + 1) / 4) * 4);
+
+  // Colors come from the brand tokens: pink marker for the series, navy-grey for the frame.
+  const tokens = getComputedStyle(canvas);
+  const token = (name, fallback) => tokens.getPropertyValue(name).trim() || fallback;
+  const seriesColor = token('--marker', 'deeppink');
+  const muteColor = token('--ink-mute', 'gray');
+  const ruleColor = token('--rule', 'lightgray');
+  const paperColor = token('--paper', 'white');
+  const labelFont = token('--font-body', 'sans-serif');
 
   // Y-axis labels and grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.font = '10px Plus Jakarta Sans, sans-serif';
+  ctx.strokeStyle = ruleColor;
+  ctx.fillStyle = muteColor;
+  ctx.font = `500 10px ${labelFont}`;
   ctx.textAlign = 'right';
   ctx.lineWidth = 1;
-  
+
   for (let i = 0; i <= 4; i++) {
     const y = padding.top + (chartH / 4) * i;
     const val = Math.round(maxVal - (maxVal / 4) * i);
@@ -2032,7 +1820,7 @@ function drawSimpleChart(canvas, coupons = []) {
   // Spline Path
   const splinePath = new Path2D();
   splinePath.moveTo(points[0].x, points[0].y);
-  
+
   for (let i = 0; i < points.length - 1; i++) {
     const xc = (points[i].x + points[i + 1].x) / 2;
     const yc = (points[i].y + points[i + 1].y) / 2;
@@ -2040,44 +1828,42 @@ function drawSimpleChart(canvas, coupons = []) {
   }
   splinePath.lineTo(points[points.length - 1].x, points[points.length - 1].y);
 
-  // Line
-  ctx.strokeStyle = '#00F0A0';
-  ctx.lineWidth = 3;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.stroke(splinePath);
-
-  // Gradient fill
+  // Gradient fill under the line
   const fillPath = new Path2D(splinePath);
   fillPath.lineTo(points[points.length - 1].x, h - padding.bottom);
   fillPath.lineTo(points[0].x, h - padding.bottom);
   fillPath.closePath();
-  
+
   const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
-  gradient.addColorStop(0, 'rgba(0, 240, 160, 0.25)');
-  gradient.addColorStop(1, 'rgba(0, 240, 160, 0)');
+  gradient.addColorStop(0, withAlpha(seriesColor, 0.16));
+  gradient.addColorStop(1, withAlpha(seriesColor, 0));
   ctx.fillStyle = gradient;
   ctx.fill(fillPath);
+
+  // Line
+  ctx.strokeStyle = seriesColor;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke(splinePath);
 
   // Dots
   points.forEach((pt) => {
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#00F0A0';
+    ctx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = paperColor;
     ctx.fill();
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#0B0B0B';
-    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = seriesColor;
+    ctx.stroke();
   });
 
   // X-axis Labels
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.font = '11px Plus Jakarta Sans, sans-serif';
+  ctx.fillStyle = muteColor;
+  ctx.font = `500 11px ${labelFont}`;
   ctx.textAlign = 'center';
   labels.forEach((label, i) => {
     const x = padding.left + (chartW / (data.length - 1)) * i;
     ctx.fillText(label, x, h - 10);
   });
 }
-

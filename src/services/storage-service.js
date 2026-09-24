@@ -1,5 +1,5 @@
 /**
- * Storage Service — Linka (Supabase Storage)
+ * Storage Service — Empreende iCEV (Supabase Storage)
  * Handles image uploads for product listings.
  */
 import { supabase } from '../lib/supabase.js';

@@ -4,14 +4,40 @@ import {
   signUpUser,
   updateUserPassword,
 } from '../services/auth-service.js';
-import { icons } from '../main.js';
+import { icons, renderBrandLogo } from '../main.js';
+import { getAllowedSignupDomains } from '../services/institution-service.js';
 
-const PASSWORD_RECOVERY_KEY = 'linka_password_recovery_active';
+const PASSWORD_RECOVERY_KEY = 'empreende_password_recovery_active';
 
 let isLoginMode = true;
 let isResetRequestMode = false;
 let selectedRole = 'buyer';
 let lastIntent = '';
+// E-mail domains accepted at sign-up (null until loaded, [] when unknown).
+let allowedSignupDomains = null;
+let allowedDomainsRequest = null;
+
+function getEmailDomain(email) {
+  const at = String(email || '').lastIndexOf('@');
+  return at > -1 ? String(email).slice(at).trim().toLowerCase() : '';
+}
+
+function describeAllowedDomains() {
+  if (!allowedSignupDomains?.length) return 'Use seu e-mail institucional do iCEV.';
+  return `Use seu e-mail institucional do iCEV (${allowedSignupDomains.join(' ou ')}).`;
+}
+
+/** Loads the accepted domains once and refreshes the hint without re-rendering the form. */
+function ensureAllowedSignupDomains() {
+  if (allowedSignupDomains || allowedDomainsRequest) return;
+  allowedDomainsRequest = getAllowedSignupDomains().then((domains) => {
+    allowedSignupDomains = domains;
+    const hint = document.getElementById('authEmailHint');
+    if (hint) hint.textContent = describeAllowedDomains();
+    const input = document.getElementById('authEmail');
+    if (input && domains.length) input.placeholder = `voce${domains[0]}`;
+  });
+}
 
 function readAuthParams() {
   const raw = window.location.hash.startsWith('#/auth') ? window.location.hash.split('?')[1] || '' : '';
@@ -43,8 +69,8 @@ function syncIntentFromUrl() {
   const intent = params.get('role') || params.get('intent') || '';
   if (intent && intent !== lastIntent) {
     lastIntent = intent;
-    if (intent === 'seller') {
-      selectedRole = 'seller';
+    if (intent === 'seller' || intent === 'signup') {
+      selectedRole = intent === 'seller' ? 'seller' : 'buyer';
       isLoginMode = false;
       isResetRequestMode = false;
     }
@@ -60,12 +86,12 @@ function showAuthMessage(text, type = 'error') {
 
 function setLoading(button, isLoading, text) {
   button.disabled = isLoading;
-  button.innerHTML = isLoading ? `${icons.loader || ''} Aguarde...` : text;
+  button.innerHTML = isLoading ? '<span class="spinner" aria-hidden="true"></span> Aguarde…' : text;
 }
 
 function isEmailRateLimitError(text = '') {
   const normalized = text.toLowerCase();
-  return normalized.includes('limite temporario')
+  return normalized.includes('limite temporário')
     || normalized.includes('muitas tentativas')
     || normalized.includes('rate limit');
 }
@@ -96,13 +122,20 @@ function getAuthMode() {
   return isLoginMode ? 'login' : 'signup';
 }
 
+function getTitle(mode) {
+  if (mode === 'recovery') return 'Crie uma nova senha';
+  if (mode === 'forgot') return 'Redefinir senha';
+  if (isLoginMode) return 'Bem-vindo de volta';
+  return selectedRole === 'seller' ? 'Cadastre sua empresa' : 'Crie sua conta de aluno';
+}
+
 function getSubtitle(mode) {
   if (mode === 'recovery') return 'Crie uma nova senha para voltar ao seu fluxo.';
   if (mode === 'forgot') return 'Informe seu e-mail e enviaremos um link seguro.';
-  if (isLoginMode) return 'Entre para continuar usando o Linka.';
+  if (isLoginMode) return 'Entre com seu e-mail do iCEV para pegar cupons das empresas dos colegas.';
   return selectedRole === 'seller'
-    ? 'Crie sua conta de vendedor e publique seu primeiro produto.'
-    : 'Crie sua conta para comprar com cupom e acompanhar pedidos.';
+    ? 'Divulgue cupons da sua empresa para os alunos do iCEV. Os pedidos chegam no seu WhatsApp.'
+    : 'Pegue cupons das empresas dos colegas e compre direto com elas.';
 }
 
 function renderModeSwitch(mode) {
@@ -124,23 +157,24 @@ function renderSignupFields() {
     </div>
 
     <div class="auth-form-group">
-      <label>Como voce vai usar o Linka?</label>
+      <span class="auth-label">Como você vai usar o Empreende iCEV?</span>
       <div class="auth-role-grid">
-        <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer">
-          <strong>Comprar</strong>
-          <span>Ver ofertas, pagar e receber cupons.</span>
+        <button type="button" class="auth-role-btn ${selectedRole === 'buyer' ? 'active' : ''}" data-role="buyer" aria-pressed="${selectedRole === 'buyer'}">
+          <strong>Quero pegar cupons</strong>
+          <span>Descontos das empresas dos colegas.</span>
         </button>
-        <button type="button" class="auth-role-btn ${selectedRole === 'seller' ? 'active' : ''}" data-role="seller">
-          <strong>Vender</strong>
-          <span>Cadastrar produtos e receber no Mercado Pago.</span>
+        <button type="button" class="auth-role-btn ${selectedRole === 'seller' ? 'active' : ''}" data-role="seller" aria-pressed="${selectedRole === 'seller'}">
+          <strong>Tenho uma empresa</strong>
+          <span>Divulgue cupons e receba pedidos no WhatsApp.</span>
         </button>
       </div>
     </div>
 
     ${selectedRole === 'seller' ? `
       <div class="auth-form-group">
-        <label for="authWhatsapp">WhatsApp do vendedor</label>
-        <input type="tel" id="authWhatsapp" class="auth-input" placeholder="(86) 99900-1122" autocomplete="tel" />
+        <label for="authWhatsapp">WhatsApp da empresa</label>
+        <input type="tel" id="authWhatsapp" class="auth-input" placeholder="(86) 99900-1122" autocomplete="tel" inputmode="tel" aria-describedby="authWhatsappHint" />
+        <p class="auth-field-hint" id="authWhatsappHint">Os alunos chamam a empresa por aqui para comprar.</p>
       </div>
     ` : ''}
   `;
@@ -150,10 +184,10 @@ function renderAuthForm(mode) {
   if (mode === 'recovery') {
     return `
       <form class="auth-form" id="authForm">
-        <div id="authError" class="auth-error"></div>
+        <div id="authError" class="auth-error" role="alert" aria-live="polite"></div>
         <div class="auth-form-group">
           <label for="authPassword">Nova senha</label>
-          <input type="password" id="authPassword" class="auth-input" placeholder="Minimo 6 caracteres" autocomplete="new-password" />
+          <input type="password" id="authPassword" class="auth-input" placeholder="Mínimo de 6 caracteres" autocomplete="new-password" />
         </div>
         <div class="auth-form-group">
           <label for="authPasswordConfirm">Confirmar nova senha</label>
@@ -162,7 +196,7 @@ function renderAuthForm(mode) {
         <button id="btnSubmitAuth" class="auth-btn" type="submit">Salvar nova senha</button>
       </form>
       <div class="auth-switch">
-        Lembrou a senha? <span id="btnBackToLogin">Voltar ao login</span>
+        Lembrou a senha? <button type="button" class="auth-link" id="btnBackToLogin">Voltar para o login</button>
       </div>
     `;
   }
@@ -170,35 +204,36 @@ function renderAuthForm(mode) {
   if (mode === 'forgot') {
     return `
       <form class="auth-form" id="authForm">
-        <div id="authError" class="auth-error"></div>
+        <div id="authError" class="auth-error" role="alert" aria-live="polite"></div>
         <div class="auth-reset-note">
-          Enviaremos um link de redefinicao para o e-mail da sua conta Linka.
+          Enviaremos um link de redefinição para o e-mail da sua conta Empreende iCEV.
         </div>
         <div class="auth-form-group">
           <label for="authEmail">E-mail</label>
-          <input type="email" id="authEmail" class="auth-input" placeholder="seu@email.com" autocomplete="email" />
+          <input type="email" id="authEmail" class="auth-input" placeholder="voce@icev.edu.br" autocomplete="email" />
         </div>
-        <button id="btnSubmitAuth" class="auth-btn" type="submit">Enviar link de redefinicao</button>
+        <button id="btnSubmitAuth" class="auth-btn" type="submit">Enviar link</button>
       </form>
       <div class="auth-switch">
-        Ja tem acesso? <span id="btnBackToLogin">Fazer login</span>
+        Já tem acesso? <button type="button" class="auth-link" id="btnBackToLogin">Entrar</button>
       </div>
     `;
   }
 
   return `
     <form class="auth-form" id="authForm">
-      <div id="authError" class="auth-error"></div>
+      <div id="authError" class="auth-error" role="alert" aria-live="polite"></div>
       ${renderSignupFields()}
 
       <div class="auth-form-group">
-        <label for="authEmail">E-mail</label>
-        <input type="email" id="authEmail" class="auth-input" placeholder="seu@email.com" autocomplete="email" />
+        <label for="authEmail">${isLoginMode ? 'E-mail' : 'E-mail institucional'}</label>
+        <input type="email" id="authEmail" class="auth-input" placeholder="voce${allowedSignupDomains?.[0] || '@icev.edu.br'}" autocomplete="email"${isLoginMode ? '' : ' aria-describedby="authEmailHint"'} />
+        ${isLoginMode ? '' : `<p class="auth-field-hint" id="authEmailHint">${describeAllowedDomains()}</p>`}
       </div>
 
       <div class="auth-form-group">
         <label for="authPassword">Senha</label>
-        <input type="password" id="authPassword" class="auth-input" placeholder="Minimo 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
+        <input type="password" id="authPassword" class="auth-input" placeholder="Mínimo de 6 caracteres" autocomplete="${isLoginMode ? 'current-password' : 'new-password'}" />
       </div>
 
       ${isLoginMode ? `
@@ -206,16 +241,9 @@ function renderAuthForm(mode) {
       ` : ''}
 
       <button id="btnSubmitAuth" class="auth-btn" type="submit">
-        ${isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Criar conta de vendedor' : 'Criar conta de comprador'}
+        ${isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Cadastrar empresa' : 'Criar conta'}
       </button>
     </form>
-
-    <div class="auth-switch">
-      ${isLoginMode
-        ? `Ainda nao tem conta? <span id="btnSwitchMode">Cadastre-se</span>`
-        : `Ja tem conta? <span id="btnSwitchMode">Fazer login</span>`
-      }
-    </div>
   `;
 }
 
@@ -252,15 +280,39 @@ export function renderAuth(container) {
   const subtitle = getSubtitle(mode);
 
   container.innerHTML = `
-    <div class="auth-wrapper">
-      <div class="auth-header">
-        <div class="auth-logo">Link<span>a</span></div>
-        <p class="auth-subtitle">${subtitle}</p>
-        <button type="button" class="auth-back-home" id="btnBackHome">${icons.home || ''} Voltar ao inicio</button>
-      </div>
+    <div class="page auth-wrapper">
+      <aside class="auth-aside" aria-hidden="true">
+        ${renderBrandLogo('wordmark-white', 'auth-aside-logo')}
+        <p class="auth-aside-title">Conexões que geram <span class="hl">negócios</span>.</p>
+        <div class="auth-ticket">
+          <div class="auth-ticket-main">
+            <span class="auth-ticket-eyebrow">Cupom Empreende iCEV</span>
+            <strong>Brownie com nozes</strong>
+            <span class="auth-ticket-price">R$ 9,00 <s>R$ 12,00</s></span>
+          </div>
+          <div class="auth-ticket-stub">
+            <span class="auth-ticket-code">K7QM-4TXP</span>
+          </div>
+        </div>
+        <p class="auth-aside-note">Empresas de alunos do iCEV. Você pega o código aqui e compra direto com elas.</p>
+      </aside>
 
-      ${renderModeSwitch(mode)}
-      ${renderAuthForm(mode)}
+      <main class="auth-main">
+        <div class="auth-card">
+          <div class="auth-header">
+            <button type="button" class="auth-back-home" id="btnBackHome">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              Voltar para a vitrine
+            </button>
+            ${renderBrandLogo('wordmark', 'brand-logo auth-logo')}
+            <h1 class="auth-title">${getTitle(mode)}</h1>
+            <p class="auth-subtitle">${subtitle}</p>
+          </div>
+
+          ${renderModeSwitch(mode)}
+          ${renderAuthForm(mode)}
+        </div>
+      </main>
     </div>
   `;
 
@@ -272,12 +324,6 @@ export function renderAuth(container) {
 
   document.getElementById('authModeSignup')?.addEventListener('click', () => {
     isLoginMode = false;
-    isResetRequestMode = false;
-    renderAuth(container);
-  });
-
-  document.getElementById('btnSwitchMode')?.addEventListener('click', () => {
-    isLoginMode = !isLoginMode;
     isResetRequestMode = false;
     renderAuth(container);
   });
@@ -313,11 +359,12 @@ export function renderAuth(container) {
   if (authParams.get('confirmed') === '1') {
     const confirmedRole = authParams.get('role') === 'seller' ? 'seller' : 'buyer';
     showAuthMessage(confirmedRole === 'seller'
-      ? 'E-mail confirmado. Entre para abrir seu painel de vendedor.'
-      : 'E-mail confirmado. Entre para acessar suas ofertas e cupons.', 'success');
+      ? 'E-mail confirmado. Entre para abrir o painel da sua empresa.'
+      : 'E-mail confirmado. Entre para pegar seus cupons.', 'success');
   }
 
   bindEnterSubmit();
+  if (!isLoginMode) ensureAllowedSignupDomains();
 
   document.getElementById('authForm').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -325,7 +372,7 @@ export function renderAuth(container) {
 
     if (mode === 'forgot') {
       const email = document.getElementById('authEmail').value.trim();
-      const defaultText = 'Enviar link de redefinicao';
+      const defaultText = 'Enviar link de redefinição';
       if (!email) {
         showAuthMessage('Informe o e-mail da sua conta.');
         return;
@@ -335,7 +382,7 @@ export function renderAuth(container) {
       document.getElementById('authError').classList.remove('visible', 'success');
       const res = await requestPasswordReset(email);
       if (!res.success) {
-        showAuthMessage(res.error || 'Nao foi possivel enviar o link agora.');
+        showAuthMessage(res.error || 'Não foi possível enviar o link agora.');
         setLoading(btn, false, defaultText);
         return;
       }
@@ -360,7 +407,7 @@ export function renderAuth(container) {
       }
 
       if (password !== confirmation) {
-        showAuthMessage('As senhas nao conferem.');
+        showAuthMessage('As senhas não conferem.');
         return;
       }
 
@@ -368,13 +415,13 @@ export function renderAuth(container) {
       document.getElementById('authError').classList.remove('visible', 'success');
       const res = await updateUserPassword(password);
       if (!res.success) {
-        showAuthMessage(res.error || 'Nao foi possivel salvar a nova senha.');
+        showAuthMessage(res.error || 'Não foi possível salvar a nova senha.');
         setLoading(btn, false, defaultText);
         return;
       }
 
       sessionStorage.removeItem(PASSWORD_RECOVERY_KEY);
-      showAuthMessage('Senha atualizada. Voce ja pode entrar com a nova senha.', 'success');
+      showAuthMessage('Senha atualizada. Você ja pode entrar com a nova senha.', 'success');
       setLoading(btn, false, defaultText);
       window.setTimeout(() => {
         window.location.hash = '#/auth';
@@ -384,7 +431,7 @@ export function renderAuth(container) {
 
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
-    const defaultText = isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Criar conta de vendedor' : 'Criar conta de comprador';
+    const defaultText = isLoginMode ? 'Entrar' : selectedRole === 'seller' ? 'Cadastrar empresa' : 'Criar conta';
 
     if (!email || !password) {
       showAuthMessage('Preencha e-mail e senha.');
@@ -406,8 +453,16 @@ export function renderAuth(container) {
         return;
       }
 
-      showAuthMessage(res.error || 'Nao foi possivel entrar. Verifique os dados.');
+      showAuthMessage(res.error || 'Não foi possível entrar. Verifique os dados.');
       setLoading(btn, false, defaultText);
+      return;
+    }
+
+    // The database rejects other domains too; checking here explains why before submitting.
+    if (allowedSignupDomains?.length && !allowedSignupDomains.includes(getEmailDomain(email))) {
+      showAuthMessage(describeAllowedDomains());
+      setLoading(btn, false, defaultText);
+      document.getElementById('authEmail')?.focus();
       return;
     }
 
@@ -420,14 +475,14 @@ export function renderAuth(container) {
     }
 
     if (selectedRole === 'seller' && !whatsapp) {
-      showAuthMessage('Informe um WhatsApp para seus compradores falarem com voce.');
+      showAuthMessage('Informe o WhatsApp da empresa: é por ele que os alunos vão comprar.');
       setLoading(btn, false, defaultText);
       return;
     }
 
     const res = await signUpUser(email, password, name, selectedRole, { whatsapp });
     if (!res.success) {
-      const message = res.error || 'Nao foi possivel criar a conta.';
+      const message = res.error || 'Não foi possível criar a conta.';
       showAuthMessage(message);
       setLoading(btn, false, defaultText);
       if (isEmailRateLimitError(message)) {

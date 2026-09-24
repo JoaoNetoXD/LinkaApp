@@ -1,5 +1,5 @@
 /**
- * Notification Service — Linka
+ * Notification Service — Empreende iCEV
  * Push notifications via Service Worker + in-app notifications via Supabase.
  */
 import { supabase } from '../lib/supabase.js';
@@ -148,8 +148,8 @@ function urlBase64ToUint8Array(base64String) {
 
 function getMockNotifications() {
   return [
-    { id: '1', title: 'Cupom gerado!', body: 'Seu cupom A7K2 para Brownie Artesanal está ativo.', type: 'success', read: false, created_at: new Date().toISOString() },
-    { id: '2', title: 'Oferta expirando', body: 'Açaí no Copo 500ml expira em 2h.', type: 'warning', read: false, created_at: new Date(Date.now() - 3600000).toISOString() },
-    { id: '3', title: 'Pagamento confirmado', body: 'Pix de R$ 9,00 aprovado com sucesso.', type: 'success', read: true, created_at: new Date(Date.now() - 86400000).toISOString() },
+    { id: '1', title: 'Cupom retirado', body: 'Seu cupom K7QM-4TXP para Brownie Artesanal está ativo.', type: 'success', read: false, created_at: new Date().toISOString() },
+    { id: '2', title: 'Oferta terminando', body: 'Açaí no Copo 500ml sai do ar em 2h.', type: 'warning', read: false, created_at: new Date(Date.now() - 3600000).toISOString() },
+    { id: '3', title: 'Cupom usado', body: 'A empresa confirmou seu cupom de Brownie Artesanal na compra.', type: 'success', read: true, created_at: new Date(Date.now() - 86400000).toISOString() },
   ];
 }

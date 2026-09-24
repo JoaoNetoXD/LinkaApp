@@ -1,192 +1,152 @@
+/* ============================================================
+   Empreende iCEV · design tokens
+   Brand: navy #182A50, magenta #C0176B, pink #ED1E79 and the
+   navy → magenta → pink gradient of the logo symbol. Type: Inter.
+   ============================================================ */
+
 :root {
-  /* Backgrounds */
-  --lk-bg:          #0D0D12;
-  --lk-surface:     #16161E;
-  --lk-card:        #1C1C26;
-  --lk-overlay:     rgba(13, 13, 18, 0.92);
+  color-scheme: light;
 
-  /* Borders */
-  --lk-border:      rgba(255, 255, 255, 0.07);
-  --lk-border-md:   rgba(255, 255, 255, 0.12);
-  --lk-border-strong: rgba(255, 255, 255, 0.18);
+  /* Brand */
+  --navy:           #182A50;
+  --magenta:        #C0176B;
+  --pink:           #ED1E79;
+  --brand-gradient: linear-gradient(135deg, #182A50 0%, #C0176B 64%, #ED1E79 100%);
 
-  /* Brand accent — use APENAS para: preços, CTAs, elementos ativos */
-  --lk-accent:      #C8F135;
-  --lk-accent-dim:  rgba(200, 241, 53, 0.12);
-  --lk-accent-border: rgba(200, 241, 53, 0.25);
+  /* Surfaces */
+  --porcelain:      #F3F4F8;   /* page canvas */
+  --paper:          #FFFFFF;   /* raised surfaces */
+  --paper-sunken:   #F7F7FA;   /* inset areas inside cards */
 
-  /* Secondary accent — destaques, badges premium */
-  --lk-purple:      #7B6EF6;
-  --lk-purple-dim:  rgba(123, 110, 246, 0.15);
-  --lk-purple-border: rgba(123, 110, 246, 0.30);
+  /* Text: navy-based so type always reads as the brand */
+  --ink:            #182A50;   /* primary text, dark fills */
+  --ink-soft:       #465070;   /* secondary text */
+  --ink-mute:       #6B7289;   /* captions, placeholders, metadata */
+  --ink-faint:      #A5AABB;   /* disabled, decorative strokes */
+  --rule:           #E4E6EE;   /* hairlines */
+  --rule-strong:    #CFD3DE;   /* input borders, emphasized dividers */
 
-  /* Semantic */
-  --lk-success:     #2DD4A0;
-  --lk-danger:      #FF5C5C;
-  --lk-warning:     #F59E0B;
+  /* The one action color */
+  --brand:          #C0176B;
+  --brand-press:    #A11259;
+  --brand-tint:     #FCE8F2;
+  --brand-ink:      #9A0F53;
 
-  /* Text */
-  --lk-text:        #F0EEE8;
-  --lk-text-muted:  #7A7A8A;
-  --lk-text-faint:  #3E3E4A;
+  /* Highlight accent (charts, active marks). Never a text background. */
+  --marker:         #ED1E79;
+  --marker-soft:    #FDE3EF;
+  --marker-ink:     #8C0C4A;
 
-  /* Radius */
-  --r-xs:   6px;
+  --success:        #0B8A5E;
+  --success-tint:   #E3F5ED;
+  --danger:         #D42D3B;
+  --danger-tint:    #FDECEE;
+  --warning:        #A85A00;
+  --warning-tint:   #FFF2DC;
+  --info-tint:      #EAF0FB;
+
+  /* Typography: Inter is the brand typeface (tagline and supporting text) */
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --tracking-label: 0.14em;   /* uppercase labels, echoing "CONEXÕES QUE GERAM NEGÓCIOS." */
+
+  --fs-11: 0.6875rem;
+  --fs-12: 0.75rem;
+  --fs-13: 0.8125rem;
+  --fs-14: 0.875rem;
+  --fs-15: 0.9375rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-24: 1.5rem;
+  --fs-28: 1.75rem;
+  --fs-34: 2.125rem;
+  --fs-44: 2.75rem;
+
+  /* Shape. Radius rule: 0 or 8–16px, pills only for chips/badges */
+  --r-xs:   8px;
   --r-sm:   10px;
-  --r-md:   14px;
-  --r-lg:   18px;
-  --r-xl:   24px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-xl:   16px;
   --r-pill: 999px;
 
-  /* Spacing scale */
+  /* Spacing (4px grid) */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
   --sp-5: 20px;
   --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --gutter: 20px;
 
-  /* Typography */
-  --font-display: 'DM Sans', sans-serif;
-  --font-body:    'DM Sans', sans-serif;
+  /* Elevation: soft, navy-tinted shadows */
+  --shadow-1: 0 1px 2px rgba(24, 42, 80, 0.05), 0 1px 1px rgba(24, 42, 80, 0.03);
+  --shadow-2: 0 12px 28px -16px rgba(24, 42, 80, 0.24), 0 2px 5px rgba(24, 42, 80, 0.05);
+  --shadow-3: 0 30px 70px -28px rgba(24, 42, 80, 0.45), 0 6px 16px rgba(24, 42, 80, 0.07);
+  --ring-focus: 0 0 0 3px rgba(192, 23, 107, 0.26);
 
-  /* Transitions */
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --duration: 200ms;
+  /* Motion */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 340ms;
+
+  /* Layout */
+  --max-width:          1180px;
+  --content-width:      720px;
+  --header-height:      64px;
+  --bottom-nav-height:  68px;
+  --safe-top:           env(safe-area-inset-top, 0px);
+  --safe-bottom:        env(safe-area-inset-bottom, 0px);
+
+  --z-sticky:         200;
+  --z-nav:            250;
+  --z-modal-backdrop: 300;
+  --z-modal:          400;
+  --z-toast:          500;
+  --z-tooltip:        600;
 }
 
+/* Legacy aliases still referenced by inline styles inside the page templates. */
 :root {
-  /* Compatibility layer for the older screens that still reference legacy vars. */
-  --primary-900: var(--lk-bg);
-  --primary-800: var(--lk-surface);
-  --primary-700: var(--lk-accent);
-  --primary-600: var(--lk-accent);
-  --primary-500: var(--lk-accent);
-  --primary-400: var(--lk-accent);
-  --primary-300: var(--lk-accent-border);
-  --primary-200: var(--lk-accent-border);
-  --primary-100: var(--lk-accent-dim);
-  --primary-50: var(--lk-accent-dim);
+  --lk-bg: var(--porcelain);
+  --lk-surface: var(--paper);
+  --lk-card: var(--paper);
+  --lk-text: var(--ink);
+  --lk-text-muted: var(--ink-mute);
+  --lk-accent: var(--brand);
+  --lk-success: var(--success);
+  --lk-danger: var(--danger);
+  --lk-warning: var(--warning);
 
-  --accent-700: var(--lk-success);
-  --accent-600: var(--lk-success);
-  --accent-500: var(--lk-success);
-  --accent-400: var(--lk-success);
-  --accent-300: var(--lk-success);
-  --accent-200: rgba(45, 212, 160, 0.22);
-  --accent-100: rgba(45, 212, 160, 0.14);
-  --accent-50: rgba(45, 212, 160, 0.08);
-  --linka-green: var(--lk-accent);
+  --background: var(--paper);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-tertiary: var(--ink-mute);
+  --primary-500: var(--brand);
+  --primary-700: var(--brand-ink);
+  --danger-500: var(--danger);
+  --gray-200: var(--rule);
+  --gray-700: var(--ink-soft);
 
-  --gray-900: var(--lk-bg);
-  --gray-800: var(--lk-surface);
-  --gray-700: var(--lk-card);
-  --gray-600: var(--lk-text-faint);
-  --gray-500: var(--lk-text-muted);
-  --gray-400: var(--lk-text-muted);
-  --gray-300: var(--lk-border-strong);
-  --gray-200: var(--lk-border-md);
-  --gray-100: var(--lk-surface);
-  --gray-50: var(--lk-card);
+  --font-size-xs: var(--fs-12);
+  --font-size-sm: var(--fs-14);
+  --font-size-md: var(--fs-15);
+  --font-size-lg: var(--fs-18);
+  --font-size-xl: var(--fs-20);
+  --font-weight-bold: 600;
 
-  --success-700: var(--lk-success);
-  --success-600: var(--lk-success);
-  --success-500: var(--lk-success);
-  --success-100: rgba(45, 212, 160, 0.14);
-  --success-50: rgba(45, 212, 160, 0.08);
-
-  --warning-700: var(--lk-warning);
-  --warning-600: var(--lk-warning);
-  --warning-500: var(--lk-warning);
-  --warning-100: rgba(245, 158, 11, 0.14);
-  --warning-50: rgba(245, 158, 11, 0.08);
-
-  --danger-700: var(--lk-danger);
-  --danger-600: var(--lk-danger);
-  --danger-500: var(--lk-danger);
-  --danger-100: rgba(255, 92, 92, 0.14);
-  --danger-50: rgba(255, 92, 92, 0.08);
-
-  --surface: var(--lk-bg);
-  --surface-alt: var(--lk-surface);
-  --surface-raised: var(--lk-card);
-  --backdrop: var(--lk-overlay);
-  --text-primary: var(--lk-text);
-  --text-secondary: var(--lk-text-muted);
-  --text-tertiary: var(--lk-text-faint);
-  --text-inverse: var(--lk-bg);
-  --border-light: var(--lk-border);
-  --border: var(--lk-border-md);
-  --border-strong: var(--lk-border-strong);
-
-  --gradient-hero: linear-gradient(135deg, #1A1A26 0%, #1E1830 100%);
-  --gradient-brand: linear-gradient(135deg, var(--lk-card) 0%, var(--lk-surface) 100%);
-  --gradient-card: linear-gradient(135deg, #1A1A26 0%, #1E1830 100%);
-  --gradient-success: linear-gradient(135deg, var(--lk-success), var(--lk-success));
-  --gradient-cta: linear-gradient(135deg, var(--lk-accent), var(--lk-accent));
-
-  --font-family: var(--font-body);
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-  --font-size-4xl: 2.25rem;
-  --font-size-5xl: 3rem;
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
-  --line-height-tight: 1.2;
-  --line-height-snug: 1.35;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.625;
-
-  --space-1: var(--sp-1);
   --space-2: var(--sp-2);
   --space-3: var(--sp-3);
   --space-4: var(--sp-4);
   --space-5: var(--sp-5);
   --space-6: var(--sp-6);
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-20: 80px;
-  --space-24: 96px;
-
-  --radius-sm: var(--r-sm);
-  --radius-md: var(--r-md);
-  --radius-lg: var(--r-lg);
-  --radius-xl: var(--r-xl);
-  --radius-2xl: var(--r-xl);
-  --radius-full: var(--r-pill);
-
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-  --shadow-xl: none;
-  --shadow-card: none;
-  --shadow-card-hover: none;
-  --shadow-float: none;
-  --shadow-brand: none;
-  --transition-fast: var(--duration) var(--ease);
-  --transition-base: var(--duration) var(--ease);
-  --transition-slow: 300ms var(--ease);
-  --transition-spring: 400ms var(--ease);
-
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-modal-backdrop: 300;
-  --z-modal: 400;
-  --z-toast: 500;
-  --z-tooltip: 600;
-  --max-width: 1200px;
-  --header-height: 64px;
-  --bottom-nav-height: 72px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --space-8: var(--sp-8);
 }

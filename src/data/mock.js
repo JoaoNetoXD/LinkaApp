@@ -1,4 +1,4 @@
-// Mock data for Linka
+// Mock data for Empreende iCEV (local preview only)
 export const institution = {
   name: 'iCEV',
   fullName: 'Instituto de Ensino Superior iCEV',

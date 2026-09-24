@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, getCurrentTheme, toggleAppTheme } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, rejectReasons, categories as mockCategories, institution } from '../data/mock.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
 import { getInstitutionStats, updateInstitution, getInstitution, getAllInstitutions } from '../services/institution-service.js';
@@ -8,6 +8,10 @@ import { resetAppScroll } from '../utils/scroll.js';
 import { getPlatformUsers, updatePlatformUser, createPlatformInstitution } from '../services/superadmin-service.js';
 
 const USE_MOCKS = import.meta.env.DEV;
+const BRAND_NAME = 'Empreende iCEV';
+// Sign-up compares '@' + lower(domain part) with these values, so store them that way.
+// A strict subset of the API check (^@[a-z0-9.-]+\.[a-z]{2,}$): no empty or dash-edged labels.
+const EMAIL_DOMAIN_PATTERN = /^@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 
 let adminView = 'dashboard';
 let loadedPendingAds = null;
@@ -29,6 +33,145 @@ let platformUsersError = '';
 let platformInstitutions = [];
 let adminRenderId = 0;
 const isSuperadmin = () => globalProfile?.role === 'superadmin';
+
+const ADMIN_VIEWS = [
+  { id: 'dashboard', label: 'Visão geral', icon: 'home' },
+  { id: 'moderation', label: 'Aprovar ofertas', icon: 'shield' },
+  { id: 'categories', label: 'Categorias', icon: 'grid' },
+  { id: 'reports', label: 'Relatórios', icon: 'chart' },
+  { id: 'settings', label: 'Configurações', icon: 'settings' },
+];
+
+const PLATFORM_VIEWS = [
+  { id: 'users', label: 'Usuários', icon: 'user' },
+  { id: 'institutions', label: 'Instituições', icon: 'all' },
+];
+
+function getPendingList() {
+  return loadedPendingAds || (USE_MOCKS ? pendingAds : []);
+}
+
+function getInitials(name, fallback = 'U') {
+  const initials = String(name || '')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return initials || fallback;
+}
+
+// The brand always writes "iCEV" with a lowercase i, even inside uppercase labels.
+function brandCaseHTML(value) {
+  return escapeHTML(value).replace(/iCEV/g, '<span class="admin-brand-case">iCEV</span>');
+}
+
+function createFallbackInstitution() {
+  return { name: BRAND_NAME, fullName: BRAND_NAME, domain: '', primaryColor: '#C0176B', settings: {} };
+}
+
+// Accepts "@escola.edu.br", "escola.edu.br" or a pasted address ("nome@escola.edu.br").
+function normalizeEmailDomain(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return '';
+  return `@${text.slice(text.lastIndexOf('@') + 1)}`;
+}
+
+// Raw strings as stored in institutions.settings.extra_domains.
+function getExtraDomains(inst = activeInstitution) {
+  const list = inst?.settings?.extra_domains;
+  return Array.isArray(list) ? list.map((item) => String(item || '').trim()).filter(Boolean) : [];
+}
+
+function getSignupDomains(inst = activeInstitution) {
+  return [inst?.domain, ...getExtraDomains(inst)].map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function parseDomainList(raw, primaryDomain = '') {
+  const primary = normalizeEmailDomain(primaryDomain);
+  const domains = [];
+  const invalid = [];
+  String(raw || '').split(/[\s,;]+/).filter(Boolean).forEach((entry) => {
+    const domain = normalizeEmailDomain(entry);
+    if (!EMAIL_DOMAIN_PATTERN.test(domain)) invalid.push(entry);
+    else if (domain !== primary && !domains.includes(domain)) domains.push(domain);
+  });
+  return { domains, invalid };
+}
+
+// Institution form values with the domain stored the way sign-up compares it; null if invalid.
+function withNormalizedDomain(values) {
+  const domain = normalizeEmailDomain(values.domain);
+  return EMAIL_DOMAIN_PATTERN.test(domain) ? { ...values, domain } : null;
+}
+
+function renderDomainList(domains, emptyText) {
+  if (!domains.length) return `<p>${escapeHTML(emptyText)}</p>`;
+  return `<ul class="settings-domain-list">${domains.map((domain) => `<li class="settings-domain">${escapeHTML(domain)}</li>`).join('')}</ul>`;
+}
+
+function renderViewHeader({ eyebrow = '', title, subtitle = '', actions = '' }) {
+  return `
+    <header class="admin-view-header">
+      <div class="admin-view-heading">
+        ${eyebrow ? `<span class="t-eyebrow">${eyebrow}</span>` : ''}
+        <h1 class="admin-view-title">${title}</h1>
+        ${subtitle ? `<p class="admin-view-subtitle">${subtitle}</p>` : ''}
+      </div>
+      ${actions ? `<div class="admin-view-actions">${actions}</div>` : ''}
+    </header>
+  `;
+}
+
+function renderAdminEmpty({ icon = '', title, text, action = '' }) {
+  return `
+    <div class="empty-state admin-empty">
+      ${icon ? `<span class="admin-empty-icon">${icon}</span>` : ''}
+      <h3>${title}</h3>
+      <p>${text}</p>
+      ${action}
+    </div>
+  `;
+}
+
+// Phone tabs scroll sideways; keep the current one in view after each render.
+function revealActiveAdminTab(container) {
+  const tabs = container.querySelector('.admin-tabs');
+  const activeTab = tabs?.querySelector('.tab.active');
+  if (!tabs || !activeTab || tabs.scrollWidth <= tabs.clientWidth) return;
+  const offset = activeTab.getBoundingClientRect().left - tabs.getBoundingClientRect().left;
+  tabs.scrollLeft += offset - (tabs.clientWidth - activeTab.offsetWidth) / 2;
+}
+
+function renderAdminSkeleton() {
+  return `
+    <div class="page admin-page is-loading" aria-busy="true">
+      <aside class="admin-sidebar">
+        <div class="admin-sidebar-brand">${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}</div>
+      </aside>
+      <div class="admin-main">
+        <div class="admin-topbar admin-skeleton-topbar">
+          <div class="app-header admin-main-header">
+            <div class="admin-header-brand">${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}</div>
+          </div>
+        </div>
+        <div class="admin-body">
+          <div class="admin-view-header">
+            <div class="admin-view-heading">
+              <span class="skeleton admin-skeleton-eyebrow"></span>
+              <span class="skeleton admin-skeleton-title"></span>
+            </div>
+          </div>
+          <div class="admin-stats-grid">
+            ${'<div class="card admin-skeleton-card"><span class="skeleton admin-skeleton-icon"></span><span class="skeleton admin-skeleton-value"></span><span class="skeleton admin-skeleton-label"></span></div>'.repeat(6)}
+          </div>
+          <span class="sr-only" role="status">Carregando painel</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 function isAdminRoute() {
   const path = window.location.hash.startsWith('#/')
@@ -96,7 +239,7 @@ async function syncInstitutionForUser() {
       return;
     }
   }
-  activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+  activeInstitution = USE_MOCKS ? institution : createFallbackInstitution();
 }
 
 function getSettledValue(result, fallback) {
@@ -112,7 +255,7 @@ async function loadAdminData({ force = false } = {}) {
     try {
       await syncInstitutionForUser();
     } catch {
-      activeInstitution = USE_MOCKS ? institution : { name: 'Linka', fullName: 'Linka', domain: '', primaryColor: '#2563eb' };
+      activeInstitution = USE_MOCKS ? institution : createFallbackInstitution();
     }
     const [
       pendingResult,
@@ -152,6 +295,7 @@ async function loadAdminData({ force = false } = {}) {
 export function renderAdmin(container, subpage) {
   if (subpage) adminView = subpage;
   else adminView = 'dashboard';
+  if (!container.querySelector('.admin-page')) container.innerHTML = renderAdminSkeleton();
   renderAdminPage(container).then((rendered) => {
     if (rendered) resetAppScroll(container);
   });
@@ -177,55 +321,71 @@ async function renderAdminPage(container, options = {}) {
   }
   if (renderId !== adminRenderId || !isAdminRoute()) return false;
   if (!isSuperadmin() && ['users', 'institutions'].includes(adminView)) adminView = 'dashboard';
+  const pendingCount = getPendingList().length;
+  const tabViews = [...ADMIN_VIEWS, ...(isSuperadmin() ? PLATFORM_VIEWS : [])];
+  const renderNavItem = (view) => `
+    <button class="nav-item admin-nav-item ${adminView === view.id ? 'active' : ''}" type="button" data-nav="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
+      ${icons[view.icon]}
+      <span class="admin-nav-label">${view.label}</span>
+      ${view.id === 'moderation' && pendingCount ? `<span class="admin-nav-count">${pendingCount}</span>` : ''}
+    </button>
+  `;
   container.innerHTML = `
     <div class="page admin-page">
-      <header class="app-header admin-main-header">
-        <div class="admin-header-brand">
-          <div class="avatar admin-header-avatar">${isSuperadmin() ? 'SA' : 'AD'}</div>
-          <div class="admin-header-copy">
-            <div class="admin-header-title">${isSuperadmin() ? 'Superadmin' : 'Painel Admin'}</div>
-            <div class="admin-header-subtitle">${isSuperadmin() ? 'Linka · Visão global' : escapeHTML(activeInstitution.fullName)}</div>
+      <aside class="admin-sidebar">
+        <div class="admin-sidebar-brand">
+          ${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}
+          <span class="admin-sidebar-tag">${isSuperadmin() ? 'Superadmin' : 'Admin'}</span>
+        </div>
+        <nav class="admin-nav" aria-label="Seções do painel">
+          <span class="admin-nav-group">Operação</span>
+          ${ADMIN_VIEWS.map(renderNavItem).join('')}
+          ${isSuperadmin() ? `
+            <span class="admin-nav-group">Plataforma</span>
+            ${PLATFORM_VIEWS.map(renderNavItem).join('')}
+          ` : ''}
+        </nav>
+      </aside>
+      <div class="admin-main">
+        <div class="admin-topbar">
+          <header class="app-header admin-main-header">
+            <div class="admin-header-brand">
+              ${renderBrandLogo('wordmark', 'brand-logo admin-brand-logo')}
+              <div class="avatar admin-header-avatar" aria-hidden="true">${isSuperadmin() ? 'SA' : 'AD'}</div>
+              <div class="admin-header-copy">
+                <div class="admin-header-title">${isSuperadmin() ? 'Superadmin' : 'Painel admin'}</div>
+                <div class="admin-header-subtitle">${brandCaseHTML(isSuperadmin() ? `${BRAND_NAME} · visão global` : activeInstitution.fullName || activeInstitution.name || BRAND_NAME)}</div>
+              </div>
+            </div>
+            <div class="admin-header-actions">
+              <button class="btn-ghost btn-sm admin-refresh-btn" id="btnAdminRefresh" type="button" aria-label="Atualizar dados">${icons.refresh}<span class="admin-refresh-label">Atualizar</span></button>
+              <button class="icon-btn admin-notif-btn" id="btnAdminNotif" type="button" aria-label="${pendingCount ? `Abrir ofertas para aprovar, ${pendingCount} ${pendingCount === 1 ? 'pendente' : 'pendentes'}` : 'Abrir ofertas para aprovar'}">
+                ${icons.bell}
+                ${pendingCount ? '<span class="admin-notif-dot" aria-hidden="true"></span>' : ''}
+              </button>
+              <button class="btn-secondary btn-sm admin-logout-btn" id="btnAdminLogout" type="button">Sair</button>
+            </div>
+          </header>
+          <nav class="admin-tabs-container" aria-label="Seções do painel">
+            <div class="tabs admin-tabs">
+              ${tabViews.map((view) => `
+                <button class="tab ${adminView === view.id ? 'active' : ''}" type="button" data-admin-tab="${view.id}" ${adminView === view.id ? 'aria-current="page"' : ''}>
+                  ${view.label}${view.id === 'moderation' && pendingCount ? ` <span class="tab-count">${pendingCount}</span>` : ''}
+                </button>
+              `).join('')}
+            </div>
+          </nav>
+        </div>
+        <main class="admin-body">
+          <div id="admin-content">
+            ${getAdminContent()}
           </div>
-        </div>
-        <div class="admin-header-actions">
-          <button class="period-filter admin-refresh-btn" id="btnAdminRefresh" type="button">${icons.refresh} <span class="hide-mobile">Atualizar</span></button>
-          <button class="btn-icon" id="btnAdminNotif" style="position:relative;">
-            ${icons.bell}
-            <span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:var(--danger-500);border-radius:50%;border:2px solid var(--background, #0A0A0F);"></span>
-          </button>
-          <button class="btn btn-secondary btn-sm admin-logout-btn" id="btnAdminLogout" type="button">Sair</button>
-        </div>
-      </header>
-      <div class="app-body">
-        <!-- Admin tabs -->
-        <div class="admin-tabs-container">
-          <div class="tabs">
-            <button class="tab ${adminView === 'dashboard' ? 'active' : ''}" data-admin-tab="dashboard">Dashboard</button>
-            <button class="tab ${adminView === 'moderation' ? 'active' : ''}" data-admin-tab="moderation">Moderação <span class="tab-count">${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}</span></button>
-            <button class="tab ${adminView === 'categories' ? 'active' : ''}" data-admin-tab="categories">Categorias</button>
-            <button class="tab ${adminView === 'reports' ? 'active' : ''}" data-admin-tab="reports">Relatórios</button>
-            <button class="tab ${adminView === 'settings' ? 'active' : ''}" data-admin-tab="settings">Config</button>
-            ${isSuperadmin() ? `
-              <button class="tab ${adminView === 'users' ? 'active' : ''}" data-admin-tab="users">Usuários</button>
-              <button class="tab ${adminView === 'institutions' ? 'active' : ''}" data-admin-tab="institutions">Instituições</button>
-            ` : ''}
-          </div>
-        </div>
-        <div id="admin-content">
-          ${getAdminContent()}
-        </div>
+        </main>
       </div>
-      <nav class="bottom-nav">
-        <div class="nav-item ${adminView === 'dashboard' ? 'active' : ''}" data-nav="dashboard">${icons.home}<span>Dashboard</span></div>
-        <div class="nav-item ${adminView === 'moderation' ? 'active' : ''}" data-nav="moderation">${icons.shield}<span>Moderação</span></div>
-        <div class="nav-item ${adminView === 'categories' ? 'active' : ''}" data-nav="categories">${icons.grid}<span>Categorias</span></div>
-        <div class="nav-item ${adminView === 'reports' ? 'active' : ''}" data-nav="reports">${icons.chart}<span>Relatórios</span></div>
-        <div class="nav-item ${adminView === 'settings' ? 'active' : ''}" data-nav="settings">${icons.settings}<span>Config</span></div>
-        ${isSuperadmin() ? `<div class="nav-item ${adminView === 'users' ? 'active' : ''}" data-nav="users">${icons.user}<span>Usuários</span></div>` : ''}
-      </nav>
     </div>
   `;
   bindAdminEvents(container);
+  revealActiveAdminTab(container);
   return true;
 }
 
@@ -246,67 +406,108 @@ function renderPlatformUsers() {
   const options = (selected) => `
     <option value="" ${!selected ? 'selected' : ''}>Sem instituição</option>
     ${institutions.map((item) => `<option value="${escapeHTML(item.id)}" ${item.id === selected ? 'selected' : ''}>${escapeHTML(item.name)}</option>`).join('')}`;
-  const roleLabels = { buyer: 'Comprador', seller: 'Vendedor', admin: 'Admin', superadmin: 'Superadmin' };
+  const roleLabels = { buyer: 'Aluno', seller: 'Empresa', admin: 'Admin', superadmin: 'Superadmin' };
+  const totalPages = Math.max(1, Math.ceil(platformUsersTotal / 25));
   return `
-    <section class="admin-section platform-section">
-      <div class="admin-section-header">
-        <div><h3 class="admin-section-title">Usuários da plataforma</h3><p class="admin-section-subtitle">${platformUsersTotal} contas cadastradas</p></div>
-      </div>
-      <form id="platform-user-search" class="platform-toolbar">
-        <input class="input-field" type="search" name="search" aria-label="Buscar usuários" placeholder="Buscar por nome ou e-mail" value="${escapeHTML(platformUsersSearch)}" />
-        <button class="btn btn-secondary btn-sm" type="submit">Buscar</button>
-      </form>
-      ${platformUsersError ? `<p class="platform-error" role="alert">${escapeHTML(platformUsersError)}</p>` : ''}
+    ${renderViewHeader({
+      eyebrow: 'Plataforma',
+      title: 'Usuários',
+      subtitle: `${platformUsersTotal} ${platformUsersTotal === 1 ? 'conta cadastrada' : 'contas cadastradas'}. Defina o papel e a instituição de cada conta.`,
+    })}
+    <form id="platform-user-search" class="platform-toolbar" role="search">
+      <label class="platform-search">
+        ${icons.search}
+        <input class="platform-search-input" type="search" name="search" aria-label="Buscar usuários" placeholder="Buscar por nome ou e-mail" value="${escapeHTML(platformUsersSearch)}" />
+      </label>
+      <button class="btn-secondary platform-search-btn" type="submit">Buscar</button>
+    </form>
+    ${platformUsersError ? `<p class="alert alert-danger platform-error" role="alert">${icons.alertTriangle}<span>${escapeHTML(platformUsersError)}</span></p>` : ''}
+    <section class="platform-list">
+      ${platformUsers.length ? `
+        <div class="platform-list-head platform-user-grid" aria-hidden="true">
+          <span>Conta</span><span>Papel</span><span>Instituição</span><span></span>
+        </div>
+      ` : ''}
       <div class="platform-user-list">
         ${platformUsers.map((user) => `
-          <form class="platform-user-row" data-platform-user="${escapeHTML(user.id)}">
+          <form class="platform-user-row platform-user-grid" data-platform-user="${escapeHTML(user.id)}">
             <div class="platform-user-identity">
-              <strong>${escapeHTML(user.name || 'Usuário')}</strong>
-              <span>${escapeHTML(user.email)}</span>
+              <span class="avatar avatar-sm">${escapeHTML(getInitials(user.name))}</span>
+              <span class="platform-user-copy">
+                <strong>${escapeHTML(user.name || 'Usuário')}</strong>
+                <span>${escapeHTML(user.email)}</span>
+              </span>
             </div>
-            <label>Papel
-              <select class="input-field" name="role" ${user.role === 'superadmin' ? 'disabled' : ''}>
+            <label class="platform-cell">
+              <span class="platform-cell-label">Papel</span>
+              <select class="input-field admin-input-sm" name="role" ${user.role === 'superadmin' ? 'disabled' : ''}>
                 ${Object.entries(roleLabels).filter(([role]) => role !== 'superadmin' || user.role === 'superadmin').map(([role, label]) => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${label}</option>`).join('')}
               </select>
             </label>
-            <label>Instituição
-              <select class="input-field" name="institutionId" ${user.role === 'superadmin' ? 'disabled' : ''}>${options(user.institution_id)}</select>
+            <label class="platform-cell">
+              <span class="platform-cell-label">Instituição</span>
+              <select class="input-field admin-input-sm" name="institutionId" ${user.role === 'superadmin' ? 'disabled' : ''}>${options(user.institution_id)}</select>
             </label>
-            ${user.role === 'superadmin' ? '<span class="platform-protected">Conta protegida</span>' : '<button class="btn btn-secondary btn-sm" type="submit">Salvar</button>'}
+            <div class="platform-row-action">
+              ${user.role === 'superadmin' ? '<span class="status-pill platform-protected">Conta protegida</span>' : '<button class="btn-secondary btn-sm" type="submit">Salvar</button>'}
+            </div>
           </form>
-        `).join('') || '<p class="empty-state">Nenhum usuário encontrado.</p>'}
+        `).join('') || renderAdminEmpty({ icon: icons.search, title: 'Nenhum usuário encontrado', text: 'Confira a grafia ou busque por outro nome ou e-mail.' })}
       </div>
-      <div class="platform-pagination">
-        <button class="btn btn-secondary btn-sm" type="button" data-platform-page="prev" ${platformUsersPage <= 1 ? 'disabled' : ''}>Anterior</button>
-        <span>Página ${platformUsersPage} de ${Math.max(1, Math.ceil(platformUsersTotal / 25))}</span>
-        <button class="btn btn-secondary btn-sm" type="button" data-platform-page="next" ${platformUsersPage * 25 >= platformUsersTotal ? 'disabled' : ''}>Próxima</button>
-      </div>
-    </section>`;
+    </section>
+    <div class="platform-pagination">
+      <button class="btn-secondary btn-sm" type="button" data-platform-page="prev" ${platformUsersPage <= 1 ? 'disabled' : ''}>Anterior</button>
+      <span class="platform-page-info">Página ${platformUsersPage} de ${totalPages}</span>
+      <button class="btn-secondary btn-sm" type="button" data-platform-page="next" ${platformUsersPage * 25 >= platformUsersTotal ? 'disabled' : ''}>Próxima</button>
+    </div>
+  `;
 }
 
 function renderPlatformInstitutions() {
+  const planOptions = (selected) => ['basic', 'pro', 'enterprise']
+    .map((plan) => `<option value="${plan}" ${selected === plan ? 'selected' : ''}>${plan.charAt(0).toUpperCase()}${plan.slice(1)}</option>`)
+    .join('');
   return `
-    <section class="admin-section platform-section">
-      <div class="admin-section-header"><div><h3 class="admin-section-title">Instituições</h3><p class="admin-section-subtitle">${platformInstitutions.length} cadastradas</p></div></div>
+    ${renderViewHeader({
+      eyebrow: 'Plataforma',
+      title: 'Instituições',
+      subtitle: `${platformInstitutions.length} ${platformInstitutions.length === 1 ? 'instituição cadastrada' : 'instituições cadastradas'}. O domínio define quem entra com e-mail institucional.`,
+    })}
+    <section class="platform-list">
+      ${platformInstitutions.length ? `
+        <div class="platform-list-head platform-institution-grid" aria-hidden="true">
+          <span>Nome curto</span><span>Nome completo</span><span>Domínio</span><span>Plano</span><span></span>
+        </div>
+      ` : ''}
       <div class="platform-institution-list">
         ${platformInstitutions.map((item) => `
-          <form class="platform-institution-row" data-platform-institution="${escapeHTML(item.id)}">
-            <label>Nome curto<input class="input-field" name="name" required value="${escapeHTML(item.name)}" /></label>
-            <label>Nome completo<input class="input-field" name="fullName" required value="${escapeHTML(item.fullName)}" /></label>
-            <label>Domínio<input class="input-field" name="domain" required value="${escapeHTML(item.domain)}" /></label>
-            <label>Plano<select class="input-field" name="plan">${['basic', 'pro', 'enterprise'].map((plan) => `<option value="${plan}" ${item.plan === plan ? 'selected' : ''}>${plan}</option>`).join('')}</select></label>
-            <button class="btn btn-secondary btn-sm" type="submit">Salvar</button>
-          </form>`).join('') || '<p class="empty-state">Nenhuma instituição cadastrada.</p>'}
+          <form class="platform-institution-row platform-institution-grid" data-platform-institution="${escapeHTML(item.id)}">
+            <label class="platform-cell"><span class="platform-cell-label">Nome curto</span><input class="input-field admin-input-sm" name="name" required value="${escapeHTML(item.name)}" /></label>
+            <label class="platform-cell"><span class="platform-cell-label">Nome completo</span><input class="input-field admin-input-sm" name="fullName" required value="${escapeHTML(item.fullName)}" /></label>
+            <label class="platform-cell"><span class="platform-cell-label">Domínio</span><input class="input-field admin-input-sm" name="domain" required value="${escapeHTML(item.domain)}" /></label>
+            <label class="platform-cell"><span class="platform-cell-label">Plano</span><select class="input-field admin-input-sm" name="plan">${planOptions(item.plan)}</select></label>
+            <div class="platform-row-action"><button class="btn-secondary btn-sm" type="submit">Salvar</button></div>
+          </form>`).join('') || renderAdminEmpty({ icon: icons.all, title: 'Nenhuma instituição cadastrada', text: 'Cadastre a primeira no formulário abaixo.' })}
       </div>
-      <h3 class="admin-section-title platform-create-title">Nova instituição</h3>
-      <form id="platform-institution-create" class="platform-institution-row">
-        <label>Nome curto<input class="input-field" name="name" required maxlength="80" /></label>
-        <label>Nome completo<input class="input-field" name="fullName" required maxlength="160" /></label>
-        <label>Domínio<input class="input-field" name="domain" required placeholder="@exemplo.edu.br" /></label>
-        <label>Plano<select class="input-field" name="plan"><option value="basic">basic</option><option value="pro">pro</option><option value="enterprise">enterprise</option></select></label>
-        <button class="btn btn-primary btn-sm" type="submit">Criar</button>
+    </section>
+    <section class="admin-section">
+      <div class="admin-section-header">
+        <div>
+          <h2 class="admin-section-title platform-create-title">Nova instituição</h2>
+          <p class="admin-section-subtitle">Use o domínio do e-mail dos alunos, com @ na frente.</p>
+        </div>
+      </div>
+      <form id="platform-institution-create" class="card platform-create-form">
+        <label class="platform-field"><span class="platform-field-label">Nome curto</span><input class="input-field admin-input-sm" name="name" required maxlength="80" placeholder="Ex.: iCEV" /></label>
+        <label class="platform-field platform-field-wide"><span class="platform-field-label">Nome completo</span><input class="input-field admin-input-sm" name="fullName" required maxlength="160" placeholder="Ex.: Instituto de Ensino Superior iCEV" /></label>
+        <label class="platform-field"><span class="platform-field-label">Domínio</span><input class="input-field admin-input-sm" name="domain" required placeholder="@exemplo.edu.br" /></label>
+        <label class="platform-field"><span class="platform-field-label">Plano</span><select class="input-field admin-input-sm" name="plan">${planOptions('basic')}</select></label>
+        <div class="platform-create-actions">
+          <button class="btn-primary btn-sm" type="submit">${icons.plus} Criar instituição</button>
+        </div>
       </form>
-    </section>`;
+    </section>
+  `;
 }
 
 function renderAdminDashboard() {
@@ -316,92 +517,121 @@ function renderAdminDashboard() {
   const stats = [
     { id: 'students', label: 'Alunos', value: s.students?.value ?? 0, change: s.students?.change || '', positive: true, icon: icons.user },
     { id: 'clicks', label: 'Cliques', value: s.clicks?.value ?? 0, change: s.clicks?.change || '', positive: true, icon: icons.eye },
-    { id: 'couponsGenerated', label: 'Cupons gerados', value: s.couponsGenerated?.value ?? 0, change: s.couponsGenerated?.change || '', positive: true, icon: icons.ticket },
+    { id: 'couponsGenerated', label: 'Cupons retirados', value: s.couponsGenerated?.value ?? 0, change: s.couponsGenerated?.change || '', positive: true, icon: icons.ticket },
     { id: 'couponsUsed', label: 'Cupons usados', value: s.couponsUsed?.value ?? 0, change: s.couponsUsed?.change || '', positive: true, icon: icons.checkCircle },
-    { id: 'conversion', label: 'Conversão', value: s.conversionRate?.value ?? '0%', change: s.conversionRate?.change || '', positive: true, icon: icons.checkCircle },
-    { id: 'pending', label: 'Pendentes', value: (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length, change: '', positive: true, icon: icons.clock },
+    { id: 'conversion', label: 'Taxa de uso', value: s.conversionRate?.value ?? '0%', change: s.conversionRate?.change || '', positive: true, icon: icons.chart },
+    { id: 'pending', label: 'Ofertas para aprovar', value: getPendingList().length, change: '', positive: true, icon: icons.clock },
   ];
+  const pendingList = getPendingList();
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
   return `
+    ${renderViewHeader({
+      eyebrow: `${brandCaseHTML(isSuperadmin() ? `${BRAND_NAME} · visão global` : activeInstitution.name || activeInstitution.fullName || BRAND_NAME)} · ${escapeHTML(today)}`,
+      title: 'Visão geral',
+      subtitle: 'Cupons, ofertas para aprovar e alertas em um só lugar.',
+    })}
     <div class="admin-stats-grid">
       ${stats.map(s => {
         const change = String(s.change || '').trim();
+        const isAttention = s.id === 'pending' && Number(s.value) > 0;
         return `
-        <button class="stat-card glass-card admin-metric-card" type="button" data-admin-metric="${s.id}" aria-label="Abrir detalhes de ${escapeHTML(s.label)}">
-          <div class="stat-icon-wrapper">
-            <div class="stat-icon">${s.icon || ''}</div>
-            ${change ? `<span class="stat-change ${s.positive ? 'positive' : 'negative'}">${escapeHTML(change)}</span>` : ''}
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">${s.value}</div>
-            <div class="stat-label">${s.label}</div>
-          </div>
+        <button class="card stat-card admin-metric-card ${isAttention ? 'is-highlight' : ''}" type="button" data-admin-metric="${s.id}" aria-label="Abrir detalhes de ${escapeHTML(s.label)}">
+          <span class="admin-metric-top">
+            <span class="stat-icon admin-metric-icon">${s.icon || ''}</span>
+            ${change ? `<span class="stat-change admin-metric-change ${s.positive ? 'positive' : 'negative'}">${escapeHTML(change)}</span>` : ''}
+          </span>
+          <span class="stat-info">
+            <span class="stat-value admin-metric-value">${s.value}</span>
+            <span class="stat-label admin-metric-label">${s.label}</span>
+          </span>
         </button>
       `;
       }).join('')}
     </div>
 
-    <!-- Alerts -->
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <h3 class="admin-section-title">Alertas operacionais</h3>
-        <span class="admin-section-count">${realAlerts.length}</span>
-      </div>
-      <div class="alerts-list">
-        ${realAlerts.length ? realAlerts.map(a => `
-          <div class="alert-card ${a.level === 'critical' ? 'critical' : ''}">
-            <div class="alert-card-icon">${icons.alertTriangle}</div>
-            <div class="alert-card-content">
-              <h4>${escapeHTML(a.title)}</h4>
-              <p>${escapeHTML(a.description)}</p>
-              <span class="alert-time">${escapeHTML(a.time)}</span>
+    <div class="admin-dash-grid">
+      <div class="admin-dash-col">
+        <section class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 class="admin-section-title">Aguardando aprovação</h2>
+              <p class="admin-section-subtitle">${pendingList.length > 2 ? 'As 2 primeiras da fila.' : pendingList.length ? 'Tudo o que está na fila agora.' : 'Nada novo por enquanto.'}</p>
             </div>
-            <button class="btn btn-ghost btn-sm">${escapeHTML(a.action)}</button>
+            <button class="btn-ghost btn-sm admin-link-btn" type="button" data-admin-tab="moderation">Ver fila ${icons.arrowRight}</button>
           </div>
-        `).join('') : `<div class="empty-state">${icons.checkCircle}<h3>Nenhum alerta agora</h3><p>Produtos, pagamentos e moderação estão sem pendências críticas.</p></div>`}
-      </div>
-    </div>
+          ${pendingList.length
+            ? `<div class="moderation-list">${pendingList.slice(0, 2).map(ad => renderModerationCard(ad)).join('')}</div>`
+            : renderAdminEmpty({ icon: icons.shield, title: 'Fila limpa', text: 'Nenhuma oferta aguardando aprovação agora.' })}
+        </section>
 
-    <!-- Quick moderation -->
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <h3 class="admin-section-title">Pendentes</h3>
-        <button class="btn btn-ghost btn-sm" data-admin-tab="moderation">Ver todos</button>
-      </div>
-      ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length
-        ? (loadedPendingAds || (USE_MOCKS ? pendingAds : [])).slice(0, 2).map(ad => renderModerationCard(ad)).join('')
-        : `<div class="empty-state">${icons.shield}<h3>Fila limpa</h3><p>Nenhum produto aguardando revisão agora.</p></div>`}
-    </div>
-
-    <!-- Charts -->
-    <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">Métricas</h3>
-      <div class="chart-container">
-        <h4>Produtos criados nos últimos 7 dias</h4>
-        <canvas id="admin-chart" height="200"></canvas>
-      </div>
-    </div>
-
-    <!-- Top sellers -->
-    <div class="admin-section">
-      <h3 class="admin-section-title" style="margin-bottom:var(--space-4);">Vendedores mais ativos</h3>
-      <div class="sellers-list">
-        ${topSellers.length ? topSellers.map((seller, i) => `
-          <div class="seller-row">
-            <div style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);color:var(--primary-500);width:24px;">${i + 1}</div>
-            <div class="avatar avatar-sm">${escapeHTML(seller.avatar)}</div>
-            <div class="seller-row-info">
-              <h4>${escapeHTML(seller.name)}</h4>
-              <p>${escapeHTML(seller.course || 'Sem curso informado')}</p>
-            </div>
-            <div class="seller-row-stats">
-              <span>${seller.ads} anúncios</span>
-              <span>${seller.active} ativos</span>
+        <section class="admin-section">
+          <div class="admin-section-header">
+            <div>
+              <h2 class="admin-section-title">Novas ofertas</h2>
+              <p class="admin-section-subtitle">Ofertas criadas nos últimos 7 dias.</p>
             </div>
           </div>
-        `).join('') : `<div class="empty-state">${icons.user}<h3>Nenhum vendedor ativo ainda</h3><p>Quando houver produtos reais, eles aparecerao aqui.</p></div>`}
+          <div class="card chart-container">
+            <canvas id="admin-chart" height="200" role="img" aria-label="Gráfico de ofertas criadas nos últimos 7 dias"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <div class="admin-dash-col">
+        <section class="admin-section">
+          <div class="admin-section-header">
+            <h2 class="admin-section-title">Alertas</h2>
+            <span class="admin-section-count">${realAlerts.length ? `${realAlerts.length} ${realAlerts.length === 1 ? 'ativo' : 'ativos'}` : 'Tudo certo'}</span>
+          </div>
+          ${realAlerts.length ? `
+            <div class="alerts-list">
+              ${realAlerts.map(a => `
+                <div class="alert-card ${a.level === 'critical' ? 'critical' : ''}">
+                  <span class="alert-card-icon">${icons.alertTriangle}</span>
+                  <div class="alert-card-content">
+                    <h4>${escapeHTML(a.title)}</h4>
+                    <p>${escapeHTML(a.description)}</p>
+                    <span class="alert-time">${escapeHTML(a.time)}</span>
+                  </div>
+                  <button class="btn btn-sm alert-card-action" type="button" data-alert-view="${escapeHTML(getAlertView(a))}">${escapeHTML(a.action)}</button>
+                </div>
+              `).join('')}
+            </div>
+          ` : renderAdminEmpty({ icon: icons.checkCircle, title: 'Nenhum alerta agora', text: 'Ofertas e aprovações estão sem pendências críticas.' })}
+        </section>
+
+        <section class="admin-section">
+          <div class="admin-section-header">
+            <h2 class="admin-section-title">Empresas mais ativas</h2>
+          </div>
+          ${topSellers.length ? `
+            <ol class="sellers-list">
+              ${topSellers.map((seller, i) => `
+                <li class="seller-row">
+                  <span class="seller-rank">${String(i + 1).padStart(2, '0')}</span>
+                  <span class="avatar avatar-sm">${escapeHTML(seller.avatar)}</span>
+                  <div class="seller-row-info">
+                    <h4>${escapeHTML(seller.name)}</h4>
+                    <p>${escapeHTML(seller.course || 'Sem curso informado')}</p>
+                  </div>
+                  <div class="seller-row-stats">
+                    <span>${seller.ads} ${seller.ads === 1 ? 'oferta' : 'ofertas'}</span>
+                    <span>${seller.active} ${seller.active === 1 ? 'ativa' : 'ativas'}</span>
+                  </div>
+                </li>
+              `).join('')}
+            </ol>
+          ` : renderAdminEmpty({ icon: icons.user, title: 'Nenhuma empresa ativa ainda', text: 'Quando houver ofertas cadastradas, as empresas mais ativas aparecem aqui.' })}
+        </section>
       </div>
     </div>
   `;
+}
+
+const CATEGORY_ALERT_ACTIONS = new Set(['Editar vagas', 'Visualizar']);
+
+function getAlertView(alert) {
+  return alert.view || (CATEGORY_ALERT_ACTIONS.has(alert.action) ? 'categories' : 'moderation');
 }
 
 function buildAdminAlerts() {
@@ -411,19 +641,21 @@ function buildAdminAlerts() {
   if (pendingCount > 0) {
     alertsList.push({
       level: pendingCount >= 5 ? 'critical' : 'warning',
-      title: `${pendingCount} anúncio${pendingCount > 1 ? 's' : ''} aguardando moderação`,
-      description: 'Revise a fila para liberar ou solicitar ajustes aos vendedores.',
+      title: `${pendingCount} ${pendingCount > 1 ? 'ofertas aguardando' : 'oferta aguardando'} aprovação`,
+      description: 'Revise a fila para aprovar as ofertas ou pedir ajustes às empresas.',
       time: 'Agora',
-      action: 'Moderar agora',
+      action: 'Revisar ofertas',
+      view: 'moderation',
     });
   }
   if (activeProducts.length === 0) {
     alertsList.push({
       level: 'warning',
-      title: 'Nenhum produto ativo na vitrine',
-      description: 'A vitrine de compradores fica vazia até que um produto seja aprovado.',
+      title: 'Nenhuma oferta ativa na vitrine',
+      description: 'A vitrine dos alunos fica vazia até uma oferta ser aprovada.',
       time: 'Agora',
-      action: 'Ver moderação',
+      action: 'Ver fila de aprovação',
+      view: 'moderation',
     });
   }
   return alertsList;
@@ -435,9 +667,9 @@ function buildTopSellers() {
     const seller = product.seller || {};
     const id = seller.id || product.sellerId || 'unknown';
     const current = sellers.get(id) || {
-      name: seller.name || 'Vendedor',
+      name: seller.name || 'Empresa',
       course: seller.course || '',
-      avatar: seller.avatar || seller.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'VD',
+      avatar: seller.avatar || getInitials(seller.name, 'EM'),
       ads: 0,
       active: 0,
     };
@@ -451,49 +683,57 @@ function buildTopSellers() {
 }
 
 function renderModeration() {
-  const ads = loadedPendingAds || (USE_MOCKS ? pendingAds : []);
+  const ads = getPendingList();
   return `
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <h3 class="admin-section-title">Fila de Moderação</h3>
-        <span class="admin-section-count">${ads.length} pendentes</span>
-      </div>
-      ${ads.length > 0 ? ads.map(ad => renderModerationCard(ad)).join('') : `
-        <div class="empty-state">${icons.shield}<h3>Nenhum anúncio aguardando moderação</h3><p>Todos os anúncios foram revisados.</p></div>
-      `}
-    </div>
+    ${renderViewHeader({
+      eyebrow: `Aprovar ofertas · ${ads.length} ${ads.length === 1 ? 'pendente' : 'pendentes'}`,
+      title: 'Ofertas para aprovar',
+      subtitle: 'Aprove, recuse ou peça ajuste antes de a oferta chegar aos alunos. Toque na oferta para ver fotos e detalhes.',
+    })}
+    ${ads.length > 0
+      ? `<div class="moderation-list">${ads.map(ad => renderModerationCard(ad)).join('')}</div>`
+      : renderAdminEmpty({
+        icon: icons.shield,
+        title: 'Nenhuma oferta para aprovar',
+        text: 'Todas as ofertas foram revisadas. As novas aparecem aqui assim que chegarem.',
+        action: '<button class="btn-secondary btn-sm" type="button" data-admin-tab="categories">Ver categorias</button>',
+      })}
   `;
 }
 
 function renderModerationCard(ad) {
+  const seller = ad.seller || {};
+  const sellerStudy = [seller.course, seller.semester].filter(Boolean).join(' · ');
   return `
-    <div class="moderation-card" data-ad-id="${ad.id}">
+    <article class="moderation-card" data-ad-id="${ad.id}">
       <div class="moderation-card-inner" data-admin-product-detail="${escapeHTML(ad.id)}" role="button" tabindex="0" aria-label="Abrir detalhes de ${escapeHTML(ad.title)}">
-        <div class="moderation-thumb">${getProductImage(ad.images?.[0], 80, 80)}</div>
+        <div class="moderation-thumb">${getProductImage(ad.images?.[0], 80, 80, ad.category)}</div>
         <div class="moderation-info">
-          <h4>${escapeHTML(ad.title)}</h4>
-          <div class="moderation-meta">
-            <span>${icons.user} ${escapeHTML(ad.seller.name)}</span>
-            <span>📚 ${escapeHTML(ad.seller.course)} · ${escapeHTML(ad.seller.semester)}</span>
-          </div>
-          <div class="moderation-meta">
-            <span>${icons.tag} ${escapeHTML(getCategoryLabel(ad.category))}</span>
-          </div>
-          <div class="moderation-pricing">
-            <span style="text-decoration:line-through;color:var(--text-tertiary);font-size:var(--font-size-sm);">${formatCurrency(ad.originalPrice)}</span>
-            <span style="font-weight:var(--font-weight-bold);color:var(--primary-700);margin-left:var(--space-2);">${formatCurrency(ad.discountPrice)}</span>
-            <span class="badge badge-danger" style="margin-left:var(--space-2);">-${ad.discount}%</span>
-          </div>
-          <div class="moderation-wait">${icons.clock} Aguardando há ${escapeHTML(ad.waitTime)}</div>
-          ${ad.sellerHistory ? `<div style="font-size:var(--font-size-xs);color:var(--text-secondary);margin-top:2px;">Histórico: ${escapeHTML(ad.sellerHistory.approved)} aprovados, ${escapeHTML(ad.sellerHistory.rejected)} recusados</div>` : ''}
+          <h3 class="moderation-title">${escapeHTML(ad.title)}</h3>
+          <p class="moderation-meta">
+            <span class="moderation-meta-item">${icons.user} ${escapeHTML(seller.name || 'Empresa sem perfil')}</span>
+            ${sellerStudy ? `<span class="moderation-meta-item">${escapeHTML(sellerStudy)}</span>` : ''}
+            <span class="moderation-meta-item">${icons.tag} ${escapeHTML(getCategoryLabel(ad.category))}</span>
+          </p>
+          <p class="moderation-foot">
+            <span class="moderation-wait">${icons.clock} Aguardando há ${escapeHTML(ad.waitTime || 'pouco tempo')}</span>
+            ${ad.sellerHistory ? `<span class="moderation-history">${escapeHTML(ad.sellerHistory.approved)} aprovadas · ${escapeHTML(ad.sellerHistory.rejected)} recusadas</span>` : ''}
+          </p>
+        </div>
+        <div class="moderation-pricing">
+          <span class="moderation-price">${formatCurrency(ad.discountPrice)}</span>
+          <span class="moderation-price-meta">
+            <s class="moderation-original">${formatCurrency(ad.originalPrice)}</s>
+            <span class="moderation-discount">-${ad.discount}%</span>
+          </span>
         </div>
       </div>
       <div class="moderation-actions">
-        <button class="btn btn-success btn-sm approve-btn" data-ad-id="${ad.id}">${icons.check} Aprovar</button>
-        <button class="btn btn-danger btn-sm reject-btn" data-ad-id="${ad.id}">✕ Recusar</button>
-        <button class="btn btn-secondary btn-sm adjust-btn" data-ad-id="${ad.id}">Ajuste</button>
+        <button class="btn-success btn-sm approve-btn" type="button" data-ad-id="${ad.id}">${icons.check} Aprovar</button>
+        <button class="btn-danger btn-sm reject-btn" type="button" data-ad-id="${ad.id}">${icons.x} Recusar</button>
+        <button class="btn-secondary btn-sm adjust-btn" type="button" data-ad-id="${ad.id}">Pedir ajuste</button>
       </div>
-    </div>
+    </article>
   `;
 }
 
@@ -533,12 +773,12 @@ function getAdminCategoryRows() {
 
 function getProductStatusMeta(status) {
   const map = {
-    active: { label: 'Ativo', badge: 'badge-success' },
+    active: { label: 'Ativa', badge: 'badge-success' },
     pending: { label: 'Em análise', badge: 'badge-warning' },
     queue: { label: 'Na fila', badge: 'badge-warning' },
     needs_adjustment: { label: 'Ajuste solicitado', badge: 'badge-warning' },
     rejected: { label: 'Ajuste/recusa', badge: 'badge-danger' },
-    expired: { label: 'Expirado', badge: 'badge-neutral' },
+    expired: { label: 'Expirada', badge: 'badge-neutral' },
   };
   return map[status] || { label: 'Sem status', badge: 'badge-neutral' };
 }
@@ -576,27 +816,27 @@ function renderCategoryProductRow(product) {
       <div class="category-product-main">
         <div class="category-product-titleline">
           <button class="category-product-title" type="button" data-category-product-detail="${escapeHTML(product.id)}">${escapeHTML(product.title)}</button>
-          <span class="badge ${status.badge}">${status.label}</span>
+          <span class="status-pill admin-status ${status.badge}">${status.label}</span>
         </div>
         <div class="category-product-meta">
-          <span>${icons.user} ${escapeHTML(product.seller?.name || 'Vendedor sem perfil')}</span>
-          <span>${icons.tag} ${escapeHTML(category?.name || product.category || 'Categoria')}</span>
-          <span>${icons.clock} ${formatAdminDate(product.createdAt)}</span>
+          <span class="category-product-meta-item">${icons.user} ${escapeHTML(product.seller?.name || 'Empresa sem perfil')}</span>
+          <span class="category-product-meta-item">${icons.tag} ${escapeHTML(category?.name || product.category || 'Categoria')}</span>
+          <span class="category-product-meta-item">${icons.clock} ${formatAdminDate(product.createdAt)}</span>
         </div>
         ${product.rejectionReason ? `<p class="category-product-reason">${escapeHTML(product.rejectionReason)}</p>` : ''}
-        <div class="category-product-kpis">
-          <span>${formatCurrency(product.discountPrice)}</span>
-          <span>${Number(product.clicks || 0)} cliques</span>
-          <span>${Number(product.slots?.used || 0)}/${Number(product.slots?.total || 5)} vagas</span>
-        </div>
+      </div>
+      <div class="category-product-kpis">
+        <span class="category-product-price">${formatCurrency(product.discountPrice)}</span>
+        <span class="category-product-kpi">${Number(product.clicks || 0)} cliques</span>
+        <span class="category-product-kpi">${Number(product.slots?.used || 0)}/${Number(product.slots?.total || 5)} vagas</span>
       </div>
       <div class="category-product-actions">
-        <button class="btn btn-secondary btn-sm" type="button" data-category-product-detail="${escapeHTML(product.id)}">${icons.eye} Detalhes</button>
-        <button class="btn btn-danger btn-sm" type="button" data-category-product-delete="${escapeHTML(product.id)}">Excluir</button>
         ${isModeratable ? `
-          <button class="btn btn-success btn-sm" type="button" data-category-product-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-category-product-adjust="${escapeHTML(product.id)}">Ajuste</button>
+          <button class="btn-success btn-sm" type="button" data-category-product-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
+          <button class="btn-secondary btn-sm" type="button" data-category-product-adjust="${escapeHTML(product.id)}">Pedir ajuste</button>
         ` : ''}
+        <button class="btn-ghost btn-sm" type="button" data-category-product-detail="${escapeHTML(product.id)}">${icons.eye} Ver detalhes</button>
+        <button class="btn-danger btn-sm" type="button" data-category-product-delete="${escapeHTML(product.id)}">Excluir</button>
       </div>
     </article>
   `;
@@ -617,30 +857,31 @@ function renderCategories() {
     rejected: acc.rejected + row.rejected,
   }), { products: 0, active: 0, queue: 0, rejected: 0 });
   const filters = [
-    { id: 'all', label: 'Todos', count: selectedProducts.length },
+    { id: 'all', label: 'Todas', count: selectedProducts.length },
     { id: 'pending', label: 'Em análise', count: selectedProducts.filter(product => product.status === 'pending' || product.status === 'queue').length },
-    { id: 'active', label: 'Ativos', count: selectedProducts.filter(product => product.status === 'active').length },
+    { id: 'active', label: 'Ativas', count: selectedProducts.filter(product => product.status === 'active').length },
     { id: 'rejected', label: 'Ajustes', count: selectedProducts.filter(product => product.status === 'rejected' || product.status === 'needs_adjustment').length },
-    { id: 'expired', label: 'Expirados', count: selectedProducts.filter(product => product.status === 'expired').length },
+    { id: 'expired', label: 'Expiradas', count: selectedProducts.filter(product => product.status === 'expired').length },
   ];
 
   return `
-    <div class="admin-section">
+    ${renderViewHeader({
+      eyebrow: `Categorias · ${totals.products} ${totals.products === 1 ? 'oferta' : 'ofertas'}`,
+      title: 'Gestão de categorias',
+      subtitle: 'Escolha uma categoria para acompanhar a fila, as ofertas ativas e os ajustes.',
+      actions: `<button class="btn-primary btn-sm" type="button" data-category-create>${icons.plus} Criar categoria</button>`,
+    })}
+    <div class="category-summary-grid">
+      <div class="card category-metric-card"><span class="admin-kpi-label">Total</span><strong class="admin-kpi-value">${totals.products}</strong><small class="admin-kpi-hint">Ofertas cadastradas</small></div>
+      <div class="card category-metric-card"><span class="admin-kpi-label is-success">Ativas</span><strong class="admin-kpi-value">${totals.active}</strong><small class="admin-kpi-hint">Visíveis para os alunos</small></div>
+      <div class="card category-metric-card"><span class="admin-kpi-label is-warning">Na fila</span><strong class="admin-kpi-value">${totals.queue}</strong><small class="admin-kpi-hint">Aguardando aprovação</small></div>
+      <div class="card category-metric-card"><span class="admin-kpi-label is-danger">Ajustes</span><strong class="admin-kpi-value">${totals.rejected}</strong><small class="admin-kpi-hint">Com retorno à empresa</small></div>
+    </div>
+
+    <section class="admin-section">
       <div class="admin-section-header">
-        <div>
-          <h3 class="admin-section-title">Gestão de categorias</h3>
-          <p class="admin-section-subtitle">Dados reais dos anúncios. Clique em uma categoria para operar a fila, os ativos e os ajustes.</p>
-        </div>
-        <div class="admin-section-actions">
-          <span class="admin-section-count">${totals.products} produtos</span>
-          <button class="btn btn-primary btn-sm" type="button" data-category-create>${icons.plus} Nova categoria</button>
-        </div>
-      </div>
-      <div class="category-summary-grid">
-        <div class="category-metric-card"><span>Total</span><strong>${totals.products}</strong><small>Anúncios cadastrados</small></div>
-        <div class="category-metric-card success"><span>Ativos</span><strong>${totals.active}</strong><small>Visíveis para compradores</small></div>
-        <div class="category-metric-card warning"><span>Fila</span><strong>${totals.queue}</strong><small>Aguardando moderação</small></div>
-        <div class="category-metric-card danger"><span>Ajustes</span><strong>${totals.rejected}</strong><small>Com retorno ao vendedor</small></div>
+        <h2 class="admin-section-title">Categorias</h2>
+        <span class="admin-section-count">${rows.length} ${rows.length === 1 ? 'categoria' : 'categorias'}</span>
       </div>
       <div class="category-heat-grid">
         ${rows.map(cat => {
@@ -649,60 +890,67 @@ function renderCategories() {
           const statusBadge = cat.active > 0 ? 'badge-success' : cat.queue > 0 ? 'badge-warning' : 'badge-neutral';
           const statusLabel = cat.active > 0 ? 'Com ofertas' : cat.queue > 0 ? 'Em análise' : 'Sem ofertas';
           return `
-            <article class="category-heat-card ${selectedCategory?.id === cat.id ? 'is-selected' : ''}" role="button" tabindex="0" data-category-select="${escapeHTML(cat.id)}" aria-pressed="${selectedCategory?.id === cat.id ? 'true' : 'false'}">
+            <article class="card category-heat-card ${selectedCategory?.id === cat.id ? 'is-selected' : ''}" role="button" tabindex="0" data-category-select="${escapeHTML(cat.id)}" aria-pressed="${selectedCategory?.id === cat.id ? 'true' : 'false'}">
               <div class="category-heat-header">
                 <span class="category-heat-icon">${icons[cat.id] || icons.package}</span>
-                <span class="category-heat-name">${escapeHTML(cat.name)}</span>
-                <span class="badge ${statusBadge}">${statusLabel}</span>
+                <span class="status-pill admin-status ${statusBadge}">${statusLabel}</span>
               </div>
-              <div class="category-heat-slots">${cat.active} ativos - ${cat.queue} em análise - ${cat.rejected} ajustes</div>
-              <div class="category-rule-line">${Number(cat.maxSlots || 5)} vagas por anúncio - ${Number(cat.durationHours || 24)}h de vitrine</div>
-              <div class="progress-bar">
-                <div class="progress-fill ${barClass}" style="width:${pct}%;"></div>
+              <h3 class="category-heat-name">${escapeHTML(cat.name)}</h3>
+              <div class="category-heat-slots">
+                <span><strong class="category-heat-num">${cat.active}</strong> ${cat.active === 1 ? 'ativa' : 'ativas'}</span>
+                <span><strong class="category-heat-num">${cat.queue}</strong> em análise</span>
+                <span><strong class="category-heat-num">${cat.rejected}</strong> ${cat.rejected === 1 ? 'ajuste' : 'ajustes'}</span>
               </div>
-              <div class="category-heat-footer">
-                <span>${pct}% ativos</span>
-                <span>${cat.clicks} cliques</span>
+              <div class="category-heat-meter">
+                <div class="progress-bar">
+                  <div class="progress-fill admin-bar-${barClass}" style="width:${pct}%;"></div>
+                </div>
+                <div class="category-heat-footer">
+                  <span>${pct}% ativas</span>
+                  <span>${cat.clicks} ${cat.clicks === 1 ? 'clique' : 'cliques'}</span>
+                </div>
               </div>
+              <p class="category-rule-line">${Number(cat.maxSlots || 5)} vagas por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
               ${getCategoryRules(cat.id) ? `<p class="category-rule-preview">${escapeHTML(getCategoryRules(cat.id))}</p>` : ''}
               <div class="category-heat-actions">
-                <button class="btn btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver produtos</button>
-                <button class="btn btn-ghost btn-sm" type="button" data-category-edit="${escapeHTML(cat.id)}">Regras</button>
-                ${cat.queue ? `<button class="btn btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}">Moderar fila</button>` : ''}
+                <button class="btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver ofertas</button>
+                <button class="btn-ghost btn-sm" type="button" data-category-edit="${escapeHTML(cat.id)}">Editar regras</button>
+                ${cat.queue ? `<button class="btn-ghost btn-sm" type="button" data-category-moderate="${escapeHTML(cat.id)}">Revisar pendentes</button>` : ''}
               </div>
             </article>
           `;
         }).join('')}
       </div>
-    </div>
+    </section>
 
-    <section class="admin-section category-management-panel" id="category-management-panel">
+    <section class="admin-section card category-management-panel" id="category-management-panel">
       <div class="category-management-header">
         <div class="category-management-title">
           <span class="category-management-icon">${icons[selectedCategory?.id] || icons.package}</span>
-          <div>
-            <h3>${escapeHTML(selectedCategory?.name || 'Categoria')}</h3>
-            <p>${selectedCategory?.total || 0} anúncios - ${selectedCategory?.active || 0} ativos - ${selectedCategory?.queue || 0} em análise - ${Number(selectedCategory?.maxSlots || 5)} vagas</p>
+          <div class="category-management-copy">
+            <span class="t-eyebrow">Categoria selecionada</span>
+            <h2>${escapeHTML(selectedCategory?.name || 'Categoria')}</h2>
+            <p>${selectedCategory?.total || 0} ${selectedCategory?.total === 1 ? 'oferta' : 'ofertas'} · ${selectedCategory?.active || 0} ${selectedCategory?.active === 1 ? 'ativa' : 'ativas'} · ${selectedCategory?.queue || 0} em análise · ${Number(selectedCategory?.maxSlots || 5)} vagas por oferta</p>
           </div>
         </div>
         <div class="category-management-actions">
-          <button class="btn btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras/vagas</button>
-          <button class="btn btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled' : ''}>Excluir categoria</button>
-          <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Abrir moderação</button>
+          <button class="btn-secondary btn-sm" type="button" data-category-edit="${escapeHTML(selectedCategory?.id || '')}">Editar regras e vagas</button>
+          <button class="btn-secondary btn-sm" type="button" data-admin-tab="moderation">${icons.shield} Ver fila de aprovação</button>
+          <button class="btn-danger btn-sm" type="button" data-category-delete="${escapeHTML(selectedCategory?.id || '')}" ${selectedCategory?.total ? 'disabled title="Só é possível excluir categorias sem ofertas"' : ''}>Excluir categoria</button>
         </div>
       </div>
       ${selectedCategory ? `
         <div class="category-rule-detail">
-          <strong>Regra atual:</strong>
-          <span>${escapeHTML(getCategoryRules(selectedCategory.id) || 'Sem regra específica. A categoria usa apenas as regras gerais da instituição.')}</span>
+          <span class="t-eyebrow">Regra atual</span>
+          <span>${escapeHTML(getCategoryRules(selectedCategory.id) || 'Sem regra específica. A categoria segue só as regras gerais da instituição.')}</span>
         </div>
       ` : ''}
 
-      <div class="category-filter-row" role="tablist" aria-label="Filtrar produtos da categoria">
+      <div class="category-filter-row" role="tablist" aria-label="Filtrar ofertas da categoria">
         ${filters.map(filter => `
-          <button class="category-filter-btn ${categoryStatusFilter === filter.id ? 'active' : ''}" type="button" data-category-filter="${filter.id}" role="tab" aria-selected="${categoryStatusFilter === filter.id ? 'true' : 'false'}">
+          <button class="chip category-filter-btn ${categoryStatusFilter === filter.id ? 'active' : ''}" type="button" data-category-filter="${filter.id}" role="tab" aria-selected="${categoryStatusFilter === filter.id ? 'true' : 'false'}">
             ${escapeHTML(filter.label)}
-            <span>${filter.count}</span>
+            <span class="category-filter-count">${filter.count}</span>
           </button>
         `).join('')}
       </div>
@@ -710,7 +958,14 @@ function renderCategories() {
       <div class="category-products-list">
         ${filteredProducts.length
           ? filteredProducts.map(product => renderCategoryProductRow(product)).join('')
-          : `<div class="empty-state compact">${icons.package}<h3>Nenhum produto neste filtro</h3><p>Quando houver anúncios reais nessa categoria, eles aparecem aqui para análise e acompanhamento.</p></div>`}
+          : renderAdminEmpty({
+            icon: icons.package,
+            title: 'Nenhuma oferta neste filtro',
+            text: categoryStatusFilter === 'all'
+              ? 'Quando houver ofertas nesta categoria, elas aparecem aqui para análise e acompanhamento.'
+              : 'Troque o filtro para ver as outras ofertas desta categoria.',
+            action: categoryStatusFilter === 'all' ? '' : '<button class="btn-secondary btn-sm" type="button" data-category-filter="all">Mostrar todas</button>',
+          })}
       </div>
     </section>
   `;
@@ -727,67 +982,74 @@ function renderReports() {
   const totalClicks = products.reduce((sum, product) => sum + Number(product.clicks || 0), 0);
   const mostActiveCategory = rows.sort((a, b) => b.active - a.active || b.clicks - a.clicks)[0];
   const topProducts = [...products].sort((a, b) => Number(b.clicks || 0) - Number(a.clicks || 0)).slice(0, 5);
+  // Stats may arrive localized ("1.234"); keep digits only for the hint.
+  const toCount = (value) => Number(String(value ?? 0).replace(/\D/g, '')) || 0;
+  const couponsRetrieved = toCount(s.couponsGenerated?.value);
+  const couponsUsed = toCount(s.couponsUsed?.value);
+  const usageHint = couponsRetrieved > 0
+    ? `${couponsUsed} de ${couponsRetrieved} ${couponsRetrieved === 1 ? 'cupom usado' : 'cupons usados'}`
+    : 'Cupons usados / retirados';
   return `
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <div>
-          <h3 class="admin-section-title">Relatórios operacionais</h3>
-          <p class="admin-section-subtitle">Leitura real da base: produtos, vendedores, cliques e fila de moderação.</p>
-        </div>
-        <div class="admin-section-actions">
-          <button class="btn btn-secondary btn-sm" type="button" data-admin-tab="categories">${icons.grid} Categorias</button>
-          <button class="btn btn-primary btn-sm" id="btnExportPDF">${icons.fileText} Exportar TXT</button>
-        </div>
-      </div>
+    ${renderViewHeader({
+      eyebrow: `Relatórios · ${new Date().toLocaleDateString('pt-BR')}`,
+      title: 'Relatórios operacionais',
+      subtitle: 'Ofertas, empresas, cliques e cupons lidos direto da base.',
+      actions: `
+        <button class="btn-secondary btn-sm" type="button" data-admin-tab="categories">${icons.grid} Ver categorias</button>
+        <button class="btn-primary btn-sm" type="button" id="btnExportPDF">${icons.fileText} Exportar relatório (.txt)</button>
+      `,
+    })}
 
-      <div class="report-action-grid">
-        <button class="report-action-card" type="button" data-admin-metric="students"><span>Vendedores</span><strong>${sellersCount}</strong><small>Com produtos cadastrados</small></button>
-        <button class="report-action-card success" type="button" data-admin-tab="categories"><span>Produtos ativos</span><strong>${activeProducts}</strong><small>Visíveis para compradores</small></button>
-        <button class="report-action-card warning" type="button" data-admin-tab="moderation"><span>Pendentes</span><strong>${pendingProducts}</strong><small>Aguardando decisão</small></button>
-        <button class="report-action-card" type="button" data-admin-metric="clicks"><span>Cliques</span><strong>${totalClicks}</strong><small>Interações registradas</small></button>
-        <button class="report-action-card" type="button" data-admin-metric="couponsGenerated"><span>Cupons gerados</span><strong>${s.couponsGenerated?.value ?? 0}</strong><small>Emitidos para alunos</small></button>
-        <button class="report-action-card danger" type="button" data-admin-metric="conversion"><span>Conversão</span><strong>${s.conversionRate?.value ?? '0%'}</strong><small>Uso de cupom / geração</small></button>
-      </div>
+    <div class="report-action-grid">
+      <button class="card report-action-card" type="button" data-admin-metric="students"><span class="admin-kpi-label">Empresas</span><strong class="admin-kpi-value">${sellersCount}</strong><small class="admin-kpi-hint">Com ofertas cadastradas</small></button>
+      <button class="card report-action-card" type="button" data-admin-tab="categories"><span class="admin-kpi-label is-success">Ofertas ativas</span><strong class="admin-kpi-value">${activeProducts}</strong><small class="admin-kpi-hint">Visíveis para os alunos</small></button>
+      <button class="card report-action-card" type="button" data-admin-tab="moderation"><span class="admin-kpi-label is-warning">Pendentes</span><strong class="admin-kpi-value">${pendingProducts}</strong><small class="admin-kpi-hint">Aguardando aprovação</small></button>
+      <button class="card report-action-card" type="button" data-admin-metric="clicks"><span class="admin-kpi-label">Cliques</span><strong class="admin-kpi-value">${totalClicks}</strong><small class="admin-kpi-hint">Interações com as ofertas</small></button>
+      <button class="card report-action-card" type="button" data-admin-metric="couponsGenerated"><span class="admin-kpi-label">Cupons retirados</span><strong class="admin-kpi-value">${escapeHTML(String(s.couponsGenerated?.value ?? 0))}</strong><small class="admin-kpi-hint">Códigos retirados pelos alunos</small></button>
+      <button class="card report-action-card" type="button" data-admin-metric="conversion"><span class="admin-kpi-label">Taxa de uso</span><strong class="admin-kpi-value">${escapeHTML(String(s.conversionRate?.value ?? '0%'))}</strong><small class="admin-kpi-hint">${escapeHTML(usageHint)}</small></button>
+    </div>
 
-      <div class="reports-insight-grid">
-        <div class="report-panel">
-          <h4>Saúde da vitrine</h4>
-          <div class="report-list">
-            <div><span>Categoria mais ativa</span><strong>${escapeHTML(mostActiveCategory?.name || 'Sem dados')}</strong></div>
-            <div><span>Produtos expirados</span><strong>${expiredProducts}</strong></div>
-            <div><span>Produtos totais</span><strong>${products.length}</strong></div>
-          </div>
-        </div>
-        <div class="report-panel">
-          <h4>Produtos com mais cliques</h4>
-          <div class="report-product-list">
-            ${topProducts.length ? topProducts.map(product => `
-              <button type="button" data-category-product-detail="${escapeHTML(product.id)}">
-                <span>${escapeHTML(product.title)}</span>
-                <strong>${Number(product.clicks || 0)} cliques</strong>
-              </button>
-            `).join('') : '<p class="muted-text">Nenhum clique registrado ainda.</p>'}
-          </div>
-        </div>
-      </div>
+    <div class="reports-insight-grid">
+      <section class="card report-panel">
+        <h2 class="report-panel-title">Saúde da vitrine</h2>
+        <dl class="report-list">
+          <div class="report-list-row"><dt>Categoria mais ativa</dt><dd>${escapeHTML(mostActiveCategory?.name || 'Sem dados')}</dd></div>
+          <div class="report-list-row"><dt>Ofertas expiradas</dt><dd>${expiredProducts}</dd></div>
+          <div class="report-list-row"><dt>Ofertas cadastradas</dt><dd>${products.length}</dd></div>
+        </dl>
+      </section>
+      <section class="card report-panel">
+        <h2 class="report-panel-title">Ofertas com mais cliques</h2>
+        ${topProducts.length ? `
+          <ol class="report-product-list">
+            ${topProducts.map((product, index) => `
+              <li>
+                <button class="report-product-row" type="button" data-category-product-detail="${escapeHTML(product.id)}">
+                  <span class="report-product-rank">${String(index + 1).padStart(2, '0')}</span>
+                  <span class="report-product-name">${escapeHTML(product.title)}</span>
+                  <strong class="report-product-clicks">${Number(product.clicks || 0)} cliques</strong>
+                </button>
+              </li>
+            `).join('')}
+          </ol>
+        ` : '<p class="muted-text">Nenhum clique registrado ainda.</p>'}
+      </section>
+    </div>
 
-      <div class="reports-grid">
-        <div class="chart-container">
-          <h4>Produtos ativos por categoria</h4>
-          <canvas id="report-chart-1" height="200"></canvas>
-        </div>
-        <div class="chart-container">
-          <h4>Produtos em análise por categoria</h4>
-          <canvas id="report-chart-2" height="200"></canvas>
-        </div>
-      </div>
+    <div class="reports-grid">
+      <section class="card chart-container">
+        <h2 class="chart-title">Ofertas ativas por categoria</h2>
+        <canvas id="report-chart-1" height="200" role="img" aria-label="Gráfico de ofertas ativas por categoria"></canvas>
+      </section>
+      <section class="card chart-container">
+        <h2 class="chart-title">Ofertas em análise por categoria</h2>
+        <canvas id="report-chart-2" height="200" role="img" aria-label="Gráfico de ofertas em análise por categoria"></canvas>
+      </section>
     </div>
   `;
 }
 
 function renderSettings() {
-  const currentTheme = getCurrentTheme();
-  const isDarkTheme = currentTheme === 'dark';
   const settings = {
     autoApproveTrustedSellers: false,
     requireMinorConsent: true,
@@ -800,115 +1062,145 @@ function renderSettings() {
     defaultAnnouncementHours: 24,
     supportWhatsapp: '',
     termsUrl: '',
-    paymentPolicy: 'O Linka não cobra taxa. O vendedor recebe diretamente pelo Mercado Pago conectado.',
     ...(activeInstitution.settings || {}),
   };
+  const noInstitution = !activeInstitution?.id;
+  const primaryDomain = String(activeInstitution.domain || '').trim();
+  const renderToggle = (key, isOn, label) => `
+    <button class="toggle ${isOn ? 'active' : ''}" type="button" role="switch" aria-checked="${isOn ? 'true' : 'false'}" data-setting-toggle="${key}" aria-label="${label}"></button>
+  `;
   return `
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <div>
-          <h3 class="admin-section-title">Configurações institucionais</h3>
-          <p class="admin-section-subtitle">Políticas, identidade e regras operacionais usadas pelo app em produção.</p>
-        </div>
+    ${renderViewHeader({
+      eyebrow: `Configurações · ${brandCaseHTML(activeInstitution.name || activeInstitution.fullName || BRAND_NAME)}`,
+      title: 'Configurações da instituição',
+      subtitle: 'Acesso, identidade e regras que o app usa em produção.',
+    })}
+    ${noInstitution ? `
+      <div class="alert alert-warning admin-inline-alert" role="status">
+        ${icons.alertTriangle}
+        <span>Nenhuma instituição real está vinculada a este admin. Vincule o usuário a uma instituição no Supabase ou mantenha só uma instituição cadastrada para editar aqui.</span>
       </div>
-      ${!activeInstitution?.id ? `
-        <div class="admin-inline-alert">
-          ${icons.alertTriangle}
-          <span>Não encontrei uma instituição real vinculada a este admin. Vincule o usuário admin a uma instituição no Supabase ou mantenha apenas uma instituição cadastrada para edição automática.</span>
+    ` : ''}
+    <div class="settings-section">
+      <section class="settings-group">
+        <div class="settings-group-head">
+          <h2 class="settings-group-title">Acesso</h2>
+          <p>Só e-mails destes domínios conseguem criar conta.</p>
         </div>
-      ` : ''}
-      <div class="settings-section">
-        <h4 class="settings-group-title">Identidade</h4>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="fullName" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Domínio de e-mail</h4><p>${escapeHTML(activeInstitution.domain)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="domain" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Cor principal</h4><p style="display:flex;align-items:center;gap:8px;"><span style="width:16px;height:16px;border-radius:4px;background:${activeInstitution.primaryColor};display:inline-block;"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="primaryColor" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>URL do logo</h4><p>${escapeHTML(activeInstitution.logoUrl || 'Não configurado')}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting="logoUrl" ${!activeInstitution?.id ? 'disabled' : ''}>Editar</button>
-        </div>
-        <div class="divider"></div>
-
-        <h4 class="settings-group-title">Aparência do app</h4>
-        <div class="setting-item setting-item-theme">
-          <div class="setting-item-info">
-            <h4>Tema padrão neste dispositivo</h4>
-            <p>${isDarkTheme ? 'Tema escuro ativo. Recomendado para o uso mobile do Linka.' : 'Tema claro ativo neste dispositivo.'}</p>
+        <div class="card settings-card">
+          <div class="setting-item">
+            <div class="setting-item-info">
+              <h4>Domínio principal</h4>
+              ${renderDomainList(primaryDomain ? [primaryDomain] : [], 'Não configurado')}
+            </div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="domain" ${noInstitution ? 'disabled' : ''}>Editar</button>
           </div>
-          <button class="btn btn-ghost btn-sm admin-theme-toggle" type="button" id="btnAdminThemeToggle">
-            ${isDarkTheme ? 'Usar claro' : 'Usar escuro'}
-          </button>
+          <div class="setting-item">
+            <div class="setting-item-info">
+              <h4>Domínios extras</h4>
+              ${renderDomainList(getExtraDomains(), 'Nenhum domínio extra')}
+            </div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-list="extra_domains" ${noInstitution ? 'disabled' : ''}>Editar</button>
+          </div>
         </div>
-        <div class="divider"></div>
+      </section>
 
-        <h4 class="settings-group-title">Moderação e segurança</h4>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Autoaprovação para bons vendedores</h4><p>Vendedores com 5+ anúncios aprovados sem recusa</p></div>
-          <div class="toggle ${settings.autoApproveTrustedSellers ? 'active' : ''}" data-setting-toggle="autoApproveTrustedSellers"></div>
+      <section class="settings-group">
+        <div class="settings-group-head">
+          <h2 class="settings-group-title">Identidade</h2>
+          <p>Como a instituição aparece para alunos e empresas.</p>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
-          <div class="toggle ${settings.requireMinorConsent !== false ? 'active' : ''}" data-setting-toggle="requireMinorConsent"></div>
+        <div class="card settings-card">
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Nome da instituição</h4><p>${escapeHTML(activeInstitution.fullName)}</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="fullName" ${noInstitution ? 'disabled' : ''}>Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Cor principal</h4><p class="setting-color-value"><span class="setting-swatch" style="background:${escapeHTML(activeInstitution.primaryColor)};"></span> ${escapeHTML(activeInstitution.primaryColor)}</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="primaryColor" ${noInstitution ? 'disabled' : ''}>Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>URL do logo</h4><p>${escapeHTML(activeInstitution.logoUrl || 'Não configurado')}</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting="logoUrl" ${noInstitution ? 'disabled' : ''}>Editar</button>
+          </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>WhatsApp obrigatório para vendedor</h4><p>Melhora contato, retirada e suporte ao comprador</p></div>
-          <div class="toggle ${settings.requireSellerWhatsapp !== false ? 'active' : ''}" data-setting-toggle="requireSellerWhatsapp"></div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Foto real obrigatória</h4><p>Ajuda a moderação e evita anúncios genéricos</p></div>
-          <div class="toggle ${settings.requireProductPhoto !== false ? 'active' : ''}" data-setting-toggle="requireProductPhoto"></div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Navegação de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
-          <div class="toggle ${settings.allowGuestBrowsing !== false ? 'active' : ''}" data-setting-toggle="allowGuestBrowsing"></div>
-        </div>
-        <div class="divider"></div>
+      </section>
 
-        <h4 class="settings-group-title">Regras comerciais</h4>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Desconto mínimo</h4><p>${Number(settings.minDiscountPercent || 10)}% por anúncio</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-number="minDiscountPercent">Editar</button>
+      <section class="settings-group">
+        <div class="settings-group-head">
+          <h2 class="settings-group-title">Aprovação e segurança</h2>
+          <p>Regras aplicadas antes de uma oferta chegar à vitrine.</p>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Desconto máximo</h4><p>${Number(settings.maxDiscountPercent || 50)}% por anúncio</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-number="maxDiscountPercent">Editar</button>
+        <div class="card settings-card">
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Aprovação automática para empresas confiáveis</h4><p>Empresas com 5 ou mais ofertas aprovadas e nenhuma recusa</p></div>
+            ${renderToggle('autoApproveTrustedSellers', settings.autoApproveTrustedSellers, 'Aprovação automática para empresas confiáveis')}
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Consentimento de responsável (menores)</h4><p>Exigir consentimento para alunos menores de 18 anos</p></div>
+            ${renderToggle('requireMinorConsent', settings.requireMinorConsent !== false, 'Consentimento de responsável para menores')}
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>WhatsApp obrigatório para empresas</h4><p>Facilita o contato do aluno com a empresa</p></div>
+            ${renderToggle('requireSellerWhatsapp', settings.requireSellerWhatsapp !== false, 'WhatsApp obrigatório para empresas')}
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Foto real obrigatória</h4><p>Ajuda na aprovação e evita ofertas genéricas</p></div>
+            ${renderToggle('requireProductPhoto', settings.requireProductPhoto !== false, 'Foto real obrigatória')}
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Navegação de visitantes</h4><p>Permite ver ofertas antes de criar conta</p></div>
+            ${renderToggle('allowGuestBrowsing', settings.allowGuestBrowsing !== false, 'Navegação de visitantes')}
+          </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Prazo de revisão</h4><p>${Number(settings.reviewSlaHours || 24)} horas para SLA interno</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-number="reviewSlaHours">Editar</button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Duração padrão da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria não definir</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-number="defaultAnnouncementHours">Editar</button>
-        </div>
-        <div class="divider"></div>
+      </section>
 
-        <h4 class="settings-group-title">Governança e suporte</h4>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>WhatsApp de suporte da instituição</h4><p>${escapeHTML(settings.supportWhatsapp || 'Não configurado')}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-text="supportWhatsapp">Editar</button>
+      <section class="settings-group">
+        <div class="settings-group-head">
+          <h2 class="settings-group-title">Regras das ofertas</h2>
+          <p>Limites de desconto e tempo de vitrine para novas ofertas.</p>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>URL de termos de uso</h4><p>${escapeHTML(settings.termsUrl || 'Não configurado')}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-text="termsUrl">Editar</button>
+        <div class="card settings-card">
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Desconto mínimo</h4><p>${Number(settings.minDiscountPercent || 10)}% por oferta</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="minDiscountPercent">Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Desconto máximo</h4><p>${Number(settings.maxDiscountPercent || 50)}% por oferta</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="maxDiscountPercent">Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Prazo de revisão</h4><p>${Number(settings.reviewSlaHours || 24)} horas para revisar cada oferta</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="reviewSlaHours">Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>Duração padrão da vitrine</h4><p>${Number(settings.defaultAnnouncementHours || 24)} horas quando a categoria não definir</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-number="defaultAnnouncementHours">Editar</button>
+          </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-item-info"><h4>Política de pagamentos</h4><p>${escapeHTML(settings.paymentPolicy)}</p></div>
-          <button class="btn btn-ghost btn-sm" data-setting-text="paymentPolicy">Editar</button>
+      </section>
+
+      <section class="settings-group">
+        <div class="settings-group-head">
+          <h2 class="settings-group-title">Governança e suporte</h2>
+          <p>Canais e documentos que aparecem para quem usa o app.</p>
         </div>
-        <div class="settings-real-summary">
-          <span>${getAdminCategories(false).length} categorias reais</span>
-          <span>${(loadedAllProducts || []).length} anúncios no banco</span>
-          <span>${(loadedPendingAds || []).length} pendentes</span>
+        <div class="card settings-card">
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>WhatsApp de suporte da instituição</h4><p>${escapeHTML(settings.supportWhatsapp || 'Não configurado')}</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-text="supportWhatsapp">Editar</button>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info"><h4>URL de termos de uso</h4><p>${escapeHTML(settings.termsUrl || 'Não configurado')}</p></div>
+            <button class="btn btn-sm setting-edit-btn" type="button" data-setting-text="termsUrl">Editar</button>
+          </div>
         </div>
+      </section>
+
+      <div class="settings-real-summary">
+        <span class="settings-summary-chip">${getAdminCategories(false).length} categorias</span>
+        <span class="settings-summary-chip">${(loadedAllProducts || []).length} ofertas cadastradas</span>
+        <span class="settings-summary-chip">${(loadedPendingAds || []).length} pendentes</span>
       </div>
     </div>
   `;
@@ -924,27 +1216,39 @@ function showAdminProductDetails(productId, container) {
   const products = [...(loadedAllProducts || []), ...(loadedPendingAds || [])];
   const product = products.find(item => String(item.id) === String(productId));
   if (!product) {
-    showToast('Produto não encontrado nesta sessão.', 'error');
+    showToast('Oferta não encontrada nesta sessão.', 'error');
     return;
   }
 
   const modalRoot = document.getElementById('modal-root');
   const category = getAdminCategories().find(c => c.id === product.category);
-  const status = getProductStatusMeta(product.status);
+  // Offers opened from the approval queue are pending even when the row carries no status.
+  const isQueued = (loadedPendingAds || []).some(item => String(item.id) === String(productId));
+  const productStatus = product.status || (isQueued ? 'pending' : '');
+  const status = getProductStatusMeta(productStatus);
   const images = Array.isArray(product.images) && product.images.length ? product.images : [null];
-  const isModeratable = product.status === 'pending' || product.status === 'queue';
+  const isModeratable = productStatus === 'pending' || productStatus === 'queue';
+  const couponHours = Number(product.couponValidHours);
+  const slotsTotal = Number(product.slots?.total || 5);
+  const slotsUsed = Number(product.slots?.used || 0);
+  const couponTerms = [
+    Number.isFinite(couponHours) && couponHours > 0 ? `Vale ${couponHours} h depois de retirado` : '',
+    slotsUsed > 0 ? `${slotsUsed} de ${slotsTotal} vagas usadas` : `${slotsTotal} ${slotsTotal === 1 ? 'vaga' : 'vagas'}`,
+  ].filter(Boolean).join(' · ');
 
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="admin-product-modal">
-      <div class="modal-content admin-product-modal-content">
+      <div class="modal-content admin-product-modal-content" role="dialog" aria-modal="true" aria-labelledby="admin-product-modal-title">
         <div class="modal-handle"></div>
         <div class="admin-product-modal-header">
-          <div>
-            <span class="badge ${status.badge}">${status.label}</span>
-            <h3>${escapeHTML(product.title)}</h3>
-            <p>${escapeHTML(category?.name || product.category || 'Categoria')}</p>
+          <div class="admin-product-modal-heading">
+            <span class="admin-product-modal-meta">
+              <span class="status-pill admin-status ${status.badge}">${status.label}</span>
+              <span class="t-eyebrow">${escapeHTML(category?.name || product.category || 'Categoria')}</span>
+            </span>
+            <h3 class="admin-product-modal-title" id="admin-product-modal-title">${escapeHTML(product.title)}</h3>
           </div>
-          <button class="btn btn-ghost btn-icon" type="button" id="close-admin-product-modal" aria-label="Fechar">${icons.x}</button>
+          <button class="icon-btn admin-modal-close" type="button" id="close-admin-product-modal" aria-label="Fechar">${icons.x}</button>
         </div>
         <div class="admin-product-detail-gallery">
           <button class="admin-product-detail-main" type="button" data-admin-photo-index="0" aria-label="Ampliar foto principal">
@@ -952,23 +1256,27 @@ function showAdminProductDetails(productId, container) {
           </button>
           ${images.length > 1 ? `
             <div class="admin-product-detail-thumbs">
-              ${images.map((image, index) => `<button type="button" data-admin-photo-index="${index}" aria-label="Abrir foto ${index + 1}">${getProductImage(image, 96, 72, product.category)}</button>`).join('')}
+              ${images.map((image, index) => `<button class="admin-product-detail-thumb" type="button" data-admin-photo-index="${index}" aria-label="Abrir foto ${index + 1}">${getProductImage(image, 96, 72, product.category)}</button>`).join('')}
             </div>
           ` : ''}
         </div>
-        <div class="admin-product-detail-grid">
-          <div><span>Preco final</span><strong>${formatCurrency(product.discountPrice)}</strong></div>
-          <div><span>Preco original</span><strong>${formatCurrency(product.originalPrice)}</strong></div>
-          <div><span>Desconto</span><strong>${Number(product.discount || 0)}%</strong></div>
-          <div><span>Cliques</span><strong>${Number(product.clicks || 0)}</strong></div>
+        <dl class="admin-product-detail-grid">
+          <div class="admin-product-detail-stat"><dt>Preço com cupom</dt><dd>${formatCurrency(product.discountPrice)}</dd></div>
+          <div class="admin-product-detail-stat"><dt>Preço original</dt><dd>${formatCurrency(product.originalPrice)}</dd></div>
+          <div class="admin-product-detail-stat"><dt>Desconto</dt><dd>${Number(product.discount || 0)}%</dd></div>
+          <div class="admin-product-detail-stat"><dt>Cliques</dt><dd>${Number(product.clicks || 0)}</dd></div>
+        </dl>
+        <div class="admin-product-detail-block">
+          <h4>Descrição</h4>
+          <p>${escapeHTML(product.description || 'Sem descrição cadastrada.')}</p>
         </div>
         <div class="admin-product-detail-block">
-          <h4>Descricao</h4>
-          <p>${escapeHTML(product.description || 'Sem descricao cadastrada.')}</p>
+          <h4>Cupom</h4>
+          <p>${escapeHTML(couponTerms)}</p>
         </div>
         <div class="admin-product-detail-block">
-          <h4>Vendedor</h4>
-          <p>${escapeHTML(product.seller?.name || 'Vendedor sem perfil')} ${product.seller?.email ? `- ${escapeHTML(product.seller.email)}` : ''}</p>
+          <h4>Empresa</h4>
+          <p>${escapeHTML(product.seller?.name || 'Empresa sem perfil')}${product.seller?.email ? ` · ${escapeHTML(product.seller.email)}` : ''}</p>
         </div>
         ${product.rejectionReason ? `
           <div class="admin-product-detail-block danger">
@@ -977,13 +1285,13 @@ function showAdminProductDetails(productId, container) {
           </div>
         ` : ''}
         <div class="admin-product-modal-actions">
-          <button class="btn btn-danger" type="button" data-modal-delete="${escapeHTML(product.id)}">Excluir da vitrine</button>
+          <button class="btn-ghost admin-product-delete" type="button" data-modal-delete="${escapeHTML(product.id)}">Excluir da vitrine</button>
           ${isModeratable ? `
-            <button class="btn btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} Aprovar</button>
-            <button class="btn btn-secondary" type="button" data-modal-adjust="${escapeHTML(product.id)}">Solicitar ajuste</button>
-            <button class="btn btn-danger" type="button" data-modal-reject="${escapeHTML(product.id)}">Recusar</button>
+            <button class="btn-danger" type="button" data-modal-reject="${escapeHTML(product.id)}">${icons.x} Recusar</button>
+            <button class="btn-secondary" type="button" data-modal-adjust="${escapeHTML(product.id)}">Pedir ajuste</button>
+            <button class="btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} Aprovar oferta</button>
           ` : `
-            <button class="btn btn-secondary" type="button" id="close-admin-product-modal-secondary">Fechar</button>
+            <button class="btn-secondary" type="button" id="close-admin-product-modal-secondary">Fechar</button>
           `}
         </div>
       </div>
@@ -1021,14 +1329,14 @@ function showAdminProductDetails(productId, container) {
     const result = await approveProduct(approveBtn.dataset.modalApprove);
     if (result?.success) {
       closeModal();
-      showToast('Produto aprovado com sucesso.', 'success');
+      showToast('Oferta aprovada.', 'success');
       invalidateAdminData();
       await renderAdminPage(container);
       scrollCategoryManagementIntoView(container);
     } else {
       approveBtn.disabled = false;
-      approveBtn.innerHTML = `${icons.check} Aprovar`;
-      showToast(result?.error || 'Não foi possível aprovar o produto.', 'error');
+      approveBtn.innerHTML = `${icons.check} Aprovar oferta`;
+      showToast(result?.error || 'Não foi possível aprovar a oferta.', 'error');
     }
   });
 }
@@ -1041,15 +1349,15 @@ function showAdminPhotoViewer(images, startIndex = 0, product = {}) {
   const render = () => {
     modalRoot.innerHTML = `
       <div class="modal-backdrop admin-photo-backdrop" id="admin-photo-modal">
-        <div class="admin-photo-viewer">
-          <button class="btn btn-ghost btn-icon admin-photo-close" type="button" id="close-admin-photo" aria-label="Fechar">${icons.x}</button>
+        <div class="admin-photo-viewer" role="dialog" aria-modal="true" aria-label="Fotos de ${escapeHTML(product.title || 'oferta')}">
+          <button class="icon-btn admin-photo-close" type="button" id="close-admin-photo" aria-label="Fechar">${icons.x}</button>
           <div class="admin-photo-stage">
             ${getProductImage(safeImages[currentIndex], 900, 680, product.category)}
           </div>
           <div class="admin-photo-controls">
-            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-prev" ${safeImages.length <= 1 ? 'disabled' : ''}>Anterior</button>
-            <span>${currentIndex + 1} / ${safeImages.length}</span>
-            <button class="btn btn-secondary btn-sm" type="button" id="admin-photo-next" ${safeImages.length <= 1 ? 'disabled' : ''}>Próxima</button>
+            <button class="btn-secondary btn-sm" type="button" id="admin-photo-prev" ${safeImages.length <= 1 ? 'disabled' : ''}>Anterior</button>
+            <span class="admin-photo-count">${currentIndex + 1} / ${safeImages.length}</span>
+            <button class="btn-secondary btn-sm" type="button" id="admin-photo-next" ${safeImages.length <= 1 ? 'disabled' : ''}>Próxima</button>
           </div>
         </div>
       </div>
@@ -1076,14 +1384,14 @@ function showDeleteProductModal(productId, container) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="delete-product-modal">
-      <div class="modal-content">
+      <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="delete-product-title">
         <div class="modal-handle"></div>
-        <h3 class="modal-title">Excluir anúncio</h3>
-        <p class="modal-description">Isso remove o produto da vitrine e encerra a oferta para compradores. O histórico continua preservado para auditoria.</p>
+        <h3 class="modal-title" id="delete-product-title">Excluir oferta</h3>
+        <p class="modal-description">A oferta sai da vitrine e os alunos deixam de retirar cupons dela. O histórico fica guardado para auditoria.</p>
         ${product ? `<div class="delete-product-summary"><strong>${escapeHTML(product.title)}</strong><span>${formatCurrency(product.discountPrice)}</span></div>` : ''}
         <div class="modal-actions">
-          <button class="btn btn-secondary" type="button" id="cancel-delete-product">Cancelar</button>
-          <button class="btn btn-danger" type="button" id="confirm-delete-product">Excluir da vitrine</button>
+          <button class="btn-secondary" type="button" id="cancel-delete-product">Cancelar</button>
+          <button class="btn-danger" type="button" id="confirm-delete-product">Excluir da vitrine</button>
         </div>
       </div>
     </div>
@@ -1100,14 +1408,14 @@ function showDeleteProductModal(productId, container) {
     const result = await deleteSellerProduct(productId);
     if (result?.success) {
       close();
-      showToast('Anúncio removido da vitrine.', 'success');
+      showToast('Oferta removida da vitrine.', 'success');
       invalidateAdminData();
       await renderAdminPage(container);
       if (adminView === 'categories') scrollCategoryManagementIntoView(container);
     } else {
       button.disabled = false;
       button.textContent = 'Excluir da vitrine';
-      showToast(result?.error || 'Não foi possível excluir o anúncio.', 'error');
+      showToast(result?.error || 'Não foi possível excluir a oferta.', 'error');
     }
   });
 }
@@ -1118,39 +1426,40 @@ function showCategoryModal(mode, category, container) {
   const currentRules = isEdit ? getCategoryRules(category.id) : '';
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="category-modal">
-      <div class="modal-content category-editor-modal">
+      <div class="modal-content admin-modal category-editor-modal" role="dialog" aria-modal="true" aria-labelledby="category-modal-title">
         <div class="modal-handle"></div>
         <form id="category-form">
-          <h3 class="modal-title">${isEdit ? 'Editar categoria' : 'Nova categoria'}</h3>
-          <p class="modal-description">Estas regras ficam salvas no banco e passam a orientar a moderação e os novos anúncios.</p>
+          <h3 class="modal-title" id="category-modal-title">${isEdit ? 'Editar categoria' : 'Nova categoria'}</h3>
+          <p class="modal-description">As regras ficam salvas e passam a orientar a aprovação e as novas ofertas.</p>
           <div class="input-group">
-            <label>Nome da categoria</label>
-            <input class="input-field" name="name" value="${escapeHTML(category?.name || '')}" placeholder="Ex.: Livros e apostilas" required maxlength="48" />
+            <label for="category-field-name">Nome da categoria</label>
+            <input class="input-field" id="category-field-name" name="name" value="${escapeHTML(category?.name || '')}" placeholder="Ex.: Livros e apostilas" required maxlength="48" />
           </div>
           ${isEdit ? '' : `
             <div class="input-group">
-              <label>Identificador</label>
-              <input class="input-field" name="id" placeholder="livros-apostilas" maxlength="48" />
+              <label for="category-field-id">Identificador</label>
+              <input class="input-field" id="category-field-id" name="id" placeholder="livros-apostilas" maxlength="48" />
+              <span class="input-hint">Use letras minúsculas e hífens, sem acentos.</span>
             </div>
           `}
           <div class="category-editor-grid">
             <div class="input-group">
-              <label>Vagas por anúncio</label>
-              <input class="input-field" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
+              <label for="category-field-slots">Vagas por oferta</label>
+              <input class="input-field" id="category-field-slots" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
             </div>
             <div class="input-group">
-              <label>Horas na vitrine</label>
-              <input class="input-field" name="durationHours" type="number" min="1" max="720" value="${Number(category?.durationHours || 24)}" required />
+              <label for="category-field-hours">Horas na vitrine</label>
+              <input class="input-field" id="category-field-hours" name="durationHours" type="number" min="1" max="720" value="${Number(category?.durationHours || 24)}" required />
             </div>
           </div>
           <div class="input-group">
-            <label>Regra da categoria</label>
-            <textarea class="input-field" name="rules" rows="3" placeholder="Ex.: Somente produtos lacrados ou com foto real.">${escapeHTML(currentRules)}</textarea>
+            <label for="category-field-rules">Regra da categoria</label>
+            <textarea class="input-field" id="category-field-rules" name="rules" rows="3" placeholder="Ex.: Somente produtos lacrados ou com foto real.">${escapeHTML(currentRules)}</textarea>
           </div>
           <div class="modal-inline-status" id="category-modal-status" role="status" aria-live="polite"></div>
           <div class="modal-actions">
-            <button class="btn btn-secondary" type="button" id="cancel-category">Cancelar</button>
-            <button class="btn btn-primary" type="submit" id="save-category">${isEdit ? 'Salvar' : 'Criar categoria'}</button>
+            <button class="btn-secondary" type="button" id="cancel-category">Cancelar</button>
+            <button class="btn-primary" type="submit" id="save-category">${isEdit ? 'Salvar' : 'Criar categoria'}</button>
           </div>
         </form>
       </div>
@@ -1178,7 +1487,7 @@ function showCategoryModal(mode, category, container) {
     saveButton.textContent = 'Salvando...';
     if (statusEl) {
       statusEl.className = 'modal-inline-status info';
-      statusEl.textContent = 'Salvando categoria no Supabase...';
+      statusEl.textContent = 'Salvando categoria...';
     }
 
     try {
@@ -1221,20 +1530,20 @@ function showDeleteCategoryModal(categoryId, container) {
   const category = getAdminCategoryRows().find((row) => row.id === categoryId);
   if (!category) return;
   if (category.total > 0) {
-    showToast('Antes de excluir, mova ou encerre os anúncios vinculados a esta categoria.', 'error');
+    showToast('Antes de excluir, mova ou encerre as ofertas vinculadas a esta categoria.', 'error');
     return;
   }
 
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="delete-category-modal">
-      <div class="modal-content">
+      <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="delete-category-title">
         <div class="modal-handle"></div>
-        <h3 class="modal-title">Excluir categoria</h3>
-        <p class="modal-description">A categoria "${escapeHTML(category.name)}" será removida do banco. Essa ação só é permitida quando não há anúncios vinculados.</p>
+        <h3 class="modal-title" id="delete-category-title">Excluir categoria</h3>
+        <p class="modal-description">A categoria "${escapeHTML(category.name)}" será removida do banco. Só dá para excluir categorias sem ofertas vinculadas.</p>
         <div class="modal-actions">
-          <button class="btn btn-secondary" type="button" id="cancel-delete-category">Cancelar</button>
-          <button class="btn btn-danger" type="button" id="confirm-delete-category">Excluir categoria</button>
+          <button class="btn-secondary" type="button" id="cancel-delete-category">Cancelar</button>
+          <button class="btn-danger" type="button" id="confirm-delete-category">Excluir categoria</button>
         </div>
       </div>
     </div>
@@ -1267,20 +1576,22 @@ function showAdminMetricModal(title, description, rows = []) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="metric-modal">
-      <div class="modal-content admin-metric-modal">
+      <div class="modal-content admin-modal admin-metric-modal" role="dialog" aria-modal="true" aria-labelledby="metric-modal-title">
         <div class="modal-handle"></div>
-        <h3 class="modal-title">${escapeHTML(title)}</h3>
+        <h3 class="modal-title" id="metric-modal-title">${escapeHTML(title)}</h3>
         <p class="modal-description">${escapeHTML(description)}</p>
-        <div class="metric-modal-list">
-          ${rows.length ? rows.map((row) => `
-            <div class="metric-modal-row">
-              <span>${escapeHTML(row.label)}</span>
-              <strong>${escapeHTML(String(row.value))}</strong>
-            </div>
-          `).join('') : '<div class="empty-state compact"><h3>Sem dados para detalhar</h3><p>Assim que houver uso real, esta lista será preenchida automaticamente.</p></div>'}
-        </div>
+        ${rows.length ? `
+          <dl class="metric-modal-list">
+            ${rows.map((row) => `
+              <div class="metric-modal-row">
+                <dt>${escapeHTML(row.label)}</dt>
+                <dd${row.isText ? ' class="is-text"' : ''}>${escapeHTML(String(row.value))}</dd>
+              </div>
+            `).join('')}
+          </dl>
+        ` : renderAdminEmpty({ title: 'Sem dados para detalhar', text: 'Assim que houver uso real, esta lista é preenchida automaticamente.' })}
         <div class="modal-actions">
-          <button class="btn btn-primary" type="button" id="close-metric-modal">Ok</button>
+          <button class="btn-secondary" type="button" id="close-metric-modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -1317,10 +1628,11 @@ async function handleAdminMetric(metric, container) {
 
   const stats = loadedStats || {};
   const sellerCount = new Set((loadedAllProducts || []).map((product) => product.seller?.id || product.sellerId).filter(Boolean)).size;
+  const signupDomains = getSignupDomains();
   showAdminMetricModal('Alunos da instituição', 'Resumo operacional com os dados disponíveis no banco.', [
     { label: 'Alunos cadastrados', value: stats.students?.value ?? 0 },
-    { label: 'Vendedores com produtos', value: sellerCount },
-    { label: 'Domínio institucional', value: activeInstitution?.domain || 'Não configurado' },
+    { label: 'Empresas com ofertas', value: sellerCount },
+    { label: signupDomains.length > 1 ? 'Domínios de cadastro' : 'Domínio de cadastro', value: signupDomains.join(', ') || 'Não configurado', isText: true },
   ]);
 }
 
@@ -1367,9 +1679,14 @@ function bindAdminEvents(container) {
     event.preventDefault();
     const form = event.currentTarget;
     const button = form.querySelector('button[type="submit"]');
+    const values = withNormalizedDomain(Object.fromEntries(new FormData(form)));
+    if (!values) {
+      showToast('Use o formato @escola.edu.br no domínio.', 'error');
+      return;
+    }
     button.disabled = true;
     try {
-      await createPlatformInstitution(Object.fromEntries(new FormData(form)));
+      await createPlatformInstitution(values);
       showToast('Instituição criada.', 'success');
       await renderAdminPage(container);
     } catch (error) {
@@ -1382,9 +1699,14 @@ function bindAdminEvents(container) {
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = form.querySelector('button[type="submit"]');
+      const values = withNormalizedDomain(Object.fromEntries(new FormData(form)));
+      if (!values) {
+        showToast('Use o formato @escola.edu.br no domínio.', 'error');
+        return;
+      }
       button.disabled = true;
       try {
-        const result = await updateInstitution(form.dataset.platformInstitution, Object.fromEntries(new FormData(form)));
+        const result = await updateInstitution(form.dataset.platformInstitution, values);
         if (!result.success) throw new Error(result.error);
         showToast('Instituição atualizada.', 'success');
         await renderAdminPage(container);
@@ -1432,13 +1754,13 @@ function bindAdminEvents(container) {
       setModerationBusy(card, approveBtn, 'Aprovando...');
       try {
         const result = await approveProduct(adId);
-        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar o anúncio.');
+        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar a oferta.');
         removePendingAd(adId);
-        showToast('Anúncio aprovado com sucesso!', 'success');
+        showToast('Oferta aprovada.', 'success');
         invalidateAdminData();
         await renderAdminPage(container);
       } catch (err) {
-        showToast(err.message || 'Não foi possível aprovar o anúncio.', 'error');
+        showToast(err.message || 'Não foi possível aprovar a oferta.', 'error');
         resetModerationBusy(card, approveBtn, originalHtml);
       }
       return;
@@ -1528,16 +1850,16 @@ function bindAdminEvents(container) {
       approveProductBtn.innerHTML = `${icons.loader} Aprovando...`;
       try {
         const result = await approveProduct(productId);
-        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar o produto.');
+        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar a oferta.');
         removePendingAd(productId);
-        showToast('Produto aprovado com sucesso.', 'success');
+        showToast('Oferta aprovada.', 'success');
         invalidateAdminData();
         await renderAdminPage(container);
         scrollCategoryManagementIntoView(container);
       } catch (error) {
         approveProductBtn.disabled = false;
         approveProductBtn.innerHTML = originalHtml;
-        showToast(error.message || 'Não foi possível aprovar o produto.', 'error');
+        showToast(error.message || 'Não foi possível aprovar a oferta.', 'error');
       }
       return;
     }
@@ -1615,12 +1937,6 @@ function bindAdminEvents(container) {
     }
   });
 
-  container.querySelector('#btnAdminThemeToggle')?.addEventListener('click', () => {
-    const theme = toggleAppTheme();
-    showToast(theme === 'dark' ? 'Tema escuro ativado.' : 'Tema claro ativado.', 'success');
-    renderAdminPage(container);
-  });
-
   // Toggles
   container.querySelectorAll('.toggle').forEach(toggle => {
     toggle.addEventListener('click', async () => {
@@ -1633,6 +1949,7 @@ function bindAdminEvents(container) {
       const nextValue = !toggle.classList.contains('active');
       toggle.classList.add('is-saving');
       toggle.classList.toggle('active', nextValue);
+      toggle.setAttribute('aria-checked', String(nextValue));
       const settings = { ...(activeInstitution.settings || {}), [key]: nextValue };
       const result = await updateInstitution(activeInstitution.id, { settings });
       if (result?.success) {
@@ -1640,6 +1957,7 @@ function bindAdminEvents(container) {
         showToast('Configuração salva.', 'success');
       } else {
         toggle.classList.toggle('active', !nextValue);
+        toggle.setAttribute('aria-checked', String(!nextValue));
         showToast(result?.error || 'Não foi possível salvar.', 'error');
       }
       toggle.classList.remove('is-saving');
@@ -1651,26 +1969,37 @@ function bindAdminEvents(container) {
     btn.addEventListener('click', () => {
       const settingItem = btn.closest('.setting-item');
       const title = settingItem?.querySelector('h4')?.textContent || '';
-      const currentVal = settingItem?.querySelector('p')?.textContent?.trim() || '';
       const settingKey = btn.dataset.setting;
+      const isDomain = settingKey === 'domain';
+      const currentVal = String(activeInstitution?.[settingKey] ?? '').trim();
       const modalRoot = document.getElementById('modal-root');
 
-      let inputHtml = `<input type="text" class="input-field" id="settingEditVal" value="${currentVal}" style="margin-top:var(--space-3);" />`;
+      let inputHtml = `<input type="text" class="input-field" id="settingEditVal" value="${escapeHTML(currentVal)}" />`;
       if (settingKey === 'primaryColor') {
-        inputHtml = `<input type="color" id="settingEditVal" value="${escapeHTML(activeInstitution.primaryColor || '#2563eb')}" style="width:100%;height:48px;border-radius:8px;border:1px solid var(--gray-700);margin-top:var(--space-3);cursor:pointer;" />`;
+        inputHtml = `<input type="color" class="admin-color-input" id="settingEditVal" value="${escapeHTML(activeInstitution.primaryColor || '#C0176B')}" />`;
+      } else if (isDomain) {
+        inputHtml = `
+          <input type="text" class="input-field admin-domain-input" id="settingEditVal" value="${escapeHTML(currentVal)}" placeholder="@icev.edu.br" inputmode="email" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingEditHint" />
+          <span class="input-hint" id="settingEditHint">Use o formato @escola.edu.br.</span>
+        `;
       }
 
       modalRoot.innerHTML = `
         <div class="modal-backdrop" id="settings-edit-modal">
-          <div class="modal-content">
+          <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="settings-edit-title">
             <div class="modal-handle"></div>
             <form id="settings-edit-form">
-              <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Editar: ${escapeHTML(title)}</h3>
-              <div class="input-group">${inputHtml}</div>
+              <span class="t-eyebrow">Editar configuração</span>
+              <h3 class="modal-title" id="settings-edit-title">${escapeHTML(title)}</h3>
+              ${isDomain ? '<p class="modal-description">Só e-mails deste domínio e dos domínios extras conseguem criar conta.</p>' : ''}
+              <div class="input-group admin-modal-field">
+                <label class="sr-only" for="settingEditVal">${escapeHTML(title)}</label>
+                ${inputHtml}
+              </div>
               <div class="modal-inline-status" id="setting-modal-status" role="status" aria-live="polite"></div>
-              <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-                <button type="button" class="btn btn-secondary" style="flex:1;" id="cancel-setting">Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="flex:1;" id="confirm-setting">Salvar</button>
+              <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="cancel-setting">Cancelar</button>
+                <button type="submit" class="btn-primary" id="confirm-setting">Salvar</button>
               </div>
             </form>
           </div>
@@ -1686,20 +2015,30 @@ function bindAdminEvents(container) {
         }
         const confirmBtn = modalRoot.querySelector('#confirm-setting');
         const statusEl = modalRoot.querySelector('#setting-modal-status');
-        const value = modalRoot.querySelector('#settingEditVal')?.value?.trim();
-        if (!value) {
-          showToast('Preencha o campo.', 'error');
+        const showFieldError = (toastMessage, inlineMessage) => {
+          showToast(toastMessage, 'error');
           if (statusEl) {
             statusEl.className = 'modal-inline-status error';
-            statusEl.textContent = 'Preencha o campo antes de salvar.';
+            statusEl.textContent = inlineMessage;
           }
+        };
+        let value = modalRoot.querySelector('#settingEditVal')?.value?.trim();
+        if (!value) {
+          showFieldError('Preencha o campo.', 'Preencha o campo antes de salvar.');
           return;
+        }
+        if (isDomain) {
+          value = normalizeEmailDomain(value);
+          if (!EMAIL_DOMAIN_PATTERN.test(value)) {
+            showFieldError('Domínio inválido.', 'Use o formato @escola.edu.br, sem espaços.');
+            return;
+          }
         }
         confirmBtn.disabled = true;
         confirmBtn.textContent = 'Salvando...';
         if (statusEl) {
           statusEl.className = 'modal-inline-status info';
-          statusEl.textContent = 'Salvando no banco de dados...';
+          statusEl.textContent = 'Salvando...';
         }
         const result = await updateInstitution(activeInstitution.id, { [settingKey]: value });
         if (result?.success) {
@@ -1721,33 +2060,45 @@ function bindAdminEvents(container) {
     });
   });
 
-  container.querySelectorAll('[data-setting-text], [data-setting-number]').forEach(btn => {
+  // Values stored inside institutions.settings (text, number or a list of e-mail domains)
+  container.querySelectorAll('[data-setting-text], [data-setting-number], [data-setting-list]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (!activeInstitution?.id) {
         showToast('Instituição real não encontrada para salvar.', 'error');
         return;
       }
-      const isNumber = Boolean(btn.dataset.settingNumber);
-      const settingKey = btn.dataset.settingNumber || btn.dataset.settingText;
+      const mode = btn.dataset.settingList ? 'list' : btn.dataset.settingNumber ? 'number' : 'text';
+      const settingKey = btn.dataset.settingList || btn.dataset.settingNumber || btn.dataset.settingText;
       const settingItem = btn.closest('.setting-item');
       const title = settingItem?.querySelector('h4')?.textContent || 'Configuração';
       const currentValue = activeInstitution.settings?.[settingKey] ?? '';
+      const primaryDomain = String(activeInstitution.domain || '').trim();
       const modalRoot = document.getElementById('modal-root');
+      let fieldHtml = `<textarea class="input-field" id="settingJsonVal" rows="3">${escapeHTML(String(currentValue || ''))}</textarea>`;
+      if (mode === 'number') {
+        fieldHtml = `<input class="input-field" id="settingJsonVal" type="number" min="0" value="${escapeHTML(String(currentValue || ''))}" />`;
+      } else if (mode === 'list') {
+        fieldHtml = `
+          <textarea class="input-field admin-domain-input" id="settingJsonVal" rows="4" placeholder="@aluno.icev.edu.br" autocapitalize="off" autocomplete="off" spellcheck="false" aria-describedby="settingJsonHint">${escapeHTML(getExtraDomains().join('\n'))}</textarea>
+          <span class="input-hint" id="settingJsonHint">Um domínio por linha, no formato @escola.edu.br.${primaryDomain ? ` O domínio principal (${escapeHTML(primaryDomain)}) já está liberado.` : ''}</span>
+        `;
+      }
       modalRoot.innerHTML = `
         <div class="modal-backdrop" id="settings-json-modal">
-          <div class="modal-content">
+          <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="settings-json-title">
             <div class="modal-handle"></div>
             <form id="settings-json-form">
-              <h3 class="modal-title">Editar: ${escapeHTML(title)}</h3>
-              <div class="input-group">
-                ${isNumber
-                  ? `<input class="input-field" id="settingJsonVal" type="number" min="0" value="${escapeHTML(String(currentValue || ''))}" />`
-                  : `<textarea class="input-field" id="settingJsonVal" rows="3">${escapeHTML(String(currentValue || ''))}</textarea>`}
+              <span class="t-eyebrow">Editar configuração</span>
+              <h3 class="modal-title" id="settings-json-title">${escapeHTML(title)}</h3>
+              ${mode === 'list' ? '<p class="modal-description">Só e-mails destes domínios conseguem criar conta. Deixe em branco para liberar apenas o domínio principal.</p>' : ''}
+              <div class="input-group admin-modal-field">
+                <label class="sr-only" for="settingJsonVal">${escapeHTML(title)}</label>
+                ${fieldHtml}
               </div>
               <div class="modal-inline-status" id="setting-json-status" role="status" aria-live="polite"></div>
               <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="cancel-json-setting">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="confirm-json-setting">Salvar</button>
+                <button type="button" class="btn-secondary" id="cancel-json-setting">Cancelar</button>
+                <button type="submit" class="btn-primary" id="confirm-json-setting">Salvar</button>
               </div>
             </form>
           </div>
@@ -1763,10 +2114,24 @@ function bindAdminEvents(container) {
         const saveBtn = modalRoot.querySelector('#confirm-json-setting');
         const statusEl = modalRoot.querySelector('#setting-json-status');
         const rawValue = modalRoot.querySelector('#settingJsonVal')?.value?.trim() || '';
-        const value = isNumber ? Number(rawValue) : rawValue;
-        if (isNumber && (!Number.isFinite(value) || value < 0)) {
-          showToast('Informe um número válido.', 'error');
-          return;
+        let value = rawValue;
+        if (mode === 'number') {
+          value = Number(rawValue);
+          if (rawValue === '' || !Number.isFinite(value) || value < 0) {
+            showToast('Informe um número válido.', 'error');
+            return;
+          }
+        } else if (mode === 'list') {
+          const { domains, invalid } = parseDomainList(rawValue, primaryDomain);
+          if (invalid.length) {
+            showToast('Revise os domínios.', 'error');
+            if (statusEl) {
+              statusEl.className = 'modal-inline-status error';
+              statusEl.textContent = `Formato inválido: ${invalid.join(', ')}. Use @escola.edu.br.`;
+            }
+            return;
+          }
+          value = domains;
         }
         saveBtn.disabled = true;
         saveBtn.textContent = 'Salvando...';
@@ -1779,7 +2144,7 @@ function bindAdminEvents(container) {
         if (result?.success) {
           activeInstitution = result.institution;
           close();
-          showToast('Configuração salva.', 'success');
+          showToast(mode === 'list' ? 'Domínios salvos.' : 'Configuração salva.', 'success');
           renderAdminPage(container);
         } else {
           saveBtn.disabled = false;
@@ -1807,38 +2172,34 @@ function bindAdminEvents(container) {
   });
 
   // Alert action buttons — route by action text
-  container.querySelectorAll('.alert-card .btn').forEach(btn => {
+  container.querySelectorAll('[data-alert-view]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const action = btn.textContent.trim();
-      if (action === 'Editar vagas') {
-        adminView = 'categories';
-        renderAdminPage(container);
-      } else if (action === 'Moderar agora' || action === 'Ver moderação') {
-        adminView = 'moderation';
-        renderAdminPage(container);
-      } else if (action === 'Visualizar') {
-        adminView = 'categories';
-        renderAdminPage(container);
-      } else if (action === 'Ver detalhes') {
-        adminView = 'moderation';
-        renderAdminPage(container);
-      } else {
-        adminView = 'moderation';
-        renderAdminPage(container);
-      }
+      adminView = btn.dataset.alertView === 'categories' ? 'categories' : 'moderation';
+      renderAdminPage(container);
     });
   });
-  
+
   // Export plain text report
   container.querySelector('#btnExportPDF')?.addEventListener('click', () => {
     const s = loadedStats || (USE_MOCKS ? adminStats : {});
-    const report = `RELATÓRIO LINKA - ${escapeHTML(activeInstitution.fullName)}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\nAlunos: ${s.students?.value ?? 0}\nCliques: ${s.clicks?.value ?? 0}\nCupons Gerados: ${s.couponsGenerated?.value ?? 0}\nCupons Usados: ${s.couponsUsed?.value ?? 0}\nConversão: ${s.conversionRate?.value ?? '0%'}\nPendentes: ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}\n`;
-    const blob = new Blob([report], { type: 'text/plain' });
+    const report = [
+      `Relatório ${BRAND_NAME} - ${activeInstitution.fullName || activeInstitution.name || ''}`,
+      `Data: ${new Date().toLocaleDateString('pt-BR')}`,
+      '',
+      `Alunos: ${s.students?.value ?? 0}`,
+      `Cliques nas ofertas: ${s.clicks?.value ?? 0}`,
+      `Cupons retirados: ${s.couponsGenerated?.value ?? 0}`,
+      `Cupons usados: ${s.couponsUsed?.value ?? 0}`,
+      `Taxa de uso: ${s.conversionRate?.value ?? '0%'}`,
+      `Ofertas para aprovar: ${(loadedPendingAds || (USE_MOCKS ? pendingAds : [])).length}`,
+      '',
+    ].join('\n');
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `relatorio-linka-${Date.now()}.txt`;
+    a.href = url; a.download = `relatorio-empreende-icev-${Date.now()}.txt`;
     a.click(); URL.revokeObjectURL(url);
-    showToast('Relatório exportado!', 'success');
+    showToast('Relatório exportado.', 'success');
   });
 
   // Charts
@@ -1853,21 +2214,21 @@ function showRejectModal(adId, container) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="reject-modal">
-      <div class="modal-content">
+      <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
         <div class="modal-handle"></div>
-        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Recusar anúncio</h3>
-        <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Selecione o motivo da recusa:</p>
+        <h3 class="modal-title" id="reject-modal-title">Recusar oferta</h3>
+        <p class="modal-description">Escolha o motivo. A empresa recebe essa explicação junto com a recusa.</p>
         <div class="reject-reasons" id="reject-reasons">
           ${rejectReasons.map((r, i) => `
-            <div class="reject-reason-option" data-reason="${i}">
-              <div class="reject-reason-radio"></div>
+            <button class="reject-reason-option" type="button" data-reason="${i}">
+              <span class="reject-reason-radio" aria-hidden="true"></span>
               <span>${r}</span>
-            </div>
+            </button>
           `).join('')}
         </div>
-        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-          <button class="btn btn-secondary" style="flex:1;" id="cancel-reject">Cancelar</button>
-          <button class="btn btn-danger" style="flex:1;" id="confirm-reject">Confirmar recusa</button>
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" id="cancel-reject">Cancelar</button>
+          <button class="btn-danger" type="button" id="confirm-reject">Recusar oferta</button>
         </div>
       </div>
     </div>
@@ -1883,6 +2244,7 @@ function showRejectModal(adId, container) {
   modalRoot.querySelector('#reject-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) modalRoot.innerHTML = ''; });
   modalRoot.querySelector('#cancel-reject').addEventListener('click', () => modalRoot.innerHTML = '');
   const confirmRejectBtn = modalRoot.querySelector('#confirm-reject');
+  const confirmRejectLabel = confirmRejectBtn.textContent;
   confirmRejectBtn.addEventListener('click', async () => {
     if (selectedReason === -1) { showToast('Selecione um motivo.', 'error'); return; }
     confirmRejectBtn.disabled = true;
@@ -1891,11 +2253,13 @@ function showRejectModal(adId, container) {
     if (result?.success) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);
-      showToast('Anúncio recusado.', 'error');
+      showToast('Oferta recusada.', 'success');
       invalidateAdminData();
       if (container) renderAdminPage(container);
     } else {
-      showToast(result?.error || 'Não foi possível recusar o anúncio.', 'error');
+      confirmRejectBtn.disabled = false;
+      confirmRejectBtn.textContent = confirmRejectLabel;
+      showToast(result?.error || 'Não foi possível recusar a oferta.', 'error');
     }
   });
 }
@@ -1904,25 +2268,25 @@ function showAdjustModal(adId, container) {
   const modalRoot = document.getElementById('modal-root');
   modalRoot.innerHTML = `
     <div class="modal-backdrop" id="adjust-modal">
-      <div class="modal-content">
+      <div class="modal-content admin-modal" role="dialog" aria-modal="true" aria-labelledby="adjust-modal-title">
         <div class="modal-handle"></div>
-        <h3 style="font-size:var(--font-size-lg);font-weight:var(--font-weight-bold);margin-bottom:var(--space-2);">Solicitar ajuste</h3>
-        <p style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-4);">Selecione o motivo e adicione uma orientação (opcional):</p>
+        <h3 class="modal-title" id="adjust-modal-title">Pedir ajuste</h3>
+        <p class="modal-description">Escolha o motivo e, se quiser, explique o que a empresa precisa corrigir.</p>
         <div class="reject-reasons">
           ${rejectReasons.map((r, i) => `
-            <div class="reject-reason-option" data-reason="${i}">
-              <div class="reject-reason-radio"></div>
+            <button class="reject-reason-option" type="button" data-reason="${i}">
+              <span class="reject-reason-radio" aria-hidden="true"></span>
               <span>${r}</span>
-            </div>
+            </button>
           `).join('')}
         </div>
-        <div class="input-group" style="margin-top:var(--space-4);">
-          <label>Orientação adicional (opcional)</label>
-          <textarea class="input-field" placeholder="Descreva o ajuste necessário..." rows="3" id="adjust-note"></textarea>
+        <div class="input-group admin-modal-field">
+          <label for="adjust-note">Orientação para a empresa (opcional)</label>
+          <textarea class="input-field" placeholder="Ex.: envie uma foto real do produto, sem filtros." rows="3" id="adjust-note"></textarea>
         </div>
-        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);">
-          <button class="btn btn-secondary" style="flex:1;" id="cancel-adjust">Cancelar</button>
-          <button class="btn btn-primary" style="flex:1;" id="confirm-adjust">Enviar</button>
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" id="cancel-adjust">Cancelar</button>
+          <button class="btn-primary" type="button" id="confirm-adjust">Enviar pedido</button>
         </div>
       </div>
     </div>
@@ -1947,15 +2311,30 @@ function showAdjustModal(adId, container) {
     if (result?.success) {
       modalRoot.innerHTML = '';
       removePendingAd(adId);
-      showToast('Ajuste solicitado com sucesso!', 'success');
+      showToast('Ajuste solicitado à empresa.', 'success');
       invalidateAdminData();
       if (container) renderAdminPage(container);
     } else {
       confirmAdjustBtn.disabled = false;
-      confirmAdjustBtn.textContent = 'Enviar';
+      confirmAdjustBtn.textContent = 'Enviar pedido';
       showToast(result?.error || 'Não foi possível solicitar ajuste.', 'error');
     }
   });
+}
+
+function getChartTheme() {
+  const styles = getComputedStyle(document.documentElement);
+  const token = (name) => styles.getPropertyValue(name).trim();
+  return {
+    ink: token('--ink'),
+    inkSoft: token('--ink-soft'),
+    inkMute: token('--ink-mute'),
+    rule: token('--rule'),
+    paper: token('--paper'),
+    marker: token('--marker'),
+    warning: token('--warning'),
+    mono: token('--font-mono') || 'monospace',
+  };
 }
 
 function drawAdminChart(canvas) {
@@ -1990,42 +2369,63 @@ function drawAdminChart(canvas) {
   const data = buckets.map((bucket) => bucket.count);
   const labels = buckets.map((bucket) => bucket.label);
   const w = rect.width, h = rect.height;
-  const pad = { top: 20, right: 20, bottom: 30, left: 30 };
+  if (!w || !h) return;
+  const theme = getChartTheme();
+  const pad = { top: 18, right: 18, bottom: 30, left: 18 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
   const max = Math.max(1, ...data) * 1.2;
+  const pointX = (i) => pad.left + (cw / (data.length - 1)) * i;
+  const pointY = (v) => pad.top + ch - (v / max) * ch;
 
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.strokeStyle = theme.rule;
   ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + (ch / 4) * i;
+  ctx.setLineDash([3, 4]);
+  for (let i = 0; i <= 3; i++) {
+    const y = Math.round(pad.top + (ch / 3) * i) + 0.5;
     ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
   }
+  ctx.setLineDash([]);
 
   ctx.beginPath();
-  ctx.strokeStyle = '#00E5A0';
-  ctx.lineWidth = 2.5;
-  ctx.lineJoin = 'round';
   data.forEach((v, i) => {
-    const x = pad.left + (cw / (data.length - 1)) * i;
-    const y = pad.top + ch - (v / max) * ch;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    i === 0 ? ctx.moveTo(pointX(i), pointY(v)) : ctx.lineTo(pointX(i), pointY(v));
+  });
+  ctx.lineTo(pointX(data.length - 1), pad.top + ch);
+  ctx.lineTo(pointX(0), pad.top + ch);
+  ctx.closePath();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = theme.ink;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.beginPath();
+  ctx.strokeStyle = theme.ink;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  data.forEach((v, i) => {
+    i === 0 ? ctx.moveTo(pointX(i), pointY(v)) : ctx.lineTo(pointX(i), pointY(v));
   });
   ctx.stroke();
 
-  const grad = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
-  grad.addColorStop(0, 'rgba(0,229,160,0.12)');
-  grad.addColorStop(1, 'rgba(0,229,160,0)');
-  ctx.lineTo(pad.left + cw, h - pad.bottom);
-  ctx.lineTo(pad.left, h - pad.bottom);
-  ctx.closePath();
-  ctx.fillStyle = grad;
-  ctx.fill();
+  data.forEach((v, i) => {
+    const isLast = i === data.length - 1;
+    ctx.beginPath();
+    ctx.arc(pointX(i), pointY(v), isLast ? 5 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = isLast ? theme.marker : theme.paper;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = theme.ink;
+    ctx.stroke();
+  });
 
-  ctx.fillStyle = '#55556a';
-  ctx.font = '11px Plus Jakarta Sans, sans-serif';
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
   labels.forEach((l, i) => {
-    ctx.fillText(l, pad.left + (cw / (data.length - 1)) * i, h - 8);
+    const isLast = i === labels.length - 1;
+    ctx.fillStyle = isLast ? theme.ink : theme.inkMute;
+    ctx.font = `${isLast ? 600 : 500} 11px ${theme.mono}`;
+    ctx.fillText(l, pointX(i), h - 8);
   });
 }
 
@@ -2044,39 +2444,46 @@ function drawBarChart(canvas, metric = 'active') {
   }));
   const data = rows.map((row) => row.value);
   const labels = rows.map((row) => row.label);
-  const colors = metric === 'active'
-    ? ['#00E5A0', '#22c55e', '#14b8a6', '#3b82f6', '#a855f7']
-    : ['#F5A623', '#f97316', '#eab308', '#fb7185', '#c084fc'];
+  const theme = getChartTheme();
+  const barColor = metric === 'active' ? theme.ink : theme.warning;
   const w = rect.width, h = rect.height;
-  const pad = { top: 10, right: 10, bottom: 30, left: 10 };
+  if (!w || !h || !data.length) return;
+  const pad = { top: 22, right: 8, bottom: 30, left: 8 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
-  const max = Math.max(1, ...data) * 1.2;
-  const barW = (cw / data.length) * 0.6;
-  const gap = (cw / data.length) * 0.4;
+  const max = Math.max(1, ...data) * 1.15;
+  const slot = cw / data.length;
+  const barW = Math.min(slot * 0.56, 56);
+  const baseline = pad.top + ch;
 
+  ctx.strokeStyle = theme.rule;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.left, baseline + 0.5); ctx.lineTo(w - pad.right, baseline + 0.5); ctx.stroke();
+
+  ctx.textAlign = 'center';
   data.forEach((v, i) => {
-    const x = pad.left + (cw / data.length) * i + gap / 2;
+    const x = pad.left + slot * i + (slot - barW) / 2;
     const barH = (v / max) * ch;
-    const y = pad.top + ch - barH;
+    const y = baseline - barH;
 
-    ctx.fillStyle = colors[i];
-    ctx.beginPath();
-    const r = 4;
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + barW - r, y);
-    ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
-    ctx.lineTo(x + barW, pad.top + ch);
-    ctx.lineTo(x, pad.top + ch);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.fill();
+    if (barH > 0) {
+      const r = Math.min(6, barH, barW / 2);
+      ctx.fillStyle = barColor;
+      ctx.beginPath();
+      ctx.moveTo(x, baseline);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.lineTo(x + barW - r, y);
+      ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
+      ctx.lineTo(x + barW, baseline);
+      ctx.closePath();
+      ctx.fill();
+    }
 
-    ctx.fillStyle = '#55556a';
-    ctx.font = '10px Plus Jakarta Sans, sans-serif';
-    ctx.textAlign = 'center';
+    ctx.fillStyle = theme.inkMute;
+    ctx.font = `500 10.5px ${theme.mono}`;
     ctx.fillText(labels[i], x + barW / 2, h - 8);
-    ctx.fillStyle = '#8b8b9e';
-    ctx.font = 'bold 11px Plus Jakarta Sans, sans-serif';
-    ctx.fillText(v.toString(), x + barW / 2, y - 6);
+    ctx.fillStyle = theme.inkSoft;
+    ctx.font = `600 11px ${theme.mono}`;
+    ctx.fillText(v.toString(), x + barW / 2, y - 7);
   });
 }

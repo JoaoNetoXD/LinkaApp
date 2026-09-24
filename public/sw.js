@@ -1,5 +1,5 @@
-// Linka — Service Worker (v1.2)
-const CACHE_NAME = 'linka-v1.8';
+// Empreende iCEV — Service Worker
+const CACHE_NAME = 'empreende-icev-v1';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   '/icons/favicon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/brand/logo.svg',
 ];
 
 self.addEventListener('install', (e) => {
@@ -43,7 +44,7 @@ self.addEventListener('fetch', (e) => {
 });
 
 self.addEventListener('push', (e) => {
-  let data = { title: 'Linka', body: 'Você tem uma nova notificação!' };
+  let data = { title: 'Empreende iCEV', body: 'Você tem uma nova notificação.' };
 
   try {
     if (e.data) {
@@ -68,7 +69,7 @@ self.addEventListener('push', (e) => {
       { action: 'open', title: 'Abrir' },
       { action: 'dismiss', title: 'Dispensar' },
     ],
-    tag: data.tag || 'linka-notification',
+    tag: data.tag || 'empreende-notification',
     renotify: true,
   };
 

@@ -1,5 +1,5 @@
 ﻿/**
- * Product Service — Linka (Supabase CRUD)
+ * Product Service — Empreende iCEV (Supabase CRUD)
  * Full CRUD for products with Supabase integration and mock fallback.
  */
 
@@ -135,7 +135,7 @@ async function getCategoryDefaults(categoryId) {
     if (error) throw error;
     return data || {};
   } catch (error) {
-    console.warn('Nao foi possivel carregar regras da categoria:', error.message);
+    console.warn('Não foi possível carregar regras da categoria:', error.message);
     return {};
   }
 }
@@ -251,7 +251,7 @@ export async function updateSellerProduct(productId, updates) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Nao foi possivel atualizar o produto.');
+      throw new Error(data.error || 'Não foi possível atualizar a oferta.');
     }
     return { success: true, product: transformProduct(data.product) };
   } catch (err) {
@@ -293,7 +293,7 @@ export async function deleteSellerProduct(productId) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Nao foi possivel remover o produto.');
+      throw new Error(data.error || 'Não foi possível remover a oferta.');
     }
     return { success: true, product: transformProduct(data.product) };
   } catch (err) {
@@ -316,7 +316,7 @@ export async function incrementProductClicks(productId) {
     const response = await fetch(`${API_URL}/products/${productId}/click`, { method: 'POST' });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || 'Nao foi possivel registrar clique.');
+      throw new Error(data.error || 'Não foi possível registrar clique.');
     }
   } catch (err) {
     // Click tracking is non-critical; keep production console clean.
@@ -368,7 +368,7 @@ export async function approveProduct(productId) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Nao foi possivel aprovar o produto.');
+      throw new Error(data.error || 'Não foi possível aprovar a oferta.');
     }
     return { success: true, product: transformProduct(data.product) };
   } catch (err) {
@@ -415,7 +415,7 @@ export async function renewProduct(productId) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || 'Nao foi possivel renovar o produto.');
+      throw new Error(data.error || 'Não foi possível renovar a oferta.');
     }
     return { success: true, product: transformProduct(data.product) };
   } catch (err) {
