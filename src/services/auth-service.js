@@ -88,8 +88,14 @@ function translateAuthError(message = '') {
       text: 'O cadastro está desativado neste projeto. Verifique as configurações do Supabase.',
     },
     {
-      match: ['email rate limit exceeded', 'rate limit', 'security purposes'],
-      text: 'O envio de e-mails atingiu o limite temporário. Aguarde alguns minutos antes de tentar de novo.',
+      // The same address asked again within a minute.
+      match: ['security purposes'],
+      text: 'Aguarde um minuto antes de pedir outro e-mail para este endereço.',
+    },
+    {
+      // Project-wide limit of confirmation e-mails (Supabase's built-in sender allows very few per hour).
+      match: ['email rate limit exceeded', 'rate limit'],
+      text: 'Muitos cadastros ao mesmo tempo: o envio de e-mails de confirmação chegou ao limite por agora. Seus dados continuam aqui; tente de novo em alguns minutos.',
     },
     {
       match: ['database error saving new user', 'database error'],

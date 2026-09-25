@@ -134,7 +134,7 @@
   border-radius: 50%;
   border: 2px solid currentColor;
   border-right-color: transparent;
-  animation: lk-spin 700ms linear infinite;
+  animation: ei-spin 700ms linear infinite;
 }
 
 /* ---------- Form fields ---------- */
@@ -483,7 +483,7 @@ select.input-field,
   border-radius: var(--r-sm);
   background: linear-gradient(90deg, #ECEEF4 0%, #F4F5F8 50%, #ECEEF4 100%);
   background-size: 200% 100%;
-  animation: lk-shimmer 1.4s var(--ease-in-out) infinite;
+  animation: ei-shimmer 1.4s var(--ease-in-out) infinite;
 }
 .skeleton-text { height: 12px; margin-bottom: 8px; }
 .skeleton-title { height: 18px; width: 70%; margin-bottom: 12px; }
@@ -502,7 +502,7 @@ select.input-field,
   background: rgba(24, 42, 80, 0.42);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  animation: lk-fade-in var(--dur-2) var(--ease-out);
+  animation: ei-fade-in var(--dur-2) var(--ease-out);
 }
 
 .modal-content {
@@ -520,7 +520,7 @@ select.input-field,
   background: var(--paper);
   color: var(--ink);
   box-shadow: var(--shadow-3);
-  animation: lk-sheet-in var(--dur-3) var(--ease-out);
+  animation: ei-sheet-in var(--dur-3) var(--ease-out);
 }
 
 .modal-handle {
@@ -555,7 +555,7 @@ select.input-field,
     --modal-pad-bottom: 28px;
     padding: 28px var(--modal-pad-x) var(--modal-pad-bottom);
     border-radius: var(--r-xl);
-    animation: lk-pop-in var(--dur-3) var(--ease-out);
+    animation: ei-pop-in var(--dur-3) var(--ease-out);
   }
   .modal-handle { display: none; }
 }
@@ -589,7 +589,7 @@ select.input-field,
   line-height: 1.4;
   box-shadow: 0 0 0 1px rgba(24, 42, 80, 0.06), 0 18px 40px -16px rgba(12, 20, 45, 0.55);
   pointer-events: auto;
-  animation: lk-pop-in var(--dur-3) var(--ease-out);
+  animation: ei-pop-in var(--dur-3) var(--ease-out);
 }
 
 .toast-icon {

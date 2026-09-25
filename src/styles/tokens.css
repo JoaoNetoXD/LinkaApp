@@ -124,17 +124,8 @@
   --z-tooltip:        600;
 }
 
-/* Legacy aliases still referenced by inline styles inside the page templates. */
+/* Older names still used by some page templates. */
 :root {
-  --lk-bg: var(--porcelain);
-  --lk-surface: var(--paper);
-  --lk-card: var(--paper);
-  --lk-text: var(--ink);
-  --lk-text-muted: var(--ink-mute);
-  --lk-accent: var(--brand);
-  --lk-success: var(--success);
-  --lk-danger: var(--danger);
-  --lk-warning: var(--warning);
 
   --background: var(--paper);
   --text-primary: var(--ink);

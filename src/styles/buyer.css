@@ -168,7 +168,7 @@
   border: 1px solid var(--rule);
   box-shadow: var(--shadow-2);
 }
-.search-wrapper:focus-within .search-suggestions { display: block; animation: lk-pop-in var(--dur-2) var(--ease-out); }
+.search-wrapper:focus-within .search-suggestions { display: block; animation: ei-pop-in var(--dur-2) var(--ease-out); }
 .buyer-header:has(.search-wrapper:focus-within .search-suggestions) :is(.category-scroll, .feed-filters) { visibility: hidden; }
 
 .suggestion-item {
@@ -215,7 +215,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-.feed-filters.open { display: grid; animation: lk-pop-in var(--dur-2) var(--ease-out); }
+.feed-filters.open { display: grid; animation: ei-pop-in var(--dur-2) var(--ease-out); }
 
 .feed-filter {
   display: flex;
@@ -564,7 +564,7 @@
 .card-timer .timer-icon svg { width: 13px; height: 13px; }
 .card-timer.timer-amber { color: var(--warning); }
 .card-timer.timer-critical { color: var(--danger); }
-.card-timer .timer-icon.pulse { animation: lk-pulse-dot 1.4s ease-in-out infinite; }
+.card-timer .timer-icon.pulse { animation: ei-pulse-dot 1.4s ease-in-out infinite; }
 
 .card-slots-low { color: var(--warning); }
 .card-slots-low::before {

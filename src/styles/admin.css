@@ -653,7 +653,7 @@
 }
 .moderation-card:first-child { border-top: 0; }
 .moderation-card.is-processing { opacity: 0.55; }
-.moderation-card.is-processing .approve-btn svg { animation: lk-spin 900ms linear infinite; }
+.moderation-card.is-processing .approve-btn svg { animation: ei-spin 900ms linear infinite; }
 
 .moderation-card-inner {
   display: grid;
@@ -1844,7 +1844,7 @@ textarea.admin-domain-input { min-height: 120px; }
   flex-direction: column;
   gap: 14px;
   width: min(960px, 100%);
-  animation: lk-pop-in var(--dur-3) var(--ease-out);
+  animation: ei-pop-in var(--dur-3) var(--ease-out);
 }
 
 .admin-photo-stage {

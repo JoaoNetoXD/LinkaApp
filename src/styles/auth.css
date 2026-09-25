@@ -373,7 +373,7 @@
   background: var(--danger-tint);
   color: var(--danger);
 }
-.auth-error.visible { display: block; animation: lk-pop-in var(--dur-2) var(--ease-out); }
+.auth-error.visible { display: block; animation: ei-pop-in var(--dur-2) var(--ease-out); }
 .auth-error.success { background: var(--success-tint); color: var(--success); }
 .auth-error.info { background: var(--brand-tint); color: var(--brand-ink); }
 .auth-error.warning { background: var(--warning-tint); color: var(--warning); }

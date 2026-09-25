@@ -17,7 +17,7 @@
   background: rgba(24, 42, 80, 0.46);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
-  animation: lk-fade-in var(--dur-2) var(--ease-out);
+  animation: ei-fade-in var(--dur-2) var(--ease-out);
 }
 
 .first-run-tour-shell.closing {
@@ -41,11 +41,11 @@
   border-radius: var(--r-xl);
   background: var(--paper);
   box-shadow: var(--shadow-3);
-  animation: lk-sheet-in var(--dur-3) var(--ease-out);
+  animation: ei-sheet-in var(--dur-3) var(--ease-out);
 }
 
 @media (min-width: 720px) {
-  .first-run-tour-card { padding: 22px 24px 24px; animation: lk-pop-in var(--dur-3) var(--ease-out); }
+  .first-run-tour-card { padding: 22px 24px 24px; animation: ei-pop-in var(--dur-3) var(--ease-out); }
 }
 
 .first-run-tour-head {
@@ -92,7 +92,7 @@
   background: var(--paper);
   border: 1px solid var(--rule);
   box-shadow: var(--shadow-2);
-  animation: lk-pop-in var(--dur-3) var(--ease-out);
+  animation: ei-pop-in var(--dur-3) var(--ease-out);
 }
 
 .tour-scene-top {
@@ -370,7 +370,7 @@
   z-index: var(--z-modal);
   width: min(440px, calc(100vw - 20px));
   transform: translateX(-50%);
-  animation: lk-pop-in var(--dur-3) var(--ease-out);
+  animation: ei-pop-in var(--dur-3) var(--ease-out);
 }
 .install-prompt-shell.closing { opacity: 0; transition: opacity 200ms var(--ease-out); }
 

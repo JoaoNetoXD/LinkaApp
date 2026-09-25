@@ -13,7 +13,7 @@
   flex: 1;
   width: 100%;
   /* Opacity only: a transform here would trap position: fixed children (buy bar, docks). */
-  animation: lk-page-in var(--dur-3) var(--ease-out) backwards;
+  animation: ei-page-in var(--dur-3) var(--ease-out) backwards;
 }
 
 /* ---------- Type roles ---------- */
@@ -81,7 +81,7 @@
 }
 
 .hl--draw::after {
-  animation: lk-bar-draw 640ms 140ms var(--ease-out) both;
+  animation: ei-bar-draw 640ms 140ms var(--ease-out) both;
 }
 
 /* ---------- Signature: coupon perforation ----------
@@ -141,39 +141,39 @@
 
 /* ---------- Keyframes ---------- */
 
-@keyframes lk-page-in {
+@keyframes ei-page-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 
-@keyframes lk-bar-draw {
+@keyframes ei-bar-draw {
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
 }
 
-@keyframes lk-sheet-in {
+@keyframes ei-sheet-in {
   from { transform: translateY(100%); }
   to   { transform: none; }
 }
 
-@keyframes lk-pop-in {
+@keyframes ei-pop-in {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to   { opacity: 1; transform: none; }
 }
 
-@keyframes lk-fade-in {
+@keyframes ei-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
 
-@keyframes lk-shimmer {
+@keyframes ei-shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
 }
 
-@keyframes lk-spin { to { transform: rotate(360deg); } }
+@keyframes ei-spin { to { transform: rotate(360deg); } }
 
-@keyframes lk-pulse-dot {
+@keyframes ei-pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }

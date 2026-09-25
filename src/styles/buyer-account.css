@@ -1282,7 +1282,7 @@ a.notif-item:focus-visible { outline-offset: -3px; }
 
 .product-lightbox-frame .product-image {
   object-fit: contain;
-  animation: lk-fade-in var(--dur-2) var(--ease-out);
+  animation: ei-fade-in var(--dur-2) var(--ease-out);
 }
 
 .product-lightbox-arrow {

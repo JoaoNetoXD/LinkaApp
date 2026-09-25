@@ -101,7 +101,8 @@ function setLoading(button, isLoading, text) {
 
 function isEmailRateLimitError(text = '') {
   const normalized = text.toLowerCase();
-  return normalized.includes('limite temporário')
+  return normalized.includes('chegou ao limite')
+    || normalized.includes('aguarde um minuto')
     || normalized.includes('muitas tentativas')
     || normalized.includes('rate limit');
 }
