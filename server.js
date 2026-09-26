@@ -98,11 +98,31 @@ function formatReadinessError(error) {
   ].filter(Boolean).join(' - ') || 'erro sem detalhes retornado pelo Supabase';
 }
 
+// The site can answer on more than one address (the Netlify one and the iCEV subdomain):
+// every address Netlify knows, plus ALLOWED_ORIGINS (comma-separated) for extra ones.
 const allowedOrigins = new Set(
-  [FRONTEND_URL, 'http://localhost:5173', 'http://127.0.0.1:5173']
+  [
+    FRONTEND_URL,
+    process.env.URL,
+    process.env.DEPLOY_PRIME_URL,
+    ...String(process.env.ALLOWED_ORIGINS || '').split(','),
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ]
+    .map((origin) => String(origin || '').trim().replace(/\/+$/, ''))
     .filter(Boolean)
-    .map((origin) => origin.trim())
 );
+
+// Same-origin calls (the page and /api on the same address) are always allowed, so a new
+// domain pointed at the site works without touching the configuration.
+function isSameOrigin(req, origin) {
+  try {
+    const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
+    return Boolean(host) && new URL(origin).host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
+}
 
 const supabaseAdmin =
   SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
@@ -111,11 +131,12 @@ const supabaseAdmin =
       })
     : null;
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-    return callback(new Error('Origem não permitida'));
-  },
+app.use(cors((req, callback) => {
+  const origin = req.header('Origin');
+  if (!origin || allowedOrigins.has(origin) || isSameOrigin(req, origin)) {
+    return callback(null, { origin: true });
+  }
+  return callback(new Error('Origem não permitida'));
 }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -1896,6 +1917,9 @@ app.get('/api/health', async (req, res) => {
     ...configStatus,
     ...database,
     frontendUrl: FRONTEND_URL,
+    // The address this request came in on: shows a new domain reaches the API with its own
+    // host (the same-origin check in the CORS rule relies on it).
+    requestHost: String(req.headers['x-forwarded-host'] || req.headers.host || ''),
     paymentsEnabled: PAYMENTS_ENABLED,
     mercadoPagoRedirectUri: MP_REDIRECT_URI,
     expectedMercadoPagoRedirectUri: CANONICAL_MP_REDIRECT_URI,
@@ -1903,6 +1927,17 @@ app.get('/api/health', async (req, res) => {
     missingProductionConfig,
     readyForProduction,
   });
+});
+
+// Errors that reach here answer as JSON, without stack traces. A rejected origin is a 403,
+// not a server error, so a misconfigured domain is easy to spot.
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error?.message === 'Origem não permitida') {
+    return res.status(403).json({ success: false, code: 'ORIGIN_NOT_ALLOWED', error: 'Origem não permitida.' });
+  }
+  console.error('Erro não tratado na API:', error);
+  return res.status(500).json({ success: false, code: 'SERVER_ERROR', error: 'Erro inesperado no servidor.' });
 });
 
 if (!process.env.NETLIFY) {

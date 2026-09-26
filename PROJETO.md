@@ -44,4 +44,4 @@ Para ver as telas sem backend: `npm run dev` e, para capturas, `node scripts/dev
 2. ~~Publicar o site novo e rodar `coupon-claim-migration.sql` e `profile-privacy-migration.sql`~~ (feito em 24/09/2026). Falta rodar `scripts/integrity-migration.sql` no Supabase de produção: trava a edição de ofertas fora do app, devolve o estoque de cupons vencidos, limita o que o aluno edita no perfil e agenda a limpeza a cada 10 minutos (pg_cron). Testada com `npm run test:sql`.
 3. Atualizar os modelos de e-mail do Supabase com `SUPABASE_AUTH_EMAILS.md`.
 4. Rodar o teste de ponta a ponta do `DEPLOY_NETLIFY.md` com contas reais do iCEV.
-5. Renomear o site no Netlify para o nome novo e atualizar `VITE_APP_URL`, `FRONTEND_URL` e as URLs do Supabase Auth (passo a passo em `DEPLOY_NETLIFY.md`). O app não tem mais endereço fixo no código.
+5. Levar o site para o subdomínio do iCEV (passo a passo em `DEPLOY_NETLIFY.md`, "Endereço do iCEV"). Não renomear o site no Netlify: `linka-app.netlify.app` fica como destino técnico e passa a redirecionar para o endereço novo. O app não tem endereço fixo no código.

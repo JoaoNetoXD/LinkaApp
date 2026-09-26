@@ -1,6 +1,6 @@
 # Deploy no Netlify + Supabase — Empreende iCEV
 
-Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e compra direto com a empresa, sem pagamento dentro do app. O subdomínio gratuito do Netlify (`https://seu-app.netlify.app`) já serve para frontend e API.
+Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e compra direto com a empresa, sem pagamento dentro do app. O mesmo deploy responde no endereço do Netlify (`https://linka-app.netlify.app`) e no subdomínio do iCEV (veja "Endereço do iCEV" abaixo).
 
 ## 1. Banco Supabase
 
@@ -53,11 +53,13 @@ Em Site configuration > Environment variables:
 ```env
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
-VITE_APP_URL=https://seu-site.netlify.app
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
-FRONTEND_URL=https://seu-site.netlify.app
+FRONTEND_URL=https://linka-app.netlify.app
+ALLOWED_ORIGINS=https://<sub>,https://linka-app.netlify.app
 PAYMENTS_ENABLED=false
 ```
+
+`VITE_APP_URL` fica vazio até o subdomínio ter HTTPS: sem ele, os links dos e-mails voltam para o endereço que a pessoa está usando. Nunca coloque o endereço antigo nele.
 
 Não coloque `SUPABASE_SERVICE_ROLE_KEY` em variáveis `VITE_`: tudo que começa com `VITE_` vai para o navegador. Com `PAYMENTS_ENABLED=false`, as rotas de pagamento respondem 410 e as chaves do Mercado Pago não são necessárias.
 
@@ -66,18 +68,48 @@ Não coloque `SUPABASE_SERVICE_ROLE_KEY` em variáveis `VITE_`: tudo que começa
 Em Authentication > URL Configuration:
 
 ```text
-Site URL: https://seu-site.netlify.app
+Site URL: https://linka-app.netlify.app  (troque para https://<sub> só depois do HTTPS do subdomínio)
 Redirect URLs:
-https://seu-site.netlify.app/**
+https://<sub>/**
+https://linka-app.netlify.app/**
 http://localhost:5173/**
 http://127.0.0.1:5173/**
 ```
 
 Em Authentication > Email Templates, use os modelos de `SUPABASE_AUTH_EMAILS.md`.
 
-### Endereço com o nome novo
+### Endereço do iCEV (subdomínio)
 
-Se o site ainda estiver com o endereço antigo no Netlify, renomeie em Site configuration > Site details > Change site name (por exemplo `empreende-icev`, se estiver livre). Depois atualize `VITE_APP_URL` e `FRONTEND_URL` no Netlify e a Site URL e as Redirect URLs no Supabase Auth, e faça um novo deploy. As prévias de link (WhatsApp, Instagram) e os e-mails passam a usar o endereço novo automaticamente.
+O site vai morar num subdomínio do iCEV (ex.: `empreende.somosicev.com`). Não renomeie o site no Netlify: o endereço `linka-app.netlify.app` continua sendo o destino técnico do subdomínio e o link antigo que os alunos já têm. Depois da troca, ele só redireciona para o endereço novo.
+
+Faça nesta ordem. Onde está `<sub>`, use o subdomínio completo (ex.: `empreende.somosicev.com`).
+
+1. **Combine com a TI o método**: um registro DNS apontando o nome inteiro para o Netlify. Nada de "redirecionamento", "encaminhamento com máscara", iframe, proxy ou caminho (`icev.edu.br/empreende`): o site bloqueia ser aberto dentro de outra página e usa caminhos absolutos (`/api`, `/assets`).
+2. **Netlify > Environment variables**: `ALLOWED_ORIGINS=https://<sub>,https://linka-app.netlify.app` (escopo que inclua Functions) e faça um deploy. A API passa a aceitar os dois endereços.
+3. **Supabase > Authentication > URL Configuration > Redirect URLs**: adicione `https://<sub>/**` e mantenha `https://linka-app.netlify.app/**`, `http://localhost:5173/**` e `http://127.0.0.1:5173/**`. Não troque a Site URL ainda.
+4. **Netlify > Domain management > Add a domain you already own**: digite `<sub>`. Ele vira o domínio principal na hora. Abra "Pending DNS verification" e mande para a TI exatamente os registros que o Netlify mostrar.
+5. **A TI**, no DNS do domínio (hoje `somosicev.com` fica no GoDaddy e `icev.edu.br` no Linode):
+   - apaga todos os registros com esse nome exato (A, AAAA, CNAME, MX, TXT);
+   - cria `<nome>  CNAME  linka-app.netlify.app` (TTL 300), mais o TXT de verificação, se o Netlify pedir;
+   - se não der para usar CNAME: um único registro A para `75.2.60.5` (balanceador do Netlify), sem AAAA. **Nunca** o IP que `linka-app.netlify.app` mostra hoje: ele muda;
+   - não adiciona registro CAA nem proxy/CDN na frente;
+   - se houver DNS interno no campus, cria o mesmo registro lá, e libera `*.netlify.app` e `*.supabase.co` no filtro de rede.
+6. **Confira** (cmd ou Git Bash): `nslookup -type=CNAME <sub> 8.8.8.8` mostra `linka-app.netlify.app`; `curl.exe -s https://<sub>/api/health` responde `"status":"ok"` e `"requestHost":"<sub>"`. Em Domain management > HTTPS, espere o certificado (minutos, às vezes horas; use "Verify DNS configuration"). Só divulgue quando o cadeado aparecer.
+7. **Com o HTTPS funcionando**: em Environment variables, `VITE_APP_URL=https://<sub>` (opcional, põe o endereço novo nos e-mails de todo mundo) e Deploys > Trigger deploy > Clear cache and deploy site.
+8. **Supabase > Site URL** = `https://<sub>`. Teste um cadastro e um "Esqueci minha senha": o botão do e-mail deve abrir `https://<sub>/#/auth?...`.
+9. **Teste no 4G e no Wi-Fi do campus**: cadastro, confirmação, nova senha, pegar cupom, cadastrar empresa, editar e renovar oferta.
+10. **Redirecione o endereço antigo**: em `netlify.toml`, logo depois do bloco `/api/*` e antes de `/assets/*`:
+
+    ```toml
+    [[redirects]]
+      from = "https://linka-app.netlify.app/*"
+      to = "https://<sub>/:splat"
+      status = 302
+      force = true
+    ```
+
+    Depois, `FRONTEND_URL=https://<sub>` no Netlify e novo deploy. Troque 302 por 301 depois de uma semana sem problemas.
+11. **Avise os alunos**: endereço novo, entrar de novo (a sessão é por endereço) e, quem instalou o app, remover e instalar de novo a partir do endereço novo.
 
 ## 5. Privacidade dos perfis (depois do deploy)
 

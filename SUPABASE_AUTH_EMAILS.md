@@ -107,25 +107,25 @@ Em `Authentication > URL Configuration`, configure:
 
 ```text
 Site URL:
-https://seu-site.netlify.app
+https://linka-app.netlify.app   (depois do HTTPS do subdomínio do iCEV: https://<sub>)
 
 Redirect URLs:
-https://seu-site.netlify.app/**
+https://<sub>/**
+https://linka-app.netlify.app/**
 http://localhost:5173/**
 http://127.0.0.1:5173/**
 ```
 
+Se o endereço de retorno não estiver nesta lista, o Supabase usa a Site URL sem avisar: o aluno cai na página inicial do outro endereço e perde a oferta que queria.
+
 O app envia estes redirects automaticamente:
 
 ```text
-Confirmação de aluno:
-https://seu-site.netlify.app/#/auth?confirmed=1&role=buyer&next=buyer
-
-Confirmação de empresa:
-https://seu-site.netlify.app/#/auth?confirmed=1&role=seller&next=seller
+Confirmação de conta (next = oferta que o aluno queria, quando houver):
+https://<endereço em uso>/#/auth?confirmed=1&role=buyer&next=%23%2Fbuyer%2Foffer%3Fid%3D...
 
 Redefinição de senha:
-https://seu-site.netlify.app/#/auth?reset=1
+https://<endereço em uso>/#/auth?reset=1
 ```
 
 ## Aplicar automaticamente via API de gerenciamento
