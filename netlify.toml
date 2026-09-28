@@ -12,6 +12,15 @@
   status = 200
   force = true
 
+# The site lives at the iCEV subdomain; the Netlify address only forwards there. It sits
+# below /api/* so an app still open on the old address keeps working until it reloads.
+# 302 for now: switch to 301 after a quiet week on the subdomain.
+[[redirects]]
+  from = "https://empreende-icev.netlify.app/*"
+  to = "https://empreende.somosicev.com/:splat"
+  status = 302
+  force = true
+
 # A file from an older build that no longer exists is a 404, never the app page: the app
 # then reloads itself (see vite:preloadError in src/main.js) instead of running HTML as JS.
 [[redirects]]

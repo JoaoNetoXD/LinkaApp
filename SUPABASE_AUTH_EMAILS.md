@@ -107,10 +107,10 @@ Em `Authentication > URL Configuration`, configure:
 
 ```text
 Site URL:
-https://empreende-icev.netlify.app   (depois do HTTPS do subdomínio do iCEV: https://<sub>)
+https://empreende.somosicev.com
 
 Redirect URLs:
-https://<sub>/**
+https://empreende.somosicev.com/**
 https://empreende-icev.netlify.app/**
 http://localhost:5173/**
 http://127.0.0.1:5173/**

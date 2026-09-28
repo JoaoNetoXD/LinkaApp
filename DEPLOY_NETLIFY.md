@@ -1,6 +1,6 @@
 # Deploy no Netlify + Supabase — Empreende iCEV
 
-Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e compra direto com a empresa, sem pagamento dentro do app. O mesmo deploy responde no endereço do Netlify (`https://empreende-icev.netlify.app`) e no subdomínio do iCEV (veja "Endereço do iCEV" abaixo).
+Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e compra direto com a empresa, sem pagamento dentro do app. Endereço oficial: `https://empreende.somosicev.com` (veja "Endereço do iCEV" abaixo); o endereço do Netlify só redireciona para ele.
 
 ## 1. Banco Supabase
 
@@ -54,12 +54,10 @@ Em Site configuration > Environment variables:
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
-FRONTEND_URL=https://empreende-icev.netlify.app
-ALLOWED_ORIGINS=https://<sub>,https://empreende-icev.netlify.app
 PAYMENTS_ENABLED=false
 ```
 
-`VITE_APP_URL` fica vazio até o subdomínio ter HTTPS: sem ele, os links dos e-mails voltam para o endereço que a pessoa está usando. Nunca coloque o endereço antigo nele.
+`FRONTEND_URL`, `VITE_APP_URL` e `ALLOWED_ORIGINS` podem ficar vazios: o Netlify informa o domínio principal (`https://empreende.somosicev.com`) em cada deploy, os links dos e-mails voltam para o endereço que a pessoa está usando e a API aceita chamadas do próprio endereço. Se preencher algum, use só o subdomínio; nunca um endereço antigo.
 
 Não coloque `SUPABASE_SERVICE_ROLE_KEY` em variáveis `VITE_`: tudo que começa com `VITE_` vai para o navegador. Com `PAYMENTS_ENABLED=false`, as rotas de pagamento respondem 410 e as chaves do Mercado Pago não são necessárias.
 
@@ -68,9 +66,9 @@ Não coloque `SUPABASE_SERVICE_ROLE_KEY` em variáveis `VITE_`: tudo que começa
 Em Authentication > URL Configuration:
 
 ```text
-Site URL: https://empreende-icev.netlify.app  (troque para https://<sub> só depois do HTTPS do subdomínio)
+Site URL: https://empreende.somosicev.com
 Redirect URLs:
-https://<sub>/**
+https://empreende.somosicev.com/**
 https://empreende-icev.netlify.app/**
 http://localhost:5173/**
 http://127.0.0.1:5173/**
@@ -80,36 +78,13 @@ Em Authentication > Email Templates, use os modelos de `SUPABASE_AUTH_EMAILS.md`
 
 ### Endereço do iCEV (subdomínio)
 
-O site vai morar num subdomínio do iCEV (ex.: `empreende.somosicev.com`). O endereço do Netlify, `empreende-icev.netlify.app`, é o destino técnico do subdomínio: não renomeie o site de novo, ou o registro da TI deixa de valer. Depois da troca, o endereço do Netlify só redireciona para o subdomínio.
+O site mora em **https://empreende.somosicev.com** desde 28/09/2026.
 
-Faça nesta ordem. Onde está `<sub>`, use o subdomínio completo (ex.: `empreende.somosicev.com`).
-
-1. **Combine com a TI o método**: um registro DNS apontando o nome inteiro para o Netlify. Nada de "redirecionamento", "encaminhamento com máscara", iframe, proxy ou caminho (`icev.edu.br/empreende`): o site bloqueia ser aberto dentro de outra página e usa caminhos absolutos (`/api`, `/assets`).
-2. **Netlify > Environment variables**: `ALLOWED_ORIGINS=https://<sub>,https://empreende-icev.netlify.app` (escopo que inclua Functions) e faça um deploy. A API passa a aceitar os dois endereços.
-3. **Supabase > Authentication > URL Configuration > Redirect URLs**: adicione `https://<sub>/**` e mantenha `https://empreende-icev.netlify.app/**`, `http://localhost:5173/**` e `http://127.0.0.1:5173/**`. Não troque a Site URL ainda.
-4. **Netlify > Domain management > Add a domain you already own**: digite `<sub>`. Ele vira o domínio principal na hora. Abra "Pending DNS verification" e mande para a TI exatamente os registros que o Netlify mostrar.
-5. **A TI**, no DNS do domínio (hoje `somosicev.com` fica no GoDaddy e `icev.edu.br` no Linode):
-   - apaga todos os registros com esse nome exato (A, AAAA, CNAME, MX, TXT);
-   - cria `<nome>  CNAME  empreende-icev.netlify.app` (TTL 300), mais o TXT de verificação, se o Netlify pedir;
-   - se não der para usar CNAME: um único registro A para `75.2.60.5` (balanceador do Netlify), sem AAAA. **Nunca** o IP que `empreende-icev.netlify.app` mostra hoje: ele muda;
-   - não adiciona registro CAA nem proxy/CDN na frente;
-   - se houver DNS interno no campus, cria o mesmo registro lá, e libera `*.netlify.app` e `*.supabase.co` no filtro de rede.
-6. **Confira** (cmd ou Git Bash): `nslookup -type=CNAME <sub> 8.8.8.8` mostra `empreende-icev.netlify.app`; `curl.exe -s https://<sub>/api/health` responde `"status":"ok"` e `"requestHost":"<sub>"`. Em Domain management > HTTPS, espere o certificado (minutos, às vezes horas; use "Verify DNS configuration"). Só divulgue quando o cadeado aparecer.
-7. **Com o HTTPS funcionando**: em Environment variables, `VITE_APP_URL=https://<sub>` (opcional, põe o endereço novo nos e-mails de todo mundo) e Deploys > Trigger deploy > Clear cache and deploy site.
-8. **Supabase > Site URL** = `https://<sub>`. Teste um cadastro e um "Esqueci minha senha": o botão do e-mail deve abrir `https://<sub>/#/auth?...`.
-9. **Teste no 4G e no Wi-Fi do campus**: cadastro, confirmação, nova senha, pegar cupom, cadastrar empresa, editar e renovar oferta.
-10. **Redirecione o endereço antigo**: em `netlify.toml`, logo depois do bloco `/api/*` e antes de `/assets/*`:
-
-    ```toml
-    [[redirects]]
-      from = "https://empreende-icev.netlify.app/*"
-      to = "https://<sub>/:splat"
-      status = 302
-      force = true
-    ```
-
-    Depois, `FRONTEND_URL=https://<sub>` no Netlify e novo deploy. Troque 302 por 301 depois de uma semana sem problemas.
-11. **Avise os alunos**: endereço novo, entrar de novo (a sessão é por endereço) e, quem instalou o app, remover e instalar de novo a partir do endereço novo.
+- **DNS** (feito pela TI, no GoDaddy de `somosicev.com`): `empreende  CNAME  empreende-icev.netlify.app`. O endereço do Netlify é o destino técnico desse registro: não renomeie o site no Netlify, ou o subdomínio para de funcionar. Se um dia não der para usar CNAME, o substituto é um único registro A para `75.2.60.5` (balanceador do Netlify), nunca o IP que o endereço do Netlify mostra.
+- **Netlify > Domain management**: `empreende.somosicev.com` é o domínio principal; o certificado HTTPS (Let's Encrypt) é renovado sozinho, desde que o CNAME continue lá. Não adicione registro CAA nem proxy/CDN na frente.
+- **Endereço antigo**: `netlify.toml` manda `empreende-icev.netlify.app` para o subdomínio (302), com o caminho e o `#/...` intactos; `/api/*` continua respondendo nos dois endereços. Depois de uma semana sem problemas, troque `status = 302` por `301`.
+- **Conferir**: `curl.exe -s https://empreende.somosicev.com/api/health` responde `"status":"ok"` e `"requestHost":"empreende.somosicev.com"`.
+- **Quem já usava o endereço antigo** entra de novo (a sessão fica guardada por endereço) e, se instalou o app, remove e instala de novo a partir do endereço novo.
 
 ## 5. Privacidade dos perfis (depois do deploy)
 
