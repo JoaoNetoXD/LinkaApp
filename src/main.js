@@ -548,7 +548,9 @@ export function replayFirstRunTour() {
 function maybeShowFirstRunTour(path = '') {
   if (!canShowFirstRunTour(path)) return;
   window.setTimeout(() => {
-    showFirstRunTour(path);
+    // Checked again: in that time the person may have tapped "Entrar" or opened an offer.
+    const [currentPath] = (window.location.hash.slice(1) || window.location.pathname).split('?');
+    showFirstRunTour(currentPath);
   }, 900);
 }
 

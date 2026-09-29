@@ -50,8 +50,37 @@ function normalizeRole(role) {
   return role === 'seller' || role === 'admin' || role === 'superadmin' ? role : 'buyer';
 }
 
-function translateAuthError(message = '') {
-  const normalized = String(message || '').toLowerCase();
+const EMAIL_SEND_FAILED_TEXT = 'O e-mail não pôde ser enviado agora. Tente de novo em alguns minutos; se continuar, avise a organização do Empreende iCEV.';
+
+const WEAK_PASSWORD_REASONS = {
+  length: 'use mais caracteres',
+  characters: 'misture letras maiúsculas, minúsculas, números e símbolos',
+  pwned: 'essa senha já apareceu em vazamentos de dados',
+};
+
+// Supabase error codes first: the English messages change between versions, the codes do not.
+function translateAuthErrorCode(err) {
+  const code = String(err?.code || '');
+  const message = String(err?.message || '').toLowerCase();
+
+  if (code === 'email_address_not_authorized' || message.includes('error sending')) return EMAIL_SEND_FAILED_TEXT;
+  if (code === 'over_request_rate_limit') return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.';
+  if (code === 'email_address_invalid') return 'Este e-mail não é aceito. Confira se digitou certo.';
+  if (code === 'captcha_failed') return 'A verificação de segurança falhou. Recarregue a página e tente de novo.';
+  if (code === 'weak_password') {
+    const hints = (err?.reasons || []).map((reason) => WEAK_PASSWORD_REASONS[reason]).filter(Boolean);
+    return hints.length
+      ? `Escolha uma senha mais forte: ${hints.join('; ')}.`
+      : 'Escolha uma senha mais forte, com pelo menos 6 caracteres.';
+  }
+  return '';
+}
+
+function translateAuthError(err) {
+  const byCode = translateAuthErrorCode(err);
+  if (byCode) return byCode;
+
+  const normalized = String(err?.message || '').toLowerCase();
   if (!normalized) return 'Não foi possível concluir a autenticação.';
 
   const knownMessages = [
@@ -108,7 +137,14 @@ function translateAuthError(message = '') {
   ];
 
   const found = knownMessages.find((item) => item.match.some((part) => normalized.includes(part)));
-  return found?.text || 'Não foi possível concluir a autenticação. Revise os dados e tente novamente.';
+  if (found) return found.text;
+  // The code lets the organizers find the exact failure in the Supabase logs.
+  const reference = err?.code || err?.status;
+  return `Não foi possível concluir a autenticação. Revise os dados e tente novamente.${reference ? ` (código: ${reference})` : ''}`;
+}
+
+function isEmailNotConfirmed(err) {
+  return err?.code === 'email_not_confirmed' || String(err?.message || '').toLowerCase().includes('email not confirmed');
 }
 
 export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}) {
@@ -171,7 +207,7 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
       return {
         success: false,
         code: 'ALREADY_REGISTERED',
-        error: 'Já existe uma conta com este e-mail. Entre com sua senha ou use "Esqueci minha senha".',
+        error: 'Este e-mail já tem conta, inclusive se ela foi criada no endereço antigo do site. Entre com a mesma senha ou use "Esqueci minha senha".',
       };
     }
 
@@ -187,8 +223,8 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
       homePath: getHomePathForRole(profile?.role || accountRole),
     };
   } catch (err) {
-    console.error('Sign up error:', err.message);
-    return { success: false, error: translateAuthError(err.message) };
+    console.error('Sign up error:', err.code, err.message);
+    return { success: false, error: translateAuthError(err) };
   }
 }
 
@@ -217,8 +253,31 @@ export async function signInUser(email, password) {
       homePath: getHomePathForRole(profile?.role || data.user?.user_metadata?.role || 'buyer'),
     };
   } catch (err) {
-    console.error('Sign in error:', err.message);
-    return { success: false, error: translateAuthError(err.message) };
+    console.error('Sign in error:', err.code, err.message);
+    if (isEmailNotConfirmed(err)) {
+      return {
+        success: false,
+        code: 'EMAIL_NOT_CONFIRMED',
+        error: 'Seu e-mail ainda não foi confirmado. Abra o link que enviamos (confira o spam) ou peça outro abaixo.',
+      };
+    }
+    return { success: false, error: translateAuthError(err) };
+  }
+}
+
+// For accounts created while confirmation e-mails were not arriving.
+export async function resendConfirmationEmail(email) {
+  try {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: getEmailRedirectTo('buyer') },
+    });
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.error('Resend confirmation error:', err.code, err.message);
+    return { success: false, error: translateAuthError(err) };
   }
 }
 
@@ -232,7 +291,7 @@ export async function requestPasswordReset(email) {
     return { success: true };
   } catch (err) {
     console.error('Password reset request error:', err.message);
-    return { success: false, error: translateAuthError(err.message) };
+    return { success: false, error: translateAuthError(err) };
   }
 }
 
@@ -243,7 +302,7 @@ export async function updateUserPassword(password) {
     return { success: true, data };
   } catch (err) {
     console.error('Password update error:', err.message);
-    return { success: false, error: translateAuthError(err.message) };
+    return { success: false, error: translateAuthError(err) };
   }
 }
 

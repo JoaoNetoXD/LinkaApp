@@ -1,5 +1,6 @@
 import {
   requestPasswordReset,
+  resendConfirmationEmail,
   signInUser,
   signUpUser,
   updateUserPassword,
@@ -92,6 +93,33 @@ function showAuthMessage(text, type = 'error') {
   if (!errorBox) return;
   errorBox.textContent = text;
   errorBox.className = `auth-error visible ${type}`;
+}
+
+// Sign-in refused because the e-mail was never confirmed: offer a new confirmation link.
+function showResendConfirmation(email) {
+  const errorBox = document.getElementById('authError');
+  if (!errorBox || document.getElementById('btnResendConfirmation')) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'auth-inline-action auth-resend-action';
+  button.id = 'btnResendConfirmation';
+  button.textContent = 'Reenviar e-mail de confirmação';
+  errorBox.after(button);
+
+  button.addEventListener('click', async () => {
+    const defaultText = button.textContent;
+    setLoading(button, true, defaultText);
+    const res = await resendConfirmationEmail(email);
+    if (res.success) {
+      showAuthMessage(`Enviamos um novo link para ${email}. Abra o e-mail (confira o spam) e depois entre.`, 'success');
+      startRetryCooldown(button, 'Reenviar e-mail de confirmação', 60);
+      return;
+    }
+    showAuthMessage(res.error);
+    setLoading(button, false, 'Reenviar e-mail de confirmação');
+    if (isEmailRateLimitError(res.error)) startRetryCooldown(button, 'Reenviar e-mail de confirmação', 60);
+  });
 }
 
 function setLoading(button, isLoading, text) {
@@ -471,6 +499,7 @@ export function renderAuth(container, { entering = false } = {}) {
     document.getElementById('authError').classList.remove('visible', 'success');
 
     if (isLoginMode) {
+      document.getElementById('btnResendConfirmation')?.remove();
       const res = await signInUser(email, password);
       if (res.success) {
         openAfterSignIn(res.homePath || '#/buyer');
@@ -478,6 +507,7 @@ export function renderAuth(container, { entering = false } = {}) {
       }
 
       showAuthMessage(res.error || 'Não foi possível entrar. Verifique os dados.');
+      if (res.code === 'EMAIL_NOT_CONFIRMED') showResendConfirmation(email);
       setLoading(btn, false, defaultText);
       return;
     }

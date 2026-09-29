@@ -328,6 +328,16 @@
   color: var(--brand);
 }
 .auth-inline-action:hover { color: var(--brand-press); text-decoration: underline; text-underline-offset: 3px; }
+.auth-inline-action:disabled { color: var(--ink-mute); text-decoration: none; cursor: default; }
+/* Sits under the message it answers ("e-mail ainda não confirmado"). */
+.auth-resend-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  margin-top: -8px;
+}
+.auth-resend-action .spinner { width: 14px; height: 14px; }
 
 .auth-btn {
   display: inline-flex;
