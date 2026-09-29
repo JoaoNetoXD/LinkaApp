@@ -163,13 +163,18 @@ function renderProductImagePlaceholder(categoryId, width) {
   return `<div class="product-image-placeholder" role="img" aria-label="Produto sem foto">${icon}${label}</div>`;
 }
 
-// Product image renderer — handles mock keys, real URLs, and blob URLs.
-export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
-  const src = typeof imageKey === 'string' && (imageKey.startsWith('http') || imageKey.startsWith('blob:'))
+/** The safe address of a product photo (real URL, upload preview or mock key), or ''. */
+export function getProductImageSrc(imageKey) {
+  return typeof imageKey === 'string' && (imageKey.startsWith('http') || imageKey.startsWith('blob:'))
     ? sanitizeUrl(imageKey)
     : sanitizeUrl(Object.hasOwn(mockImages, imageKey) ? mockImages[imageKey] : '');
+}
+
+// Product image renderer — handles mock keys, real URLs, and blob URLs.
+export function getProductImage(imageKey, width = 400, height = 300, categoryId = 'others') {
+  const src = getProductImageSrc(imageKey);
   if (!src) return renderProductImagePlaceholder(categoryId, width);
-  return `<img src="${escapeHTML(src)}" alt="Foto do produto" data-product-image data-image-category="${escapeHTML(categoryId)}" data-image-width="${width}" class="product-image" loading="lazy" decoding="async" />`;
+  return `<img src="${escapeHTML(src)}" alt="Foto do produto" data-product-image data-image-category="${escapeHTML(categoryId)}" data-image-width="${width}" class="product-image" loading="lazy" decoding="async" draggable="false" />`;
 }
 
 document.addEventListener('error', (event) => {
@@ -177,6 +182,30 @@ document.addEventListener('error', (event) => {
   if (!(image instanceof HTMLImageElement) || !image.hasAttribute('data-product-image')) return;
   image.outerHTML = renderProductImagePlaceholder(image.dataset.imageCategory, Number(image.dataset.imageWidth));
 }, true);
+
+// Photos fade in once they arrive, like in an installed app, instead of painting top to bottom.
+// The shape decides how a square frame shows them (see .photo-backdrop in buyer.css).
+function markPhotoLoaded(image) {
+  if (!image.complete || !image.naturalWidth) return;
+  const ratio = image.naturalWidth / image.naturalHeight;
+  image.dataset.orientation = ratio > 1.08 ? 'landscape' : ratio < 0.92 ? 'portrait' : 'square';
+  image.classList.add('is-loaded');
+}
+document.addEventListener('load', (event) => {
+  if (event.target instanceof HTMLImageElement && event.target.hasAttribute('data-product-image')) {
+    markPhotoLoaded(event.target);
+  }
+}, true);
+// Photos already in the browser's cache can finish before their load event is watched.
+new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (!(node instanceof Element)) continue;
+      if (node.matches('img[data-product-image]')) markPhotoLoaded(node);
+      node.querySelectorAll?.('img[data-product-image]').forEach(markPhotoLoaded);
+    }
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
 
 // Format currency
 export function formatCurrency(value) {

@@ -245,10 +245,11 @@ select.input-field,
   font-weight: 500;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 .chip svg { width: 16px; height: 16px; stroke-width: 1.8; }
 .chip:hover { border-color: var(--rule-strong); color: var(--ink); }
+.chip:active { transform: scale(0.95); }
 .chip.active {
   background: var(--ink);
   border-color: var(--ink);
@@ -674,6 +675,8 @@ select.input-field,
   border-color: var(--brand);
   color: var(--on-navy);
 }
+.canopy .chip .tab-count { background: rgba(255, 255, 255, 0.14); color: var(--on-navy); }
+.canopy .chip.active .tab-count { background: rgba(255, 255, 255, 0.24); }
 
 .canopy .user-avatar { background: var(--brand); }
 

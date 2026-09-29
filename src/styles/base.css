@@ -166,6 +166,13 @@
   to   { opacity: 1; }
 }
 
+@keyframes ei-rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes ei-photo-failsafe { to { opacity: 1; } }
+
 @keyframes ei-shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
@@ -200,6 +207,25 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity 280ms var(--ease-out);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Photos fade in once they arrive (main.js marks them). If that mark never comes,
+   the photo shows anyway after a few seconds. */
+.product-image:not(.is-loaded) {
+  opacity: 0;
+  animation: ei-photo-failsafe 1ms linear 4s forwards;
+}
+
+/* Touch screens: holding a finger on cards, tabs and buttons neither selects their
+   text nor opens the browser's menu, as in an installed app. */
+.bottom-nav, .chip, .product-card, .buyer-featured-strip, .category-app-card,
+.detail-header, .detail-buy-bar, .detail-carousel {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .product-image-placeholder {

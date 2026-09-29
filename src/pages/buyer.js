@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, getProductImageSrc, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons, claimCoupon } from '../services/coupon-service.js';
@@ -12,6 +12,7 @@ import { navigate, goBack, getHashParams, offerRoute, offerShareUrl, authRoute, 
 import { copyText, shareLink, offerShareText } from '../utils/share.js';
 import { hasVisibleDiscount } from '../utils/pricing.js';
 import { formatPhoneBR, bindPhoneFormatting, normalizeWhatsAppBR, WHATSAPP_HINT } from '../utils/phone.js';
+import { openPhotoViewer } from '../utils/photo-viewer.js';
 
 const USE_MOCKS = import.meta.env.DEV;
 const guestUser = {
@@ -218,6 +219,53 @@ function getMarketCategories(includeAll = true) {
   return includeAll ? rows : rows.filter((category) => category.id !== 'all');
 }
 
+// Offers per category, from the last load of the whole vitrine (no category, no search).
+let categoryOfferCounts = null;
+
+// Areas students shop in most come first; "Outros" always closes the list.
+const CATEGORY_ORDER = ['food', 'fashion', 'services', 'digital'];
+
+function categoryRank(categoryId) {
+  const position = CATEGORY_ORDER.indexOf(categoryId);
+  return position === -1 ? CATEGORY_ORDER.length : position;
+}
+
+function countOffersByCategory(products) {
+  const counts = new Map();
+  (Array.isArray(products) ? products : []).forEach((product) => {
+    counts.set(product.category, (counts.get(product.category) || 0) + 1);
+  });
+  return counts;
+}
+
+/** Categories with offers first (the most offers first), then the empty ones; "Outros" last in each group. */
+function sortCategoriesByOffers(categories, counts) {
+  const offersIn = (category) => counts?.get(category.id) || 0;
+  return [...categories].sort((a, b) => {
+    const aHasOffers = offersIn(a) > 0;
+    const bHasOffers = offersIn(b) > 0;
+    if (aHasOffers !== bHasOffers) return aHasOffers ? -1 : 1;
+    if ((a.id === 'others') !== (b.id === 'others')) return a.id === 'others' ? 1 : -1;
+    return (offersIn(b) - offersIn(a))
+      || (categoryRank(a.id) - categoryRank(b.id))
+      || String(a.name).localeCompare(String(b.name), 'pt-BR');
+  });
+}
+
+/** Home chips: "Todos", then the areas with offers right now (every area while that is unknown). */
+function getCategoryChips() {
+  const allChip = getMarketCategories().find((category) => category.id === 'all') || { id: 'all', name: 'Todos' };
+  const sorted = sortCategoriesByOffers(getMarketCategories(false), categoryOfferCounts);
+  const total = categoryOfferCounts ? [...categoryOfferCounts.values()].reduce((sum, count) => sum + count, 0) : 0;
+  const visible = total
+    ? sorted.filter((category) => (categoryOfferCounts.get(category.id) || 0) > 0 || category.id === activeCategory)
+    : sorted;
+  return [
+    { ...allChip, count: total || 0 },
+    ...visible.map((category) => ({ ...category, count: categoryOfferCounts?.get(category.id) || 0 })),
+  ];
+}
+
 function shouldShowInstitutionBanner() {
   return !sessionStorage.getItem(INST_BANNER_SESSION_KEY);
 }
@@ -295,6 +343,9 @@ async function loadBuyerProducts({ categoryId = activeCategory, search = searchQ
     .then((rows) => {
       const products = Array.isArray(rows) ? rows : [];
       buyerProductsCache.set(cacheKey, { products, loadedAt: Date.now() });
+      if ((categoryId || 'all') === 'all' && !String(search || '').trim()) {
+        categoryOfferCounts = countOffersByCategory(products);
+      }
       productsLoadFailed = false;
       return products;
     })
@@ -830,10 +881,11 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
         <div class="category-scroll">
           <div class="category-chips">
-            ${getMarketCategories().map(c => `
-              <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${c.id}" type="button" aria-pressed="${activeCategory === c.id ? 'true' : 'false'}">
+            ${getCategoryChips().map(c => `
+              <button class="chip ${activeCategory === c.id ? 'active' : ''}" data-cat="${escapeHTML(c.id)}" type="button" aria-pressed="${activeCategory === c.id ? 'true' : 'false'}"${c.count ? ` aria-label="${escapeHTML(c.name)}, ${c.count} ${c.count === 1 ? 'oferta' : 'ofertas'}"` : ''}>
                 ${icons[c.id] || icons.others}
                 <span>${escapeHTML(c.name)}</span>
+                ${c.count ? `<span class="tab-count" aria-hidden="true">${c.count}</span>` : ''}
               </button>
             `).join('')}
           </div>
@@ -895,7 +947,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
           return `
           <article class="product-card ${isSoldOut ? 'sold-out' : ''}" data-product-card="${p.id}" role="button" tabindex="0" aria-label="${escapeHTML(p.title)}, ${formatCurrency(p.discountPrice)}${isSoldOut ? ', esgotado' : ''}">
             <div class="card-image-area">
-              ${getProductImage(p.images?.[0], 400, 300, p.category)}
+              ${renderPhotoBackdrop(p.images?.[0])}
+              ${getProductImage(p.images?.[0], 400, 400, p.category)}
+              ${p.images?.length > 1 ? `<span class="card-photo-count" aria-hidden="true">${ICON_PHOTOS}${p.images.length}</span>` : ''}
               ${isSoldOut
                 ? '<span class="discount-badge soldout-badge">Esgotado</span>'
                 : hasDiscount ? `<span class="discount-badge">−${p.discount}%</span>` : ''
@@ -1022,14 +1076,9 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
 
   // Category clicks
   container.querySelectorAll('.chip').forEach(chip => {
-    chip.addEventListener('click', (e) => {
-      const list = container.querySelector('.products-list');
-      if (list) {
-        list.style.opacity = '0';
-        list.style.transform = 'scale(0.98)';
-        list.style.transition = 'all 0.15s ease-out';
-      }
-      
+    chip.addEventListener('click', () => {
+      if (chip.dataset.cat === activeCategory) return;
+      container.querySelector('.products-list')?.classList.add('is-switching');
       setTimeout(() => {
         activeCategory = chip.dataset.cat;
         renderBuyerPage(container);
@@ -1037,12 +1086,23 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     });
   });
 
+  // The chosen area stays in view: the chip row is drawn again from its start on every render.
+  const chipScroller = container.querySelector('.category-scroll');
+  const activeChip = chipScroller?.querySelector('.chip.active');
+  if (chipScroller && activeChip && activeCategory !== 'all') {
+    const scrollerBox = chipScroller.getBoundingClientRect();
+    const chipBox = activeChip.getBoundingClientRect();
+    if (chipBox.right > scrollerBox.right - 28) {
+      chipScroller.scrollLeft += chipBox.left - scrollerBox.left - (scrollerBox.width - chipBox.width) / 2;
+    }
+  }
+
   container.querySelectorAll('[data-featured-product]').forEach((ticket) => {
-    ticket.addEventListener('click', () => openProductDetail(ticket.dataset.featuredProduct));
+    ticket.addEventListener('click', () => openProductDetail(ticket.dataset.featuredProduct, ticket.querySelector('.product-image')));
   });
 
   container.querySelectorAll('[data-product-card]').forEach(card => {
-    const open = () => openProductDetail(card.dataset.productCard);
+    const open = () => openProductDetail(card.dataset.productCard, card.querySelector('.card-image-area .product-image'));
     card.addEventListener('click', (event) => {
       if (event.target.closest('button, a, input, select, textarea')) return;
       open();
@@ -1060,7 +1120,7 @@ async function renderCategories(container) {
   const products = await loadBuyerProducts({ categoryId: 'all', search: '' });
   const allProducts = Array.isArray(products) ? products : [];
   cachedProducts = allProducts;
-  const categories = getMarketCategories(false);
+  const categories = sortCategoriesByOffers(getMarketCategories(false), countOffersByCategory(allProducts));
   const totalOffers = allProducts.length;
   const stats = categories.map((category) => {
     const categoryProducts = allProducts.filter(product => product.category === category.id);
@@ -1076,6 +1136,21 @@ async function renderCategories(container) {
     };
   });
   const institutionName = activeInstitution?.name || '';
+  // Areas with offers lead; the empty ones wait in a quieter list below.
+  const withOffers = stats.filter((category) => category.count > 0);
+  const mainCategories = withOffers.length ? withOffers : stats;
+  const quietCategories = withOffers.length ? stats.filter((category) => category.count === 0) : [];
+  const renderCategoryCard = (category) => `
+    <button class="category-app-card ${category.count === 0 ? 'empty' : ''}" type="button" data-open-category="${escapeHTML(category.id)}">
+      <span class="category-app-icon" aria-hidden="true">${icons[category.id] || icons.others}</span>
+      ${hasVisibleDiscount(category.bestDeal) ? `<span class="category-deal-pill">até −${Number(category.bestDeal.discount)}%</span>` : ''}
+      <span class="category-app-copy">
+        <strong>${escapeHTML(category.name)}</strong>
+        <small>${category.count ? `${category.count} ${category.count === 1 ? 'oferta' : 'ofertas'}` : 'Sem ofertas agora'}</small>
+        <span class="category-app-desc">${escapeHTML(CATEGORY_DESCRIPTIONS[category.id] || CATEGORY_DESCRIPTIONS.others)}</span>
+      </span>
+    </button>
+  `;
 
   container.innerHTML = `
     <div class="page buyer-wrapper acct-page buyer-categories-page">
@@ -1112,23 +1187,25 @@ async function renderCategories(container) {
 
       <section class="category-section" aria-labelledby="categorySectionTitle">
         <div class="acct-section-head category-section-head">
-          <h2 class="acct-section-title" id="categorySectionTitle">Todas as categorias</h2>
-          <span class="acct-count">${categories.length} ${categories.length === 1 ? 'categoria' : 'categorias'}</span>
+          <h2 class="acct-section-title" id="categorySectionTitle">${withOffers.length ? 'Com ofertas agora' : 'Todas as categorias'}</h2>
+          <span class="acct-count">${mainCategories.length} ${mainCategories.length === 1 ? 'categoria' : 'categorias'}</span>
         </div>
         <div class="category-app-grid">
-          ${stats.map(category => `
-            <button class="category-app-card ${category.count === 0 ? 'empty' : ''}" type="button" data-open-category="${escapeHTML(category.id)}">
-              <span class="category-app-icon" aria-hidden="true">${icons[category.id] || icons.others}</span>
-              ${hasVisibleDiscount(category.bestDeal) ? `<span class="category-deal-pill">até −${Number(category.bestDeal.discount)}%</span>` : ''}
-              <span class="category-app-copy">
-                <strong>${escapeHTML(category.name)}</strong>
-                <small>${category.count ? `${category.count} ${category.count === 1 ? 'oferta' : 'ofertas'}` : 'Sem ofertas agora'}</small>
-                <span class="category-app-desc">${escapeHTML(CATEGORY_DESCRIPTIONS[category.id] || CATEGORY_DESCRIPTIONS.others)}</span>
-              </span>
-            </button>
-          `).join('')}
+          ${mainCategories.map(renderCategoryCard).join('')}
         </div>
       </section>
+
+      ${quietCategories.length ? `
+        <section class="category-section category-section--quiet" aria-labelledby="categoryQuietTitle">
+          <div class="acct-section-head category-section-head">
+            <h2 class="acct-section-title" id="categoryQuietTitle">Ainda sem ofertas</h2>
+            <span class="acct-count">${quietCategories.length} ${quietCategories.length === 1 ? 'categoria' : 'categorias'}</span>
+          </div>
+          <div class="category-app-grid is-quiet">
+            ${quietCategories.map(renderCategoryCard).join('')}
+          </div>
+        </section>
+      ` : ''}
     </div>
 
     ${renderBuyerBottomNav('cats')}
@@ -1152,14 +1229,48 @@ async function renderCategories(container) {
   });
 }
 
-function openProductDetail(productId) {
+function waitForElement(selector, timeout) {
+  return new Promise((resolve) => {
+    if (document.querySelector(selector)) {
+      resolve();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (document.querySelector(selector)) done();
+    });
+    const timer = window.setTimeout(done, timeout);
+    function done() {
+      observer.disconnect();
+      window.clearTimeout(timer);
+      resolve();
+    }
+    observer.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
+  });
+}
+
+// sourcePhoto: the photo that was tapped. It grows into the offer's photo, like in an app,
+// in browsers with view transitions; the others simply open the offer.
+function openProductDetail(productId, sourcePhoto = null) {
   if (!isValidOfferId(productId)) return;
   const product = findKnownProduct(productId);
   if (product) {
     selectedProduct = product;
     selectedProductImageIndex = 0;
   }
-  navigate(offerRoute(productId));
+  const route = offerRoute(productId);
+  const canMorph = Boolean(product && sourcePhoto?.isConnected && document.startViewTransition)
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!canMorph) {
+    navigate(route);
+    return;
+  }
+  sourcePhoto.style.viewTransitionName = 'offer-photo';
+  document.documentElement.classList.add('is-view-transition');
+  const transition = document.startViewTransition(() => {
+    navigate(route);
+    return waitForElement('.detail-page .detail-carousel-slide', 700);
+  });
+  transition.finished.finally(() => document.documentElement.classList.remove('is-view-transition'));
 }
 
 async function shareOffer(product) {
@@ -1170,6 +1281,15 @@ async function shareOffer(product) {
   });
   if (result === 'copied') showToast('Link da oferta copiado.', 'success');
   else if (result === 'failed') showToast('Não foi possível copiar o link da oferta.', 'error');
+}
+
+const ICON_PHOTOS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="14" height="14" rx="2"/><path d="M17 3H5a2 2 0 0 0-2 2v12"/></svg>';
+
+// A blurred copy of the photo behind it: a wide photo is shown whole on it instead of
+// losing its sides (tall and square photos fill the frame; see buyer.css).
+function renderPhotoBackdrop(imageKey) {
+  const src = getProductImageSrc(imageKey);
+  return src ? `<img class="photo-backdrop" src="${escapeHTML(src)}" alt="" aria-hidden="true" loading="lazy" decoding="async" draggable="false" />` : '';
 }
 
 const ICON_BACK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>';
@@ -1854,33 +1974,6 @@ function renderProfile(container) {
 
 // ─── PRODUCT DETAIL PAGE ────────────────────────────────
 
-function bindSwipeNavigation(element, onSwipeLeft, onSwipeRight) {
-  if (!element) return;
-  let startX = 0;
-  let startY = 0;
-  let isTracking = false;
-
-  element.addEventListener('touchstart', (event) => {
-    const touch = event.touches?.[0];
-    if (!touch) return;
-    startX = touch.clientX;
-    startY = touch.clientY;
-    isTracking = true;
-  }, { passive: true });
-
-  element.addEventListener('touchend', (event) => {
-    if (!isTracking) return;
-    isTracking = false;
-    const touch = event.changedTouches?.[0];
-    if (!touch) return;
-    const deltaX = touch.clientX - startX;
-    const deltaY = touch.clientY - startY;
-    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
-    if (deltaX < 0) onSwipeLeft?.();
-    else onSwipeRight?.();
-  }, { passive: true });
-}
-
 function renderProductDetail(container) {
   {
     const p = selectedProduct;
@@ -1914,7 +2007,8 @@ function renderProductDetail(container) {
             <div class="detail-carousel" id="detailCarousel" aria-label="Fotos do produto" tabindex="0">
               ${(images.length ? images : ['']).map((image, index) => `
                 <button type="button" class="detail-carousel-slide" data-photo-index="${index}" aria-label="Ampliar foto ${index + 1}">
-                  ${getProductImage(image, 840, 630, p.category)}
+                  ${renderPhotoBackdrop(image)}
+                  ${getProductImage(image, 840, 840, p.category)}
                 </button>
               `).join('')}
             </div>
@@ -1933,7 +2027,7 @@ function renderProductDetail(container) {
             <div class="detail-thumbnails">
               ${images.map((image, index) => `
                 <button type="button" class="detail-thumb ${index === selectedProductImageIndex ? 'active' : ''}" data-thumb-index="${index}" aria-label="Ver foto ${index + 1}">
-                  ${getProductImage(image, 96, 72, p.category)}
+                  ${getProductImage(image, 96, 96, p.category)}
                 </button>
               `).join('')}
             </div>
@@ -2062,8 +2156,18 @@ function renderProductDetail(container) {
       btn.addEventListener('click', () => {
         const index = Number(btn.dataset.photoIndex);
         selectedProductImageIndex = Number.isFinite(index) ? index : selectedProductImageIndex;
-        if (!images.length) return;
-        showProductImageLightbox(container, p, images, selectedProductImageIndex);
+        const sources = images.map(getProductImageSrc);
+        if (!sources.some(Boolean)) return;
+        openPhotoViewer({
+          images: sources,
+          startIndex: selectedProductImageIndex,
+          title: p.title,
+          // Closing the photos leaves the offer on the photo seen last.
+          onIndexChange: (next) => {
+            carousel?.scrollTo({ left: carousel.clientWidth * next });
+            updateGalleryState(next);
+          },
+        });
       });
     });
 
@@ -2076,65 +2180,6 @@ function renderProductDetail(container) {
     startBuyerCountdowns(container);
     return;
   }
-}
-
-function showProductImageLightbox(container, product, images, startIndex = 0) {
-  let index = startIndex;
-  const modalRoot = document.getElementById('modal-root');
-  const chevronLeft = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
-  const chevronRight = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
-  const render = () => {
-    modalRoot.innerHTML = `
-      <div class="modal-backdrop visible product-lightbox-backdrop" id="product-image-lightbox" role="dialog" aria-modal="true" aria-label="Fotos de ${escapeHTML(product.title)}">
-        <div class="product-lightbox-panel">
-          <div class="product-lightbox-header">
-            <strong>${escapeHTML(product.title)}</strong>
-            <button class="icon-btn product-lightbox-close" id="closeLightbox" type="button" aria-label="Fechar">${icons.x}</button>
-          </div>
-          <div id="lightboxImageFrame" class="product-lightbox-frame">
-            ${getProductImage(images[index], 900, 720, product.category)}
-            ${images.length > 1 ? `
-              <button class="icon-btn product-lightbox-arrow is-prev" id="lightboxPrev" type="button" aria-label="Foto anterior">${chevronLeft}</button>
-              <button class="icon-btn product-lightbox-arrow is-next" id="lightboxNext" type="button" aria-label="Próxima foto">${chevronRight}</button>
-              <div class="product-lightbox-count">${index + 1} / ${images.length}</div>
-            ` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-    modalRoot.querySelector('#product-image-lightbox')?.addEventListener('click', (event) => {
-      if (event.target === event.currentTarget) modalRoot.innerHTML = '';
-    });
-    modalRoot.querySelector('#closeLightbox')?.addEventListener('click', () => {
-      modalRoot.innerHTML = '';
-    });
-    modalRoot.querySelector('#lightboxPrev')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      index = (index - 1 + images.length) % images.length;
-      selectedProductImageIndex = index;
-      render();
-    });
-    modalRoot.querySelector('#lightboxNext')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      index = (index + 1) % images.length;
-      selectedProductImageIndex = index;
-      render();
-    });
-    bindSwipeNavigation(
-      modalRoot.querySelector('#lightboxImageFrame'),
-      () => {
-        index = (index + 1) % images.length;
-        selectedProductImageIndex = index;
-        render();
-      },
-      () => {
-        index = (index - 1 + images.length) % images.length;
-        selectedProductImageIndex = index;
-        render();
-      }
-    );
-  };
-  render();
 }
 
 // ─── NOTIFICATIONS PAGE ─────────────────────────────────

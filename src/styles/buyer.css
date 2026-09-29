@@ -209,6 +209,8 @@
   width: max-content;
   padding-right: var(--gutter);
 }
+.category-scroll { scroll-snap-type: x proximity; }
+.category-chips .chip { scroll-snap-align: start; }
 
 .feed-filters {
   display: none;
@@ -411,8 +413,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 12px;
-  transition: opacity var(--dur-2) var(--ease-out);
+  transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
+/* Switching category: the old list steps back before the new one appears. */
+.products-list.is-switching { opacity: 0; transform: scale(0.985); }
 
 @media (min-width: 640px) { .products-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 16px; } }
 @media (min-width: 960px) { .products-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -444,14 +448,55 @@
 .product-card:active { transform: scale(0.985); }
 .product-card:focus-visible { outline-offset: 3px; border-radius: var(--r-lg); }
 
+/* Square, like the photos companies upload (the offer form previews them square too). */
 .card-image-area {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   border-radius: calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px) 0 0;
   overflow: hidden;
   background: var(--paper-sunken);
 }
-.card-image-area .product-image { transition: transform 500ms var(--ease-out); }
+.card-image-area .product-image { transition: transform 500ms var(--ease-out), opacity 280ms var(--ease-out); }
+
+/* Square frames. A tall or square photo fills the frame (a phone screenshot loses its
+   black bars); a wide one is shown whole, on a blurred copy of itself. The viewer always
+   shows the whole photo. main.js sets data-orientation once the photo arrives. */
+.card-image-area > .product-image,
+.detail-carousel-slide > .product-image { position: relative; }
+.photo-backdrop {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(24px) saturate(1.15) brightness(0.92);
+  transform: scale(1.2);
+  pointer-events: none;
+}
+:is(.card-image-area, .detail-carousel-slide):has(> .product-image[data-orientation="landscape"]) > .photo-backdrop { display: block; }
+:is(.card-image-area, .detail-carousel-slide) > .product-image[data-orientation="landscape"] { object-fit: contain; }
+
+/* More than one photo: a small count, like a gallery app. */
+.card-photo-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  background: rgba(24, 42, 80, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.card-photo-count svg { width: 12px; height: 12px; }
 
 .product-card .perforation { margin: 0 12px; }
 
@@ -695,21 +740,27 @@
 
 .detail-carousel {
   display: flex;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
+  overscroll-behavior-x: contain;
 }
 .detail-carousel::-webkit-scrollbar { display: none; }
 /* The shell clips outside rings: draw it inside the photo. */
 .detail-carousel:focus-visible { outline-offset: -3px; }
 
 .detail-carousel-slide {
+  position: relative;
   flex: 0 0 100%;
   height: 100%;
+  overflow: hidden;
   scroll-snap-align: center;
+  scroll-snap-stop: always;
   cursor: zoom-in;
 }
+/* The tapped photo on the vitrine grows into this one (see openProductDetail). */
+.detail-carousel-slide:first-child .product-image { view-transition-name: offer-photo; }
 
 .detail-discount-badge { top: 12px; left: 12px; font-size: var(--fs-13); padding: 5px 9px; }
 
@@ -743,8 +794,8 @@
   scrollbar-width: none;
 }
 .detail-thumb {
-  width: 64px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
   border-radius: var(--r-xs);
   overflow: hidden;
@@ -901,6 +952,33 @@
 }
 
 .detail-buy-button { flex: 1; min-height: 52px; }
+
+/* The offer's content settles in under the photo; the buy bar rises from the bottom. */
+.detail-ticket { animation: ei-rise-in 320ms var(--ease-out) 60ms backwards; }
+.seller-detail-card { animation: ei-rise-in 320ms var(--ease-out) 120ms backwards; }
+@media (max-width: 899px) {
+  .detail-buy-bar { animation: ei-buy-bar-in 360ms var(--ease-out) 140ms backwards; }
+}
+@keyframes ei-buy-bar-in {
+  from { opacity: 0; transform: translate(-50%, 28px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Opening an offer from the vitrine (view transitions): the photo moves, the rest cross-fades. */
+::view-transition-group(offer-photo) {
+  animation-duration: 360ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(offer-photo),
+::view-transition-new(offer-photo) { height: 100%; object-fit: cover; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 220ms; }
+.is-view-transition .page { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
 .detail-buy-bar .btn-primary:disabled {
   opacity: 1;
   background: var(--on-navy-fill);
