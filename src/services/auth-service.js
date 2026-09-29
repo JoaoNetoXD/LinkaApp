@@ -177,6 +177,12 @@ export async function ensureUserProfile(user, fallbackRole = 'buyer', extra = {}
   }
 }
 
+const ALREADY_REGISTERED_RESULT = {
+  success: false,
+  code: 'ALREADY_REGISTERED',
+  error: 'Este e-mail já tem conta, inclusive se ela foi criada no endereço antigo do site. Entre com a mesma senha ou use "Esqueci minha senha".',
+};
+
 export async function signUpUser(email, password, fullName, role = 'buyer', extra = {}) {
   try {
     const accountRole = role === 'seller' ? 'seller' : 'buyer';
@@ -204,11 +210,7 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
     // With e-mail confirmation on, an address that already has an account gets no error and
     // no e-mail: Supabase answers with a user that has no identities.
     if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      return {
-        success: false,
-        code: 'ALREADY_REGISTERED',
-        error: 'Este e-mail já tem conta, inclusive se ela foi criada no endereço antigo do site. Entre com a mesma senha ou use "Esqueci minha senha".',
-      };
+      return ALREADY_REGISTERED_RESULT;
     }
 
     const profile = data?.session && data?.user
@@ -224,6 +226,10 @@ export async function signUpUser(email, password, fullName, role = 'buyer', extr
     };
   } catch (err) {
     console.error('Sign up error:', err.code, err.message);
+    // With e-mail confirmation off, the same case comes back as an error.
+    if (err?.code === 'user_already_exists' || String(err?.message || '').toLowerCase().includes('already registered')) {
+      return ALREADY_REGISTERED_RESULT;
+    }
     return { success: false, error: translateAuthError(err) };
   }
 }
