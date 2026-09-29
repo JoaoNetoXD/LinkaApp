@@ -41,7 +41,7 @@ Para ver as telas sem backend: `npm run dev` e, para capturas, `node scripts/dev
 ## Pendências para produção
 
 1. Confirmar com a coordenação que os alunos têm e-mail `@somosicev.com`. O domínio antigo da semente, `@icev.edu.br`, não recebe e-mail (não tem registro MX), e a migração troca um pelo outro.
-2. ~~Publicar o site novo e rodar `coupon-claim-migration.sql` e `profile-privacy-migration.sql`~~ (feito em 24/09/2026). Falta rodar `scripts/integrity-migration.sql` no Supabase de produção: trava a edição de ofertas fora do app, devolve o estoque de cupons vencidos, limita o que o aluno edita no perfil e agenda a limpeza a cada 10 minutos (pg_cron). Testada com `npm run test:sql`.
+2. ~~Publicar o site novo e rodar `coupon-claim-migration.sql` e `profile-privacy-migration.sql`~~ (feito em 24/09/2026). `scripts/integrity-migration.sql` rodou em produção em 29/09/2026, depois de um ensaio com contas reais que desfaz tudo (`scripts/integrity-migration-dryrun.sql`): trava a edição de ofertas fora do app, devolve o estoque de cupons vencidos, limita o que o aluno edita no perfil e agenda a limpeza a cada 10 minutos (pg_cron ativo).
 3. Atualizar os modelos de e-mail do Supabase com `SUPABASE_AUTH_EMAILS.md`.
 4. Rodar o teste de ponta a ponta do `DEPLOY_NETLIFY.md` com contas reais do iCEV.
 5. Feito em 28/09/2026: o site responde em `https://empreende.somosicev.com` (CNAME para `empreende-icev.netlify.app`, que só redireciona). Não renomear o site no Netlify: ele é o destino do registro DNS. Detalhes em `DEPLOY_NETLIFY.md`, "Endereço do iCEV".
