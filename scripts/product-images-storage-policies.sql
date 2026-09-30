@@ -8,7 +8,7 @@ CREATE POLICY "Sellers upload own product images" ON storage.objects
     AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
     AND EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE id = (SELECT auth.uid()) AND role = 'seller'
+      WHERE id = (SELECT auth.uid()) AND role IN ('seller', 'admin', 'superadmin')
     )
   );
 
@@ -28,6 +28,6 @@ CREATE POLICY "Sellers delete own product images" ON storage.objects
     AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
     AND EXISTS (
       SELECT 1 FROM public.profiles
-      WHERE id = (SELECT auth.uid()) AND role = 'seller'
+      WHERE id = (SELECT auth.uid()) AND role IN ('seller', 'admin', 'superadmin')
     )
   );

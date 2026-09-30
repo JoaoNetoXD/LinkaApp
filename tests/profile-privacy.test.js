@@ -35,12 +35,23 @@ test('the profiles policy only calls definer helpers, so it cannot recurse', () 
   const policy = /CREATE POLICY "Profiles are viewable by audience" ON public\.profiles([\s\S]*?);/.exec(sql)?.[1];
   assert.ok(policy, 'policy is defined');
   assert.doesNotMatch(policy, /\bFROM\b/i, 'no direct subquery inside the policy');
-  for (const helper of ['is_admin_for_institution', 'shares_coupon_with']) {
+  for (const helper of ['is_admin_for_institution', 'shares_coupon_with', 'has_public_active_offer']) {
     const fn = new RegExp(`FUNCTION public\\.${helper}\\([\\s\\S]*?\\$\\$;`).exec(sql)?.[0];
     assert.ok(fn, `${helper} is defined`);
     assert.match(fn, /SECURITY DEFINER/);
     assert.match(fn, /SET search_path = public/);
   }
+});
+
+test('public admin contact fields require the admin to own a live offer', () => {
+  const helper = /FUNCTION public\.has_public_active_offer\([\s\S]*?\$\$;/.exec(sql)?.[0];
+  const policy = /CREATE POLICY "Profiles are viewable by audience" ON public\.profiles([\s\S]*?);/.exec(sql)?.[1];
+  assert.ok(helper && policy, 'helper and profile policy exist');
+  assert.match(helper, /p\.seller_id = p_profile/);
+  assert.match(helper, /p\.status = 'active'/);
+  assert.match(helper, /p\.deleted_at IS NULL/);
+  assert.match(helper, /p\.expires_at IS NULL OR p\.expires_at > now\(\)/);
+  assert.match(policy, /role IN \('admin', 'superadmin'\) AND public\.has_public_active_offer\(id\)/);
 });
 
 test('app and server read only granted profile columns', () => {

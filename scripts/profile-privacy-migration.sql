@@ -4,7 +4,8 @@
 -- profile: e-mail, WhatsApp and push subscription of every student.
 -- After this migration:
 --   * companies (role 'seller') stay public: name, WhatsApp, avatar and
---     course, which students need to contact them;
+--     course, which students need to contact them; an admin/superadmin who
+--     owns an active offer is also public while that offer is visible;
 --   * any other profile is visible only to its owner, to the other side
 --     of a coupon they share, and to the institution's admins;
 --   * e-mail and push_subscription can't be read through the API at all.
@@ -58,6 +59,29 @@ REVOKE ALL ON FUNCTION public.shares_coupon_with(UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin_for_institution(UUID) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.shares_coupon_with(UUID) TO anon, authenticated, service_role;
 
+-- Keep a seller's public contact details available after their role changes
+-- to admin, but only while their own active offer is visible in the vitrine.
+-- SECURITY DEFINER avoids profiles -> products -> profiles RLS recursion.
+CREATE OR REPLACE FUNCTION public.has_public_active_offer(p_profile UUID)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.products p
+    WHERE p.seller_id = p_profile
+      AND p.status = 'active'
+      AND p.deleted_at IS NULL
+      AND (p.expires_at IS NULL OR p.expires_at > now())
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.has_public_active_offer(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.has_public_active_offer(UUID) TO anon, authenticated, service_role;
+
 CREATE INDEX IF NOT EXISTS coupons_seller_buyer_idx ON public.coupons (seller_id, buyer_id);
 
 -- Who can see a profile row.
@@ -67,6 +91,7 @@ CREATE POLICY "Profiles are viewable by audience" ON public.profiles
   FOR SELECT USING (
     id = (select auth.uid())
     OR role = 'seller'
+    OR (role IN ('admin', 'superadmin') AND public.has_public_active_offer(id))
     OR public.shares_coupon_with(id)
     OR public.is_admin_for_institution(institution_id)
     OR (select auth.role()) = 'service_role'

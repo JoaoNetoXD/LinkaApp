@@ -23,5 +23,6 @@ test('product image writes stay inside the authenticated seller folder', () => {
   assert.match(sql, /CREATE POLICY "Sellers delete own product images" ON storage\.objects\s+FOR DELETE TO authenticated/i);
   assert.match(sql, /bucket_id = 'product-images'/i);
   assert.match(sql, /\(storage\.foldername\(name\)\)\[1\] = \(SELECT auth\.uid\(\)\)::text/i);
-  assert.match(sql, /WHERE id = \(SELECT auth\.uid\(\)\) AND role = 'seller'/i);
+  assert.equal((sql.match(/WHERE id = \(SELECT auth\.uid\(\)\) AND role IN \('seller', 'admin', 'superadmin'\)/gi) || []).length, 2,
+    'upload and delete allow company-capable roles only within their own folder');
 });
