@@ -135,3 +135,18 @@ await expectError(as(db, 'authenticated', ADMIN, (tx) => tx.query(`UPDATE public
 check((await db.query(`SELECT COUNT(*)::int AS n FROM public.categories WHERE institution_id IS NULL`)).rows[0].n === 0, 'categories now belong to the institution');
 await db.exec(readFileSync(join(REPO, 'scripts/integrity-migration.sql'), 'utf8'));
 check(true, 'running the migration a second time works');
+
+// Notification delivery across institutions and duplicate coupon requests.
+await db.exec(readFileSync(join(REPO, 'scripts/in-app-notifications-migration.sql'), 'utf8'));
+const otherInstitution = (await db.query("INSERT INTO public.institutions (name, domain) VALUES ('Outra escola', '@outra.test') RETURNING id")).rows[0].id;
+await db.query("UPDATE public.profiles SET role = 'admin', institution_id = $1 WHERE id = $2", [otherInstitution, BUYER2]);
+const notifiedOffer = await createOffer(db);
+await db.query("UPDATE public.products SET title = 'Brownie especial' WHERE id = $1", [notifiedOffer.id]);
+const adminNotes = (await db.query("SELECT user_id FROM public.notifications WHERE action_url = '#/admin/moderation'")).rows;
+check(adminNotes.length === 1 && adminNotes[0].user_id === ADMIN, 'pending offer notifies the institution admin once');
+await approve(db, notifiedOffer.id);
+const notifiedCoupon = (await claim(db, BUYER, notifiedOffer.id)).rows[0];
+await claim(db, BUYER, notifiedOffer.id);
+await as(db, 'authenticated', SELLER, (tx) => tx.query("UPDATE public.coupons SET status = 'used', used_at = now() WHERE id = $1", [notifiedCoupon.id]));
+const buyerNotes = (await as(db, 'authenticated', BUYER, (tx) => tx.query('SELECT title, action_url FROM public.notifications ORDER BY created_at'))).rows;
+check(buyerNotes.length === 2 && buyerNotes.every(note => note.action_url === '#/buyer/coupons') && buyerNotes[0].title === 'Cupom retirado' && buyerNotes[1].title === 'Cupom usado', 'buyer receives only their own coupon notices, once per event');

@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo, refreshCurrentProfile } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, globalSession, globalProfile, renderBrandLogo, refreshCurrentProfile, renderNotificationBell, refreshNotificationBadge } from '../main.js';
 import { sellerAds, sellerCoupons, categories as mockCategories, currentUser } from '../data/mock.js';
 import { getSellerProducts, createProduct, renewProduct, updateSellerProduct, deleteSellerProduct } from '../services/product-service.js';
 import { getSellerCoupons as fetchSellerCoupons, markCouponUsed, validateCoupon } from '../services/coupon-service.js';
@@ -345,6 +345,7 @@ async function renderSellerPage(container, { force = false, keepScroll = false }
         <span class="seller-brand">${renderBrandLogo('wordmark-on-dark', 'brand-logo seller-brand-logo')}</span>
         <div class="seller-header-actions">
           <button class="seller-header-btn is-collapsible" id="open-buyer-mode" type="button" aria-label="Ver vitrine de ofertas">${icons.home}<span>Ver vitrine</span></button>
+          ${renderNotificationBell('seller', 'seller-header-btn')}
           <button class="user-avatar seller-avatar" id="open-seller-profile" type="button" aria-label="Abrir perfil de ${escapeHTML(displayName)}">${escapeHTML(user.avatar || 'U')}</button>
         </div>
       </header>
@@ -373,6 +374,7 @@ async function renderSellerPage(container, { force = false, keepScroll = false }
   `;
   const scrollY = window.scrollY;
   bindSellerEvents(container);
+  refreshNotificationBadge(container);
   if (keepScroll) window.scrollTo(0, scrollY);
   else resetAppScroll(container);
 }

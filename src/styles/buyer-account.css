@@ -1168,8 +1168,9 @@
   transition: background-color var(--dur-2) var(--ease-out);
 }
 .notif-item + .notif-item { border-top: 1px solid var(--rule); }
-a.notif-item:hover { background: var(--paper-sunken); }
-a.notif-item:focus-visible { outline-offset: -3px; }
+button.notif-item { width: 100%; text-align: left; }
+:is(a, button).notif-item:hover { background: var(--paper-sunken); }
+:is(a, button).notif-item:focus-visible { outline-offset: -3px; }
 
 /* Unread: cobalt dot in the gutter */
 .notif-unread::before {

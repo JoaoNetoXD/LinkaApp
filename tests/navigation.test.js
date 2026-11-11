@@ -24,8 +24,8 @@ test('the sign-in only returns to offer pages inside the app', () => {
   assert.equal(readNextRoute('#/auth'), '');
 });
 
-test('a company or admin link opened while signed out comes back after sign-in', () => {
-  for (const route of ['#/seller', '#/seller/coupons', '#/admin', '#/admin/moderation', `#/seller/edit?id=${OFFER_ID}`]) {
+test('a protected section or the inbox opened while signed out comes back after sign-in', () => {
+  for (const route of ['#/buyer/notifications', '#/seller', '#/seller/coupons', '#/admin', '#/admin/moderation', `#/seller/edit?id=${OFFER_ID}`]) {
     assert.equal(readNextRoute(authRoute({ next: route })), route);
   }
 });

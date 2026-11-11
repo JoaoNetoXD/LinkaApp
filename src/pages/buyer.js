@@ -1,4 +1,4 @@
-import { icons, showToast, getProductImage, getProductImageSrc, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, getProductImageSrc, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, refreshCurrentProfile, replayFirstRunTour, renderBrandLogo, renderNotificationBell, refreshNotificationBadge } from '../main.js';
 import { products as mockProducts, categories as mockCategories, currentUser, institution } from '../data/mock.js';
 import { getActiveProducts, getProductById, incrementProductClicks } from '../services/product-service.js';
 import { getBuyerCoupons, claimCoupon } from '../services/coupon-service.js';
@@ -191,11 +191,9 @@ let buyerShellPromise = null;
 let buyerShellUserKey = null;
 const BUYER_SHELL_TTL_MS = 30000;
 const BUYER_PRODUCTS_TTL_MS = 20000;
-const BUYER_UNREAD_TTL_MS = 30000;
 const BUYER_COUPONS_TTL_MS = 20000;
 const buyerProductsCache = new Map();
 const buyerProductsRequests = new Map();
-const unreadCountCache = new Map();
 const buyerCouponsCache = new Map();
 // The last offer request failed (offline, timeout): the home offers a retry instead of "no offers".
 let productsLoadFailed = false;
@@ -360,17 +358,6 @@ async function loadBuyerProducts({ categoryId = activeCategory, search = searchQ
 
   buyerProductsRequests.set(cacheKey, request);
   return request;
-}
-
-async function loadUnreadCount(userId) {
-  if (!userId) return 0;
-  const cached = unreadCountCache.get(userId);
-  if (cached && Date.now() - cached.loadedAt < BUYER_UNREAD_TTL_MS) {
-    return cached.count;
-  }
-  const count = await getUnreadCount(userId);
-  unreadCountCache.set(userId, { count, loadedAt: Date.now() });
-  return count;
 }
 
 async function loadBuyerCoupons(userId) {
@@ -693,28 +680,20 @@ function getSearchSuggestions(products) {
 async function refreshBuyerNavBadges(container) {
   const userId = globalSession?.user?.id;
   const couponsBadges = container.querySelectorAll('[data-nav-coupon-badge]');
-  const notificationBadges = container.querySelectorAll('[data-nav-notification-badge]');
   if (!userId) {
-    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.hidden = true; });
+    couponsBadges.forEach((badge) => { badge.hidden = true; });
     return;
   }
 
   try {
-    const [coupons, unread] = await Promise.all([
-      loadBuyerCoupons(userId).catch(() => []),
-      loadUnreadCount(userId).catch(() => 0),
-    ]);
+    const coupons = await loadBuyerCoupons(userId);
     const activeCoupons = (Array.isArray(coupons) ? coupons : []).filter((coupon) => coupon.status === 'active').length;
     couponsBadges.forEach((badge) => {
       badge.textContent = activeCoupons > 99 ? '99+' : String(activeCoupons);
       badge.hidden = !(activeCoupons > 0);
     });
-    notificationBadges.forEach((badge) => {
-      badge.textContent = unread > 99 ? '99+' : String(unread);
-      badge.hidden = !(unread > 0);
-    });
   } catch {
-    [...couponsBadges, ...notificationBadges].forEach((badge) => { badge.hidden = true; });
+    couponsBadges.forEach((badge) => { badge.hidden = true; });
   }
 }
 
@@ -845,10 +824,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
                 <span>Entrar</span>
               </button>
             `}
-            <button class="icon-btn notification-btn" id="btnNotifications" type="button" aria-label="Notificações">
-              ${icons.bell}
-              ${isAuthenticated() ? '<span class="badge" id="notifBadge" hidden>0</span>' : ''}
-            </button>
+            ${renderNotificationBell()}
             ${isAuthenticated() ? `<a class="user-avatar buyer-avatar-link" href="#/buyer/profile" aria-label="Abrir seu perfil">${escapeHTML(user.avatar || 'U')}</a>` : ''}
           </div>
         </div>
@@ -1023,9 +999,6 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
   });
 
   // Notification button
-  container.querySelector('#btnNotifications')?.addEventListener('click', () => {
-    navigate('#/buyer/notifications');
-  });
 
   container.querySelector('#btnSellerMode')?.addEventListener('click', openSellerFlow);
   container.querySelector('#btnEmptySellerFlow')?.addEventListener('click', openSellerFlow);
@@ -1061,16 +1034,7 @@ async function renderHome(container, { skipFetch = false, loading = false } = {}
     hideInstitutionBanner(container);
   });
 
-  // Load notification badge count
-  const userId = globalSession?.user?.id;
-  if (userId) {
-    loadUnreadCount(userId).then(count => {
-      const badge = container.querySelector('#notifBadge');
-      if (!badge) return;
-      badge.textContent = count > 9 ? '9+' : String(count);
-      badge.hidden = !(count > 0);
-    }).catch(() => {});
-  }
+  refreshNotificationBadge(container);
   refreshBuyerNavBadges(container);
   startBuyerCountdowns(container);
 
@@ -2192,6 +2156,10 @@ function getNotificationLink(url) {
 
 async function renderNotifications(container) {
   const userId = globalSession?.user?.id;
+  const route = window.location.hash;
+  const from = getHashParams().get('from');
+  const backRoute = from === 'admin' ? '#/admin' : from === 'seller' ? '#/seller' : '#/buyer';
+  const isCurrent = () => window.location.hash === route && globalSession?.user?.id === userId;
   const backIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>';
   if (!userId) {
     container.innerHTML = `
@@ -2216,15 +2184,19 @@ async function renderNotifications(container) {
     `;
     container.querySelector('#btnBackFromNotif')?.addEventListener('click', () => goBack('#/buyer'));
     container.querySelector('#btnNotifLogin')?.addEventListener('click', () => {
-      window.location.hash = '#/auth';
+      navigate(authRoute({ next: '#/buyer/notifications' }));
     });
     return;
   }
 
-  const notifs = await getNotifications(userId);
+  const [notifs, unreadCount] = await Promise.all([
+    getNotifications(userId).catch(() => null),
+    getUnreadCount(userId),
+  ]);
+  if (!isCurrent()) return;
   const typeIcons = { success: icons.checkCircle, warning: icons.alertTriangle, error: icons.x, info: icons.bell };
   const typeTones = { success: 'success', warning: 'warning', error: 'danger', info: 'info' };
-  const unreadTotal = notifs.filter(n => !n.read).length;
+  const unreadTotal = Math.max(unreadCount, notifs?.filter(n => !n.read).length ?? 0);
   const formatNotifTime = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -2235,15 +2207,21 @@ async function renderNotifications(container) {
     <div class="page buyer-wrapper acct-page acct-page--narrow notifications-page">
       <header class="acct-header canopy">
         <div class="acct-topbar">
-          <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar para o início">${backIcon}</button>
-          <button class="btn-ghost btn-sm acct-topbar-action" id="btnMarkAllRead" type="button">${icons.check} Marcar como lidas</button>
+          <button class="icon-btn acct-icon-btn" id="btnBackFromNotif" type="button" aria-label="Voltar">${backIcon}</button>
+          ${notifs && unreadTotal ? `<button class="btn-ghost btn-sm acct-topbar-action" id="btnMarkAllRead" type="button">${icons.check} Marcar como lidas</button>` : ''}
         </div>
         <div class="acct-header-copy">
-          <p class="t-eyebrow">${unreadTotal ? `${unreadTotal} ${unreadTotal === 1 ? 'não lida' : 'não lidas'}` : 'Tudo em dia'}</p>
+          ${notifs ? `<p class="t-eyebrow">${unreadTotal ? `${unreadTotal} ${unreadTotal === 1 ? 'não lida' : 'não lidas'}` : 'Tudo em dia'}</p>` : ''}
           <h1 class="acct-title">Notificações</h1>
         </div>
       </header>
-      ${notifs.length === 0 ? `
+      ${!notifs ? `
+        <div class="acct-empty notifications-empty-state">
+          <span class="acct-empty-icon">${icons.alertTriangle}</span>
+          <h2>Não foi possível carregar as notificações</h2>
+          <button class="btn-primary acct-empty-action" id="btnRetryNotifs" type="button">Tentar de novo</button>
+        </div>
+      ` : notifs.length === 0 ? `
         <div class="acct-empty notifications-empty-state">
           <span class="acct-empty-icon">${icons.bell}</span>
           <h2>Nada por aqui ainda</h2>
@@ -2253,41 +2231,56 @@ async function renderNotifications(container) {
         <div class="notifications-list">
           ${notifs.map(n => {
             const link = getNotificationLink(n.action_url);
-            const tag = link ? 'a' : 'div';
+            const tag = link ? 'a' : n.read ? 'div' : 'button';
+            const attributes = link ? ` href="${escapeHTML(link)}"` : tag === 'button' ? ' type="button"' : '';
             return `
-            <${tag} class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}"${link ? ` href="${escapeHTML(link)}"` : ''} data-notif-id="${escapeHTML(n.id || '')}">
+            <${tag} class="notif-item ${n.read ? 'notif-read' : 'notif-unread'}"${attributes} data-notif-id="${escapeHTML(n.id || '')}">
               <span class="notif-icon notif-icon--${typeTones[n.type] || typeTones.info}" aria-hidden="true">${typeIcons[n.type] || typeIcons.info}</span>
-              <div class="notif-content">
-                <div class="notif-head">
-                  <p class="notif-title ${n.read ? '' : 'notif-title-bold'}">${n.read ? '' : '<span class="sr-only">Não lida: </span>'}${escapeHTML(n.title)}</p>
+              <span class="notif-content">
+                <span class="notif-head">
+                  <span class="notif-title ${n.read ? '' : 'notif-title-bold'}">${n.read ? '' : '<span class="sr-only">Não lida: </span>'}${escapeHTML(n.title)}</span>
                   <time class="notif-time" datetime="${escapeHTML(n.created_at || '')}">${formatNotifTime(n.created_at)}</time>
-                </div>
-                ${n.body ? `<p class="notif-body">${escapeHTML(n.body)}</p>` : ''}
-              </div>
+                </span>
+                ${n.body ? `<span class="notif-body">${escapeHTML(n.body)}</span>` : ''}
+              </span>
             </${tag}>
           `; }).join('')}
         </div>
       `}
     </div>
-    ${renderBuyerBottomNav(null)}
+    ${backRoute === '#/buyer' ? renderBuyerBottomNav(null) : ''}
   `;
 
-  container.querySelector('#btnBackFromNotif').addEventListener('click', () => goBack('#/buyer'));
+  container.querySelector('#btnBackFromNotif').addEventListener('click', () => goBack(backRoute));
+  container.querySelector('#btnRetryNotifs')?.addEventListener('click', () => renderNotifications(container));
 
-  container.querySelector('#btnMarkAllRead')?.addEventListener('click', async () => {
-    await markAllAsRead(userId);
-    unreadCountCache.set(userId, { count: 0, loadedAt: Date.now() });
+  container.querySelector('#btnMarkAllRead')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    const result = await markAllAsRead(userId);
+    if (!isCurrent()) return;
+    if (!result.success) {
+      button.disabled = false;
+      showToast('Não foi possível marcar as notificações como lidas.', 'error');
+      return;
+    }
     showToast('Todas as notificações marcadas como lidas.', 'success');
     renderNotifications(container);
   });
 
   // Opening a notification marks it as read; its link (if any) does the navigation.
   container.querySelectorAll('.notif-item.notif-unread[data-notif-id]').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', async () => {
       const id = item.dataset.notifId;
       if (!id) return;
-      markAsRead(id).catch(() => {});
-      unreadCountCache.delete(userId);
+      const result = await markAsRead(id);
+      if (!result.success) {
+        if (isCurrent()) showToast('Não foi possível marcar o aviso como lido.', 'error');
+      } else if (item.tagName === 'BUTTON' && isCurrent()) {
+        renderNotifications(container);
+      } else {
+        refreshNotificationBadge(container);
+      }
     });
   });
 

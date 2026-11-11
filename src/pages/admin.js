@@ -1,5 +1,5 @@
 import '../styles/admin.css';
-import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, renderBrandLogo } from '../main.js';
+import { icons, showToast, getProductImage, formatCurrency, escapeHTML, brandCaseHTML, globalSession, globalProfile, renderBrandLogo, renderNotificationBell, refreshNotificationBadge } from '../main.js';
 import { pendingAds, adminStats, categoryHeat, categories as mockCategories, institution } from '../data/mock.js';
 import { REJECT_REASONS, ADJUST_REASONS } from '../utils/moderation-reasons.js';
 import { getPendingProducts, approveProduct, rejectProduct, requestProductAdjustment, getCategoryStats, getAllProducts, deleteSellerProduct } from '../services/product-service.js';
@@ -359,10 +359,7 @@ async function renderAdminPage(container, options = {}) {
             </div>
             <div class="admin-header-actions">
               <button class="btn-ghost btn-sm admin-refresh-btn" id="btnAdminRefresh" type="button" aria-label="Atualizar dados">${icons.refresh}<span class="admin-refresh-label">Atualizar</span></button>
-              <button class="icon-btn admin-notif-btn" id="btnAdminNotif" type="button" aria-label="${pendingCount ? `Abrir ofertas para aprovar, ${pendingCount} ${pendingCount === 1 ? 'pendente' : 'pendentes'}` : 'Abrir ofertas para aprovar'}">
-                ${icons.bell}
-                ${pendingCount ? '<span class="admin-notif-dot" aria-hidden="true"></span>' : ''}
-              </button>
+              ${renderNotificationBell('admin', 'admin-notif-btn')}
               <button class="btn-secondary btn-sm admin-logout-btn" id="btnAdminLogout" type="button">Sair</button>
             </div>
           </header>
@@ -1997,10 +1994,7 @@ function bindAdminEvents(container) {
     await renderAdminPage(container, { forceRefresh: true });
   });
 
-  // Admin bell notification
-  container.querySelector('#btnAdminNotif')?.addEventListener('click', () => {
-    openAdminView('moderation');
-  });
+  refreshNotificationBadge(container);
 
   // Alert action buttons — route by action text
   container.querySelectorAll('[data-alert-view]').forEach(btn => {

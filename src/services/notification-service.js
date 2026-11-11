@@ -24,7 +24,7 @@ export async function getNotifications(userId, { unreadOnly = false, limit = 20 
       console.warn('getNotifications failed:', err.message);
       return getMockNotifications();
     }
-    return [];
+    throw err;
   }
 }
 
@@ -41,7 +41,8 @@ export async function getUnreadCount(userId) {
 
 export async function markAsRead(notificationId) {
   try {
-    await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+    if (error) throw error;
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -50,7 +51,8 @@ export async function markAsRead(notificationId) {
 
 export async function markAllAsRead(userId) {
   try {
-    await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false);
+    if (error) throw error;
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };

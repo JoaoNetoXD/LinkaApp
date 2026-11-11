@@ -108,9 +108,8 @@ export function authRoute({ next = '', intent = '' } = {}) {
   return `#/auth${query ? `?${query}` : ''}`;
 }
 
-// Screens the sign-in may return to: company and admin sections, an offer, an offer being
-// edited. Other sites, other screens and extra parameters fall back to the account's home.
-const NEXT_SECTION_ROUTE = /^#\/(seller(\/(ads|coupons|insights|create))?|admin(\/[a-z]+)?)$/;
+// Allow only these sections and the offer links below as sign-in destinations.
+const NEXT_SECTION_ROUTE = /^#\/(buyer\/notifications|seller(\/(ads|coupons|insights|create))?|admin(\/[a-z]+)?)$/;
 const NEXT_ID_ROUTE = /^#\/(buyer\/offer|seller\/edit)\?id=([^&#]+)$/;
 
 /** The "next" screen requested by the sign-in address, if it is one the app can return to. */

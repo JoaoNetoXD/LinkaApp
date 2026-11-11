@@ -235,17 +235,6 @@
 }
 .admin-notif-btn svg { width: 19px; height: 19px; }
 
-.admin-notif-dot {
-  position: absolute;
-  top: 8px;
-  right: 9px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--danger);
-  border: 2px solid var(--navy);
-}
-
 .admin-logout-btn { min-height: 40px; }
 
 .admin-tabs-container {

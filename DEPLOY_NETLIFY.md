@@ -7,6 +7,7 @@ Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e com
 Abra o SQL Editor do Supabase.
 
 Em um banco já criado, rode `scripts/product-offer-duration-migration.sql` antes de publicar a versão com prazo opcional por oferta.
+Rode também `scripts/in-app-notifications-migration.sql` para ativar os avisos de revisão e de cupons na caixa de notificações.
 
 **Antes de tudo, confira o domínio de e-mail dos alunos.** Depois da migração, só e-mails desse domínio conseguem criar conta.
 

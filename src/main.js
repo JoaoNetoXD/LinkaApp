@@ -3,6 +3,7 @@ import { resetAppScroll } from './utils/scroll.js';
 import { syncHistoryEntry, readNextRoute, authRoute, navigate } from './utils/navigation.js';
 import { AUTH_RETURN_KEY } from './lib/supabase.js';
 import { installDialogA11y } from './utils/dialog-a11y.js';
+import { getUnreadCount } from './services/notification-service.js';
 // Import all styles via JS for Vite HMR support
 import './styles/tokens.css';
 import './styles/reset.css';
@@ -100,6 +101,23 @@ function sanitizeUrl(value) {
     if (String(value).startsWith('blob:') || String(value).startsWith('data:')) return String(value);
   }
   return '';
+}
+
+export function renderNotificationBell(from = '', extraClass = '') {
+  return `<a class="icon-btn notification-btn ${extraClass}" href="#/buyer/notifications${from ? `?from=${from}` : ''}" aria-label="Notificações">
+    ${icons.bell}<span class="badge" data-notification-badge aria-hidden="true" hidden></span>
+  </a>`;
+}
+
+export async function refreshNotificationBadge(container = app) {
+  const badge = container.querySelector('[data-notification-badge]');
+  const userId = globalSession?.user?.id;
+  if (!badge || !userId || document.hidden) return;
+  const count = await getUnreadCount(userId);
+  if (!badge.isConnected || globalSession?.user?.id !== userId) return;
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.hidden = count === 0;
+  badge.parentElement.setAttribute('aria-label', count ? `Notificações, ${count} ${count === 1 ? 'não lida' : 'não lidas'}` : 'Notificações');
 }
 
 // Toast notification system
@@ -784,6 +802,8 @@ onAuthStateChange(async (event, session) => {
 
 // Add event listener for hash changes to support SPA navigation
 window.addEventListener('hashchange', handleRoute);
+document.addEventListener('visibilitychange', () => refreshNotificationBadge());
+window.setInterval(() => refreshNotificationBadge(), 30000);
 
 window.addEventListener('beforeinstallprompt', (event) => {
   if (!isMobileInstallSurface()) return;
