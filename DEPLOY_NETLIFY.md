@@ -6,6 +6,8 @@ Fase atual: a plataforma só divulga cupons. O aluno pega o código no app e com
 
 Abra o SQL Editor do Supabase.
 
+Em um banco já criado, rode `scripts/product-offer-duration-migration.sql` antes de publicar a versão com prazo opcional por oferta.
+
 **Antes de tudo, confira o domínio de e-mail dos alunos.** Depois da migração, só e-mails desse domínio conseguem criar conta.
 
 O e-mail do iCEV é do Google Workspace em `somosicev.com`. O domínio antigo da semente, `@icev.edu.br`, não tem servidor de e-mail: ninguém conseguiria confirmar a conta com ele. Por isso a migração troca `@icev.edu.br` por `@somosicev.com` sozinha. Confirme com a coordenação se os alunos têm e-mail `@somosicev.com`. Para conferir o que está no banco:

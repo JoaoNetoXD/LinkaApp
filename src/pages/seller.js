@@ -903,6 +903,11 @@ function renderPriceSection(ad = null) {
       </div>
       <p class="input-hint seller-quantity-hint">Definida pela categoria. Cada aluno que pega o código usa 1 cupom.</p>
       <div class="input-group">
+        <label for="ad-offer-duration">Prazo da oferta na vitrine (horas)</label>
+        <input class="input-field" id="ad-offer-duration" type="number" min="1" max="8760" step="1" value="${ad?.offerDurationHours ?? ''}" placeholder="Sem prazo" aria-describedby="ad-offer-duration-hint" />
+        <div class="input-hint" id="ad-offer-duration-hint">Deixe em branco para pedir uma oferta sem prazo. O admin pode ajustar antes de aprovar.</div>
+      </div>
+      <div class="input-group">
         <label for="ad-coupon-valid-hours">Validade do cupom</label>
         <select class="input-field" id="ad-coupon-valid-hours">
           ${renderCouponValidityOptions(ad?.couponValidHours || 24)}
@@ -1106,6 +1111,7 @@ function readProductFormValues(container) {
     originalPrice: parseFloat(container.querySelector('#ad-price')?.value) || 0,
     discount: parseInt(container.querySelector('#ad-discount')?.value, 10) || 0,
     couponValidHours: parseInt(container.querySelector('#ad-coupon-valid-hours')?.value, 10) || 24,
+    offerDurationHours: container.querySelector('#ad-offer-duration')?.valueAsNumber || null,
     whatsapp: normalizeWhatsAppBR(container.querySelector('#ad-whatsapp')?.value) || container.querySelector('#ad-whatsapp')?.value.trim() || '',
   };
 }
@@ -1527,6 +1533,7 @@ function bindSellerEvents(container) {
         originalPrice: values.originalPrice,
         discount: values.discount,
         couponValidHours: values.couponValidHours,
+        offerDurationHours: values.offerDurationHours,
         images: imageUrls,
         whatsapp: values.whatsapp,
       });

@@ -115,6 +115,16 @@ const wallet = (await as(db, 'authenticated', BUYER2, (tx) => tx.query(
   `SELECT c.code, c.product_title, p.title AS joined FROM public.coupons c LEFT JOIN public.products p ON p.id = c.product_id WHERE c.buyer_id = $1`, [BUYER2]))).rows[0];
 check(wallet.product_title === 'Brownie artesanal', 'wallet keeps the offer name after the offer is removed', `joined=${wallet.joined}`);
 
+// Offer duration is separate from the lifetime of a claimed coupon.
+const unlimited = await createOffer(db);
+await db.query("UPDATE public.products SET status = 'active' WHERE id = $1", [unlimited.id]);
+const unlimitedCoupon = (await claim(db, BUYER, unlimited.id)).rows[0];
+await db.query('SELECT public.refresh_offers()');
+const unlimitedStatus = (await db.query('SELECT status, expires_at FROM public.products WHERE id = $1', [unlimited.id])).rows[0];
+check(unlimitedStatus.status === 'active' && unlimitedStatus.expires_at === null, 'an offer without a deadline stays active');
+check(Boolean(unlimitedCoupon.valid_until), 'a coupon from an offer without a deadline still expires');
+await expectError(db.query('UPDATE public.products SET offer_duration_hours = 0 WHERE id = $1', [unlimited.id]), /check constraint/, 'offer duration must be positive or null');
+
 // Profiles
 await as(db, 'authenticated', BUYER, (tx) => tx.query(`UPDATE public.profiles SET name = 'Aluno Novo', whatsapp = '86999001122' WHERE id = $1`, [BUYER]));
 check((await db.query('SELECT name FROM public.profiles WHERE id = $1', [BUYER])).rows[0].name === 'Aluno Novo', 'profile: a student can edit name and WhatsApp');

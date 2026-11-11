@@ -206,24 +206,6 @@ function removePendingAd(adId) {
   loadedPendingAds = loadedPendingAds.filter((ad) => String(ad.id) !== String(adId));
 }
 
-function setModerationBusy(card, activeButton, label) {
-  if (!card) return;
-  card.classList.add('is-processing');
-  card.querySelectorAll('button').forEach((button) => {
-    button.disabled = true;
-  });
-  if (activeButton) activeButton.innerHTML = `${icons.loader} ${label}`;
-}
-
-function resetModerationBusy(card, activeButton, originalHtml) {
-  if (!card) return;
-  card.classList.remove('is-processing');
-  card.querySelectorAll('button').forEach((button) => {
-    button.disabled = false;
-  });
-  if (activeButton) activeButton.innerHTML = originalHtml;
-}
-
 async function syncInstitutionForUser() {
   const institutionId = globalSession?.user?.id
     ? globalProfile?.institution_id || globalSession?.user?.user_metadata?.institution_id || null
@@ -930,7 +912,7 @@ function renderCategories() {
                   <span>${cat.clicks} ${cat.clicks === 1 ? 'clique' : 'cliques'}</span>
                 </div>
               </div>
-              <p class="category-rule-line">${Number(cat.maxSlots || 5)}&nbsp;cupons por oferta · ${Number(cat.durationHours || 24)}h de vitrine</p>
+              <p class="category-rule-line">${Number(cat.maxSlots || 5)}&nbsp;cupons por oferta</p>
               ${getCategoryRules(cat.id) ? `<p class="category-rule-preview">${escapeHTML(getCategoryRules(cat.id))}</p>` : ''}
               <div class="category-heat-actions">
                 <button class="btn-secondary btn-sm" type="button" data-category-open="${escapeHTML(cat.id)}">${icons.eye} Ver ofertas</button>
@@ -1162,6 +1144,8 @@ function showAdminProductDetails(productId, container) {
   const status = getProductStatusMeta(productStatus);
   const images = Array.isArray(product.images) && product.images.length ? product.images : [null];
   const isModeratable = productStatus === 'pending' || productStatus === 'queue';
+  const canSetDuration = isModeratable || productStatus === 'active' || productStatus === 'expired';
+  const approveLabel = isModeratable ? 'Aprovar oferta' : productStatus === 'expired' ? 'Reativar oferta' : 'Salvar prazo';
   const couponHours = Number(product.couponValidHours);
   const slotsTotal = Number(product.slots?.total || 5);
   const slotsUsed = Number(product.slots?.used || 0);
@@ -1218,15 +1202,22 @@ function showAdminProductDetails(productId, container) {
             <p>${escapeHTML(product.rejectionReason)}</p>
           </div>
         ` : ''}
+        ${canSetDuration ? `
+          <div class="admin-product-detail-block input-group">
+            <label for="admin-offer-duration">Prazo da oferta na vitrine (horas)</label>
+            <input class="input-field" id="admin-offer-duration" type="number" min="1" max="8760" step="1" value="${product.offerDurationHours ?? ''}" placeholder="Sem prazo" aria-describedby="admin-offer-duration-hint" />
+            <div class="input-hint" id="admin-offer-duration-hint">Em branco, a oferta fica sem prazo. Se informar horas, elas começam a contar ao ${isModeratable ? 'aprovar' : 'confirmar'}.</div>
+          </div>
+        ` : ''}
         <div class="admin-product-modal-actions">
           <button class="btn-ghost admin-product-delete" type="button" data-modal-delete="${escapeHTML(product.id)}">Excluir da vitrine</button>
           ${isModeratable ? `
             <button class="btn-danger" type="button" data-modal-reject="${escapeHTML(product.id)}">${icons.x} Recusar</button>
             <button class="btn-secondary" type="button" data-modal-adjust="${escapeHTML(product.id)}">Pedir ajuste</button>
-            <button class="btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} Aprovar oferta</button>
-          ` : `
-            <button class="btn-secondary" type="button" id="close-admin-product-modal-secondary">Fechar</button>
-          `}
+          ` : ''}
+          ${canSetDuration
+            ? `<button class="btn-success" type="button" data-modal-approve="${escapeHTML(product.id)}">${icons.check} ${approveLabel}</button>`
+            : '<button class="btn-secondary" type="button" id="close-admin-product-modal-secondary">Fechar</button>'}
         </div>
       </div>
     </div>
@@ -1258,19 +1249,22 @@ function showAdminProductDetails(productId, container) {
   });
   modalRoot.querySelector('[data-modal-approve]')?.addEventListener('click', async (event) => {
     const approveBtn = event.currentTarget;
+    const durationInput = modalRoot.querySelector('#admin-offer-duration');
+    if (!durationInput.reportValidity()) return;
     approveBtn.disabled = true;
-    approveBtn.innerHTML = `${icons.loader} Aprovando...`;
-    const result = await approveProduct(approveBtn.dataset.modalApprove);
+    approveBtn.innerHTML = `${icons.loader} Salvando...`;
+    const result = await approveProduct(approveBtn.dataset.modalApprove, durationInput.valueAsNumber || null);
     if (result?.success) {
       closeModal();
-      showToast('Oferta aprovada.', 'success');
+      removePendingAd(product.id);
+      showToast(isModeratable ? 'Oferta aprovada.' : productStatus === 'expired' ? 'Oferta reativada.' : 'Prazo atualizado.', 'success');
       invalidateAdminData();
       await renderAdminPage(container);
       scrollCategoryManagementIntoView(container);
     } else {
       approveBtn.disabled = false;
-      approveBtn.innerHTML = `${icons.check} Aprovar oferta`;
-      showToast(result?.error || 'Não foi possível aprovar a oferta.', 'error');
+      approveBtn.innerHTML = `${icons.check} ${approveLabel}`;
+      showToast(result?.error || 'Não foi possível salvar a oferta.', 'error');
     }
   });
 }
@@ -1364,7 +1358,7 @@ function showCategoryModal(mode, category, container) {
         <div class="modal-handle"></div>
         <form id="category-form">
           <h3 class="modal-title" id="category-modal-title">${isEdit ? 'Editar categoria' : 'Nova categoria'}</h3>
-          <p class="modal-description">Cupons por oferta e horas na vitrine valem para as novas ofertas desta categoria.</p>
+          <p class="modal-description">A quantidade de cupons vale para as novas ofertas desta categoria.</p>
           <div class="input-group">
             <label for="category-field-name">Nome da categoria</label>
             <input class="input-field" id="category-field-name" name="name" value="${escapeHTML(category?.name || '')}" placeholder="Ex.: Livros e apostilas" required maxlength="48" />
@@ -1376,15 +1370,9 @@ function showCategoryModal(mode, category, container) {
               <span class="input-hint">Use letras minúsculas e hífens, sem acentos.</span>
             </div>
           `}
-          <div class="category-editor-grid">
-            <div class="input-group">
-              <label for="category-field-slots">Cupons por oferta</label>
-              <input class="input-field" id="category-field-slots" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
-            </div>
-            <div class="input-group">
-              <label for="category-field-hours">Horas na vitrine</label>
-              <input class="input-field" id="category-field-hours" name="durationHours" type="number" min="1" max="720" value="${Number(category?.durationHours || 24)}" required />
-            </div>
+          <div class="input-group">
+            <label for="category-field-slots">Cupons por oferta</label>
+            <input class="input-field" id="category-field-slots" name="maxSlots" type="number" min="1" max="99" value="${Number(category?.maxSlots || 5)}" required />
           </div>
           <div class="input-group">
             <label for="category-field-rules">Observação para a equipe (opcional)</label>
@@ -1413,7 +1401,6 @@ function showCategoryModal(mode, category, container) {
       name: String(form.get('name') || '').trim(),
       id: String(form.get('id') || '').trim(),
       maxSlots: Number(form.get('maxSlots') || 5),
-      durationHours: Number(form.get('durationHours') || 24),
     };
     const rules = String(form.get('rules') || '').trim();
 
@@ -1668,21 +1655,7 @@ function bindAdminEvents(container) {
     if (approveBtn) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      const card = approveBtn.closest('.moderation-card');
-      const originalHtml = approveBtn.innerHTML;
-      const adId = approveBtn.dataset.adId;
-      setModerationBusy(card, approveBtn, 'Aprovando...');
-      try {
-        const result = await approveProduct(adId);
-        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar a oferta.');
-        removePendingAd(adId);
-        showToast('Oferta aprovada.', 'success');
-        invalidateAdminData();
-        await renderAdminPage(container);
-      } catch (err) {
-        showToast(err.message || 'Não foi possível aprovar a oferta.', 'error');
-        resetModerationBusy(card, approveBtn, originalHtml);
-      }
+      showAdminProductDetails(approveBtn.dataset.adId, container);
       return;
     }
 
@@ -1764,23 +1737,7 @@ function bindAdminEvents(container) {
     if (approveProductBtn) {
       event.preventDefault();
       event.stopPropagation();
-      const productId = approveProductBtn.dataset.categoryProductApprove;
-      const originalHtml = approveProductBtn.innerHTML;
-      approveProductBtn.disabled = true;
-      approveProductBtn.innerHTML = `${icons.loader} Aprovando...`;
-      try {
-        const result = await approveProduct(productId);
-        if (!result?.success) throw new Error(result?.error || 'Não foi possível aprovar a oferta.');
-        removePendingAd(productId);
-        showToast('Oferta aprovada.', 'success');
-        invalidateAdminData();
-        await renderAdminPage(container);
-        scrollCategoryManagementIntoView(container);
-      } catch (error) {
-        approveProductBtn.disabled = false;
-        approveProductBtn.innerHTML = originalHtml;
-        showToast(error.message || 'Não foi possível aprovar a oferta.', 'error');
-      }
+      showAdminProductDetails(approveProductBtn.dataset.categoryProductApprove, container);
       return;
     }
 

@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS products (
   clicks INTEGER DEFAULT 0,
   institution_id UUID REFERENCES institutions(id),
   expires_at TIMESTAMP WITH TIME ZONE,
+  offer_duration_hours INTEGER CHECK (offer_duration_hours BETWEEN 1 AND 8760),
   deleted_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

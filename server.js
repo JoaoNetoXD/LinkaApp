@@ -775,6 +775,10 @@ async function checkDatabaseReadiness() {
 
   const checks = [
     {
+      name: 'products.offer_duration_hours',
+      run: () => supabaseAdmin.from('products').select('offer_duration_hours').limit(1),
+    },
+    {
       name: 'product-images bucket',
       run: () => supabaseAdmin.storage.getBucket('product-images'),
     },
@@ -824,7 +828,7 @@ async function getProductPaymentReadiness(productId, { requireActive = true } = 
   if (requireActive && product.status !== 'active') {
     return { ready: false, code: 'PRODUCT_NOT_ACTIVE', message: 'A oferta ainda não está ativa.' };
   }
-  if (product.expires_at && new Date(product.expires_at) <= new Date()) {
+  if (requireActive && product.expires_at && new Date(product.expires_at) <= new Date()) {
     return { ready: false, code: 'PRODUCT_EXPIRED', message: 'Oferta expirada.' };
   }
   if ((product.slots_used || 0) >= (product.slots_total || 5)) {
@@ -864,7 +868,7 @@ async function loadProductForSellerMutation(admin, productId) {
   assertUuid(productId, 'Produto');
   const { data, error } = await admin
     .from('products')
-    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,coupon_valid_hours,institution_id,deleted_at')
+    .select('id,seller_id,status,title,description,category_id,original_price,discount,discount_price,images,slots_total,slots_used,coupon_valid_hours,offer_duration_hours,institution_id,deleted_at')
     .eq('id', productId)
     .maybeSingle();
 
@@ -883,6 +887,13 @@ function assertCanManageSellerProduct(auth, product) {
   }
   if (product.seller_id === auth.user.id) return;
   throw makeHttpError('Você não tem permissão para alterar esta oferta.', 403, 'PRODUCT_FORBIDDEN');
+}
+
+function validateOfferDuration(hours) {
+  if (hours !== null && (!Number.isInteger(hours) || hours < 1 || hours > 8760)) {
+    throw makeHttpError('Informe de 1 a 8760 horas ou deixe a oferta sem prazo.', 400, 'INVALID_OFFER_DURATION');
+  }
+  return hours;
 }
 
 function normalizeSellerProductUpdate(body, product) {
@@ -951,6 +962,9 @@ function normalizeSellerProductUpdate(body, product) {
       throw makeHttpError('A validade do cupom precisa ficar entre 1 hora e 30 dias.', 400, 'INVALID_COUPON_VALIDITY');
     }
     updates.coupon_valid_hours = couponValidHours;
+  }
+  if (has('offerDurationHours')) {
+    updates.offer_duration_hours = validateOfferDuration(body.offerDurationHours);
   }
 
   updates.status = 'pending';
@@ -1777,34 +1791,36 @@ app.post('/api/admin/products/:productId/approve', async (req, res) => {
     if (!auth) return;
     assertAdmin(auth);
 
-    const product = await loadProductForSellerMutation(requireSupabaseAdmin(), req.params.productId);
+    const admin = requireSupabaseAdmin();
+    const product = await loadProductForSellerMutation(admin, req.params.productId);
     assertAdminInstitution(auth, product.institution_id);
 
-    const readiness = await getProductPaymentReadiness(req.params.productId, { requireActive: false });
-    if (!readiness.ready) {
-      return res.status(409).json({
-        success: false,
-        code: readiness.code,
-        error: readiness.message,
-      });
+    if (product.deleted_at || !['pending', 'active', 'expired'].includes(product.status)) {
+      throw makeHttpError('Esta oferta não está disponível para aprovação ou ajuste de prazo.', 409, 'PRODUCT_NOT_MODERATABLE');
     }
+    const requestedHours = req.body?.offerDurationHours;
+    const hours = validateOfferDuration(requestedHours === undefined ? product.offer_duration_hours ?? null : requestedHours);
 
-    const admin = requireSupabaseAdmin();
-    // The offer stays on the vitrine for the category's hours, counted from approval.
-    const { data: category } = await admin
-      .from('categories')
-      .select('duration_hours')
-      .eq('id', product.category_id)
-      .maybeSingle();
-    const hours = Math.min(Math.max(Number(category?.duration_hours) || 24, 1), 720);
+    if (product.status !== 'active') {
+      const readiness = await getProductPaymentReadiness(product.id, { requireActive: false });
+      if (!readiness.ready) throw makeHttpError(readiness.message, 409, readiness.code);
+    }
     const { data, error } = await admin
       .from('products')
-      .update({ status: 'active', rejection_reason: null, expires_at: new Date(Date.now() + hours * 3600000).toISOString() })
-      .eq('id', req.params.productId)
+      .update({
+        status: 'active',
+        rejection_reason: null,
+        offer_duration_hours: hours,
+        expires_at: hours === null ? null : new Date(Date.now() + hours * 3600000).toISOString(),
+      })
+      .eq('id', product.id)
+      .eq('status', product.status)
+      .is('deleted_at', null)
       .select('*')
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) throw makeHttpError('A oferta mudou. Atualize a página e tente novamente.', 409, 'PRODUCT_CHANGED');
     res.json({ success: true, product: data });
   } catch (error) {
     console.error('Erro ao aprovar produto:', error);

@@ -137,7 +137,7 @@ async function getCategoryDefaults(categoryId) {
   try {
     const { data, error } = await supabase
       .from('categories')
-      .select('max_slots,duration_hours')
+      .select('max_slots')
       .eq('id', categoryId)
       .maybeSingle();
 
@@ -149,7 +149,7 @@ async function getCategoryDefaults(categoryId) {
   }
 }
 
-export async function createProduct({ sellerId, title, description, categoryId, originalPrice, discount, images = [], whatsapp, institutionId = null, couponValidHours = 24 }) {
+export async function createProduct({ sellerId, title, description, categoryId, originalPrice, discount, images = [], whatsapp, institutionId = null, couponValidHours = 24, offerDurationHours = null }) {
   const discountPrice = Math.round(originalPrice * (1 - discount / 100) * 100) / 100;
   const normalizedCouponValidHours = Math.min(Math.max(Number.parseInt(couponValidHours, 10) || 24, 1), 720);
 
@@ -179,6 +179,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
       slots_used: 0,
       clicks: 0,
       coupon_valid_hours: normalizedCouponValidHours,
+      offer_duration_hours: offerDurationHours,
     };
 
     if (institutionId) {
@@ -202,6 +203,7 @@ export async function createProduct({ sellerId, title, description, categoryId, 
         category: categoryId,
         originalPrice, discount, discountPrice,
         couponValidHours: normalizedCouponValidHours,
+        offerDurationHours,
         images, status: 'pending',
         slots: { used: 0, total: 5 },
         clicks: 0, couponsGenerated: 0, couponsUsed: 0,
@@ -377,12 +379,13 @@ export async function getPendingProducts(institutionId = null) {
 /**
  * Approve a product (admin action)
  */
-export async function approveProduct(productId) {
+export async function approveProduct(productId, offerDurationHours) {
   try {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}/admin/products/${productId}/approve`, {
       method: 'POST',
       headers,
+      body: JSON.stringify({ offerDurationHours }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
@@ -542,6 +545,7 @@ function transformProduct(dbProduct) {
     discount: dbProduct.discount,
     discountPrice: parseFloat(dbProduct.discount_price),
     couponValidHours: Math.min(Math.max(Number.parseInt(dbProduct.coupon_valid_hours, 10) || 24, 1), 720),
+    offerDurationHours: dbProduct.offer_duration_hours ?? null,
     seller: dbProduct.seller ? {
       id: dbProduct.seller.id,
       name: dbProduct.seller.name,
